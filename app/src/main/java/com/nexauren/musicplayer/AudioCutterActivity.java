@@ -72,11 +72,11 @@ public final class AudioCutterActivity extends AppCompatActivity {
     }
 
     private void buildUi(){
-        getWindow().setStatusBarColor(Color.rgb(33,150,243));
+        getWindow().setStatusBarColor(AppearanceStore.accent(this));
         getWindow().setNavigationBarColor(Color.BLACK);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xFF080B10);
 
-        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setBackgroundColor(Color.rgb(33,150,243));
+        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setBackgroundColor(AppearanceStore.accent(this));
         TextView back=text("‹",38,Color.WHITE);back.setGravity(Gravity.CENTER);
         bar.addView(back,new LinearLayout.LayoutParams(dp(52),dp(56)));back.setOnClickListener(v->finish());
         TextView title=text("Cortar áudio",19,Color.WHITE);bar.addView(title,new LinearLayout.LayoutParams(0,dp(56),1));
