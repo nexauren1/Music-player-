@@ -678,6 +678,63 @@ public final class MainActivity extends AppCompatActivity {
         return out;
     }
 
+    private void showFolders() {
+        root.removeAllViews();
+        LinearLayout shell = basePage("Pastas");
+        LinearLayout body = pageBody(shell);
+        java.util.LinkedHashMap<String, ArrayList<Track>> groups = new java.util.LinkedHashMap<>();
+
+        if (ContextCompat.checkSelfPermission(this,
+                Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED) {
+            String[] projection = {MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA};
+            try (Cursor cursor = getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection, MediaStore.Audio.Media.IS_MUSIC + " != 0", null, MediaStore.Audio.Media.DATA + " COLLATE NOCASE ASC")) {
+                if (cursor != null) {
+                    int idCol = cursor.getColumnIndex(MediaStore.Audio.Media._ID);
+                    int dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
+                    while (cursor.moveToNext()) {
+                        long id = idCol >= 0 ? cursor.getLong(idCol) : -1L;
+                        String path = dataCol >= 0 && !cursor.isNull(dataCol) ? cursor.getString(dataCol) : "";
+                        String folder = "Pasta desconhecida";
+                        if (!path.isEmpty()) {
+                            java.io.File file = new java.io.File(path);
+                            java.io.File parent = file.getParentFile();
+                            if (parent != null) folder = parent.getName();
+                        }
+                        Track match = null;
+                        for (Track t : tracks) if (t.id == id) { match = t; break; }
+                        if (match != null) {
+                            ArrayList<Track> list = groups.get(folder);
+                            if (list == null) { list = new ArrayList<>(); groups.put(folder, list); }
+                            list.add(match);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        for (java.util.Map.Entry<String, ArrayList<Track>> entry : groups.entrySet()) {
+            LinearLayout card = roundedPanel(surface(), dp(16));
+            card.setPadding(dp(14),dp(10),dp(12),dp(10));
+            card.setOrientation(LinearLayout.VERTICAL);
+            TextView name = text("▰  " + entry.getKey(), 16, textPrimary());
+            name.setTypeface(null,1);
+            TextView count = text(entry.getValue().size() + (entry.getValue().size()==1 ? " faixa" : " faixas"), 11, textSecondary());
+            card.addView(name,new LinearLayout.LayoutParams(-1,dp(28)));
+            card.addView(count,new LinearLayout.LayoutParams(-1,dp(22)));
+            ArrayList<Track> folderTracks = entry.getValue();
+            card.setOnClickListener(v -> showTrackCollection(entry.getKey(),folderTracks));
+            body.addView(card,new LinearLayout.LayoutParams(-1,dp(66)));
+            addSpacer(body,6);
+        }
+        if(groups.isEmpty()){
+            TextView empty=text("Não foi possível identificar pastas neste dispositivo.",15,textSecondary());
+            empty.setGravity(Gravity.CENTER);
+            body.addView(empty,new LinearLayout.LayoutParams(-1,dp(120)));
+        }
+    }
+
     private void showFavorites() { showTrackCollection("Favoritos", tracksFromIds(FavoritesStore.get(this))); }
     private void showPlaylist() { showTrackCollection("Minha playlist", tracksFromIds(getSharedPreferences("nexauren_playlist",MODE_PRIVATE).getStringSet("ids",new HashSet<>()))); }
 
@@ -1559,8 +1616,11 @@ public final class MainActivity extends AppCompatActivity {
     private void checkForUpdateOnEntry() {
         UpdateManager.checkAsync(this,new UpdateManager.Callback(){
             @Override public void onResult(UpdateManager.ReleaseInfo info) {
-                if(!UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME))return;
-                runOnUiThread(() -> showUpdateDialog(info));
+                if(UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME)){
+                    runOnUiThread(() -> showUpdateDialog(info));
+                } else {
+                    showWhatsNewIfNeeded(info);
+                }
             }
             @Override public void onError(Exception error) { }
         });
@@ -1653,6 +1713,31 @@ public final class MainActivity extends AppCompatActivity {
 
         dialog.setOnShowListener(vv -> {});
         dialog.show();
+    }
+
+    private void showWhatsNewIfNeeded(UpdateManager.ReleaseInfo info) {
+        if (info == null || !BuildConfig.VERSION_NAME.equals(info.version)) return;
+        android.content.SharedPreferences prefs=getSharedPreferences(UpdateManager.PREFS,MODE_PRIVATE);
+        if (BuildConfig.VERSION_NAME.equals(prefs.getString("whats_new_seen",""))) return;
+        runOnUiThread(() -> {
+            String notes=info.notes==null?"Melhorias e correções.":info.notes.trim();
+            if(notes.length()>1100)notes=notes.substring(0,1100)+"…";
+            LinearLayout box=new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(dp(18),0,dp(18),0);
+            TextView icon=text("♫",50,accent());icon.setGravity(Gravity.CENTER);
+            box.addView(icon,new LinearLayout.LayoutParams(-1,dp(62)));
+            TextView headline=text("Nexauren "+BuildConfig.VERSION_NAME,20,textPrimary());headline.setTypeface(null,1);
+            box.addView(headline,new LinearLayout.LayoutParams(-1,dp(34)));
+            TextView sub=text("O que há de novo",13,accent());sub.setTypeface(null,1);
+            box.addView(sub,new LinearLayout.LayoutParams(-1,dp(25)));
+            TextView content=text(notes,12,textSecondary());
+            box.addView(content,new LinearLayout.LayoutParams(-1,dp(118)));
+            new AlertDialog.Builder(this).setTitle("Novidades da versão").setView(box)
+                    .setPositiveButton("Entendi",(d,w)->prefs.edit().putString("whats_new_seen",BuildConfig.VERSION_NAME).apply())
+                    .setOnDismissListener(d->prefs.edit().putString("whats_new_seen",BuildConfig.VERSION_NAME).apply())
+                    .show();
+        });
     }
 
     private void deferUpdate(String version) {
@@ -1789,6 +1874,12 @@ public final class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if ((requestCode == 7810 || requestCode == 7811) && resultCode == RESULT_OK) loadTracks();
         else if (requestCode == 7901 && resultCode == RESULT_OK) recreate();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        savePlaybackState();
     }
 
     @Override
