@@ -45,6 +45,7 @@ public final class PlaybackService extends MediaSessionService {
     };
 
     private final Player.Listener audioListener = new Player.Listener() {
+        @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item, int reason) { resetAB(); }
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
             if (audioSessionId > 0) effects.attachToSession(audioSessionId);
         }
