@@ -195,6 +195,54 @@ public final class AudioEffectsController {
         return flat;
     }
 
+    public synchronized void saveToPreferences(android.content.Context context) {
+        if (context == null) return;
+        android.content.SharedPreferences.Editor e = context.getSharedPreferences("nexauren_audio_prefs", android.content.Context.MODE_PRIVATE).edit();
+        e.putBoolean("enabled", enabled);
+        if (equalizer != null) {
+            int[] values = getLevelsPercent(10);
+            StringBuilder raw = new StringBuilder();
+            for (int value : values) {
+                if (raw.length() > 0) raw.append(',');
+                raw.append(value);
+            }
+            e.putString("eq", raw.toString());
+        }
+        try { if (bassBoost != null) e.putInt("bass", bassBoost.getRoundedStrength()); } catch (Throwable ignored) {}
+        try { if (virtualizer != null) e.putInt("virtualizer", virtualizer.getRoundedStrength()); } catch (Throwable ignored) {}
+        e.apply();
+    }
+
+    public synchronized void restoreFromPreferences(android.content.Context context) {
+        if (context == null) return;
+        android.content.SharedPreferences prefs = context.getSharedPreferences("nexauren_audio_prefs", android.content.Context.MODE_PRIVATE);
+        enabled = prefs.getBoolean("enabled", enabled);
+        if (equalizer != null) {
+            String raw = prefs.getString("eq", "");
+            if (!raw.isEmpty()) {
+                String[] parts = raw.split(",");
+                for (int i = 0; i < Math.min(10, parts.length); i++) {
+                    try { setUiBand(i, 10, Integer.parseInt(parts[i])); } catch (Exception ignored) {}
+                }
+            }
+        }
+        try {
+            if (bassBoost != null) {
+                int v = Math.max(0, Math.min(1000, prefs.getInt("bass", 0)));
+                bassBoost.setStrength((short)v);
+                bassBoost.setEnabled(enabled && v > 0);
+            }
+        } catch (Throwable ignored) {}
+        try {
+            if (virtualizer != null) {
+                int v = Math.max(0, Math.min(1000, prefs.getInt("virtualizer", 0)));
+                virtualizer.setStrength((short)v);
+                virtualizer.setEnabled(enabled && v > 0);
+            }
+        } catch (Throwable ignored) {}
+        setEnabled(enabled);
+    }
+
     public synchronized void release() {
         try { if (equalizer != null) equalizer.release(); } catch (Throwable ignored) {}
         try { if (bassBoost != null) bassBoost.release(); } catch (Throwable ignored) {}
