@@ -20,5 +20,6 @@
             </intent-filter>
         </service>
             <activity android:name=".NowPlayingActivity" android:exported="false" />
+        <activity android:name=".VisualizerActivity" android:exported="false" />
     </application>
 </manifest>
