@@ -80,7 +80,7 @@ public final class VisualizerActivity extends AppCompatActivity {
                 @Override public void onFftDataCapture(Visualizer v, byte[] fft, int samplingRate){spectrum.setLevels(fft);}
             },Visualizer.getMaxCaptureRate()/2,false,true);
             visualizer.setEnabled(true);
-        }catch(SecurityException|RuntimeException e){
+        }catch(RuntimeException e){
             spectrum.animateFallback();
             Toast.makeText(this,"Visualizador limitado pelo sistema de áudio.",Toast.LENGTH_SHORT).show();
         }
