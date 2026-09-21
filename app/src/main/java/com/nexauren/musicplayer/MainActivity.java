@@ -380,7 +380,7 @@ public final class MainActivity extends AppCompatActivity {
         title.setTypeface(null, 1);
         introLine.addView(title, new LinearLayout.LayoutParams(0, dp(30), 1));
         TextView state = chipText(effectsEnabled ? "ATIVO" : "DESLIGADO",
-                effectsEnabled ? accent() : surface_2(), Color.WHITE);
+                effectsEnabled ? accent() : surface(), Color.WHITE);
         state.setTextSize(11);
         introLine.addView(state, new LinearLayout.LayoutParams(dp(84), dp(32)));
         intro.addView(introLine);
