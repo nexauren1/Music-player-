@@ -23,6 +23,8 @@
             </intent-filter>
         </service>
             <activity android:name=".NowPlayingActivity" android:exported="false" />
+        <activity android:name=".EditTagsActivity" android:exported="false" />
+        <activity android:name=".AudioCutterActivity" android:exported="false" />
         <activity android:name=".VisualizerActivity" android:exported="false" />
             <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
