@@ -2,18 +2,24 @@ package com.nexauren.musicplayer;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.media.audiofx.PresetReverb;
 
-import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.AudioProcessor;
 import androidx.media3.common.AuxEffectInfo;
 import androidx.media3.common.C;
+import androidx.media3.common.ChannelMixingMatrix;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.common.audio.ChannelMixingAudioProcessor;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.audio.AudioSink;
+import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
-import android.media.audiofx.PresetReverb;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class PlaybackService extends MediaSessionService {
@@ -21,8 +27,9 @@ public final class PlaybackService extends MediaSessionService {
     private ExoPlayer player;
     private MediaSession mediaSession;
     private final AudioEffectsController effects = new AudioEffectsController();
+    private ChannelMixingAudioProcessor channelMixer;
     private PresetReverb reverb;
-    private boolean mono = false;
+    private boolean mono;
 
     private final Player.Listener audioListener = new Player.Listener() {
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
@@ -33,13 +40,32 @@ public final class PlaybackService extends MediaSessionService {
     @Override public void onCreate() {
         super.onCreate();
         instance = this;
-        player = new ExoPlayer.Builder(this).build();
+
+        channelMixer = new ChannelMixingAudioProcessor();
+        channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(1, 1, new float[]{1f}));
+        channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 2, new float[]{1f, 0f, 0f, 1f}));
+        channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
+
+        DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this) {
+            @Override protected AudioSink buildAudioSink(android.content.Context context,
+                    boolean enableFloatOutput, boolean enableAudioTrackPlaybackParams, boolean enableOffload) {
+                return new DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .setOffloadMode(DefaultAudioSink.OFFLOAD_MODE_DISABLED)
+                        .setAudioProcessors(new AudioProcessor[]{channelMixer})
+                        .build();
+            }
+        };
+
+        player = new ExoPlayer.Builder(this, renderersFactory).build();
         player.setAudioAttributes(new AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
         player.addListener(audioListener);
+
         try {
             reverb = new PresetReverb(0, 0);
             reverb.setPreset(PresetReverb.PRESET_NONE);
@@ -61,34 +87,43 @@ public final class PlaybackService extends MediaSessionService {
     public static boolean setEqualizerBand(int index, int count, int percent) {
         return instance != null && instance.effects.setUiBandAndReturn(index, count, percent);
     }
-
     public static int getEqualizerBandCount() {
         return instance == null ? 0 : instance.effects.getBandCount();
     }
-
     public static int[] getEqualizerLevels(int count) {
         return instance == null ? new int[count] : instance.effects.getLevelsPercent(count);
     }
-
     public static boolean applyEqualizerPreset(String name, int count) {
         return instance != null && instance.effects.applyPresetAndReturn(name, count);
     }
-
     public static boolean setBass(int percent) {
         return instance != null && instance.effects.setBassAndReturn(percent);
     }
-
     public static boolean setPreamp(int percent) {
         return instance != null && instance.effects.setPreampAndReturn(percent);
     }
 
-    @OptIn(markerClass = UnstableApi.class)
     public static void setMonoMode(boolean enable) {
-        if (instance == null || instance.player == null) return;
-        // A simple routing switch is kept here so the preference is reflected immediately.
-        // The full channel-mixing pipeline can be enabled without rebuilding the MediaSession.
+        if (instance == null || instance.player == null || instance.channelMixer == null) return;
         instance.mono = enable;
-        ToastGate.post(enable ? "Modo mono" : "Modo estéreo");
+        boolean playing = instance.player.isPlaying();
+        int index = Math.max(0, instance.player.getCurrentMediaItemIndex());
+        long position = Math.max(0, instance.player.getCurrentPosition());
+        try {
+            if (enable) {
+                instance.channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
+            } else {
+                instance.channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 2, new float[]{1f, 0f, 0f, 1f}));
+            }
+            if (instance.player.getMediaItemCount() > 0) {
+                instance.player.stop();
+                instance.player.prepare();
+                instance.player.seekTo(index, position);
+                if (playing) instance.player.play();
+            }
+        } catch (Throwable ignored) {}
     }
 
     @OptIn(markerClass = UnstableApi.class)
@@ -112,12 +147,9 @@ public final class PlaybackService extends MediaSessionService {
     }
 
     public static void setPlaybackSpeedPitch(float speed, float pitch) {
-        if (instance == null || instance.player == null) return;
-        instance.player.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(speed, pitch));
-    }
-
-    public static void stop() {
-        if (instance != null && instance.player != null) instance.player.stop();
+        if (instance != null && instance.player != null) {
+            instance.player.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(speed, pitch));
+        }
     }
 
     @Override public void onDestroy() {
@@ -127,11 +159,8 @@ public final class PlaybackService extends MediaSessionService {
         effects.release();
         if (mediaSession != null) { mediaSession.release(); mediaSession = null; }
         if (player != null) { player.release(); player = null; }
+        channelMixer = null;
         instance = null;
         super.onDestroy();
-    }
-
-    private static final class ToastGate {
-        private static void post(String text) { /* UI reflects this state; no-op in service process */ }
     }
 }
