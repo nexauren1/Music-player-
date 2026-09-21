@@ -1828,12 +1828,6 @@ private void markCurrentRecent() {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_WRITE_MEDIA && resultCode == RESULT_OK) savePendingTags();
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_WRITE_MEDIA && resultCode == RESULT_OK) savePendingTags();
         else if ((requestCode == 7810 || requestCode == 7811) && resultCode == RESULT_OK) loadTracks();
     }
 
