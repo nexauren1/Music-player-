@@ -130,6 +130,7 @@ public final class MainActivity extends AppCompatActivity {
         requestNotificationPermission();
         ensureAudioPermission();
         handler.post(ticker);
+        if ("equalizer".equalsIgnoreCase(getIntent().getStringExtra("page"))) showEqualizer();
     }
 
     private void buildShell() {
