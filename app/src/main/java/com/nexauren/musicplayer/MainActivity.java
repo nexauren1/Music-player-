@@ -942,12 +942,25 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void cycleRepeat() {
-        if (controller == null) return;
+        if (controller == null || !controller.isConnected()) return;
         int mode = controller.getRepeatMode();
         int next = mode == Player.REPEAT_MODE_OFF ? Player.REPEAT_MODE_ALL :
                 mode == Player.REPEAT_MODE_ALL ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF;
         controller.setRepeatMode(next);
-        Toast.makeText(this, next == Player.REPEAT_MODE_ONE ? "Repetir uma" : next == Player.REPEAT_MODE_ALL ? "Repetir tudo" : "Repetição desligada", Toast.LENGTH_SHORT).show();
+        updatePlaybackUi();
+        Toast.makeText(this, next == Player.REPEAT_MODE_ONE ? "Repetir uma" :
+                next == Player.REPEAT_MODE_ALL ? "Repetir tudo" : "Repetição desligada", Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleABRepeat() {
+        int state = PlaybackService.toggleABRepeat();
+        if (miniAB != null) {
+            miniAB.setText(state == 1 ? "A •" : "A-B");
+            miniAB.setTextColor(state > 0 ? accent() : textSecondary());
+        }
+        if (state == 1) Toast.makeText(this, "Ponto A definido. Toque novamente para marcar B.", Toast.LENGTH_SHORT).show();
+        else if (state == 2) Toast.makeText(this, "Repetição A-B ativada.", Toast.LENGTH_SHORT).show();
+        else Toast.makeText(this, "Repetição A-B desligada.", Toast.LENGTH_SHORT).show();
     }
 
     private void togglePlayback() {
