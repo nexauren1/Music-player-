@@ -81,7 +81,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.rgb(33, 150, 243));
+        getWindow().setStatusBarColor(AppearanceStore.accent(this));
         getWindow().setNavigationBarColor(Color.BLACK);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         buildUi();
@@ -97,7 +97,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(4), 0, dp(4), 0);
-        bar.setBackgroundColor(Color.rgb(33,150,243));
+        bar.setBackgroundColor(AppearanceStore.accent(this));
 
         TextView back = icon("‹", 38);
         bar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(56)));
