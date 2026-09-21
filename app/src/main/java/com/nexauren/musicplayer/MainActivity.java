@@ -36,6 +36,7 @@ import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -96,6 +97,7 @@ public final class MainActivity extends AppCompatActivity {
     private boolean searchMode = false;
     private long sleepEndAtMs = 0L;
     private long lastArtworkId = -1L;
+    private boolean effectsEnabled = true;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
@@ -126,6 +128,8 @@ public final class MainActivity extends AppCompatActivity {
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
         darkMode = getSharedPreferences("nexauren", MODE_PRIVATE).getBoolean("dark", false);
+        effectsEnabled = getSharedPreferences("nexauren", MODE_PRIVATE).getBoolean("effects", true);
+        PlaybackService.setEffectsEnabled(effectsEnabled);
         buildShell();
         connectController();
         requestNotificationPermission();
