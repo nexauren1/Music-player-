@@ -32,6 +32,17 @@ public final class PlaybackService extends MediaSessionService {
     private boolean mono;
     private float balance;
     private boolean skipSilence;
+    private long abStartMs = -1L;
+    private long abEndMs = -1L;
+    private final android.os.Handler abHandler = new android.os.Handler();
+    private final Runnable abLoop = new Runnable() {
+        @Override public void run() {
+            if (player != null && player.isPlaying() && abStartMs >= 0 && abEndMs > abStartMs && player.getCurrentPosition() >= abEndMs) {
+                player.seekTo(abStartMs);
+            }
+            abHandler.postDelayed(this, 120L);
+        }
+    };
 
     private final Player.Listener audioListener = new Player.Listener() {
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
@@ -66,6 +77,7 @@ public final class PlaybackService extends MediaSessionService {
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
         player.addListener(audioListener);
+        abHandler.post(abLoop);
 
         try {
             reverb = new PresetReverb(0, 0);
@@ -172,6 +184,35 @@ public final class PlaybackService extends MediaSessionService {
         } catch (Throwable ignored) {}
     }
 
+    public static int toggleABRepeat() {
+        if (instance == null || instance.player == null || instance.player.getCurrentMediaItem() == null) return -1;
+        long position = Math.max(0L, instance.player.getCurrentPosition());
+        if (instance.abStartMs < 0) {
+            instance.abStartMs = position;
+            instance.abEndMs = -1L;
+            return 1;
+        }
+        if (instance.abEndMs < 0) {
+            if (position <= instance.abStartMs) return 1;
+            instance.abEndMs = position;
+            return 2;
+        }
+        instance.abStartMs = -1L;
+        instance.abEndMs = -1L;
+        return 0;
+    }
+
+    public static int getABState() {
+        if (instance == null) return 0;
+        if (instance.abStartMs >= 0 && instance.abEndMs < 0) return 1;
+        return instance.abStartMs >= 0 && instance.abEndMs > instance.abStartMs ? 2 : 0;
+    }
+
+    private void resetAB() {
+        abStartMs = -1L;
+        abEndMs = -1L;
+    }
+
     public static void stop() {
         if (instance != null && instance.player != null) instance.player.stop();
     }
@@ -183,6 +224,8 @@ public final class PlaybackService extends MediaSessionService {
     }
 
     @Override public void onDestroy() {
+        abHandler.removeCallbacks(abLoop);
+        resetAB();
         if (player != null) player.removeListener(audioListener);
         try { if (reverb != null) reverb.release(); } catch (Throwable ignored) {}
         reverb = null;
