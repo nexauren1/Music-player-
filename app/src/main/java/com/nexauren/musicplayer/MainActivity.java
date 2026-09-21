@@ -81,6 +81,14 @@ public final class MainActivity extends AppCompatActivity {
     private ImageView miniArt;
     private SeekBar miniSeek;
     private TextView miniPlay;
+    private TextView miniShuffle;
+    private TextView miniRepeat;
+    private TextView miniAB;
+    private TextView miniFavorite;
+    private TextView miniCurrent;
+    private TextView miniTotal;
+    private SeekBar miniProgress;
+    private boolean miniTracking;
     private TextView countText;
     private TextView bigTitle;
     private TextView bigPosition;
@@ -335,33 +343,67 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void buildMiniPlayer(LinearLayout shell) {
-        LinearLayout mini = roundedPanel(surface(), dp(18));
-        mini.setPadding(dp(8), dp(6), dp(6), dp(6));
-        shell.addView(mini, new LinearLayout.LayoutParams(-1, dp(66)));
-        mini.setOnClickListener(v -> startActivity(new Intent(this, NowPlayingActivity.class)));
+        LinearLayout mini=roundedPanel(surface(),dp(16));
+        mini.setOrientation(LinearLayout.VERTICAL);
+        mini.setPadding(dp(9),dp(6),dp(9),dp(5));
+        mini.setElevation(dp(5));
+        shell.addView(mini,new LinearLayout.LayoutParams(-1,dp(124)));
 
-        miniArt = new ImageView(this);
-        miniArt.setImageResource(android.R.drawable.ic_menu_gallery);
-        miniArt.setColorFilter(Color.rgb(80, 90, 100));
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
+        mini.addView(top,new LinearLayout.LayoutParams(-1,dp(50)));
+
+        miniArt=new ImageView(this);
+        miniArt.setImageResource(R.drawable.music_placeholder);
+        miniArt.setColorFilter(Color.rgb(80,90,100));
         miniArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        mini.addView(miniArt, new LinearLayout.LayoutParams(dp(50), dp(50)));
+        miniArt.setBackground(roundDrawable(Color.rgb(235,238,242),dp(11)));
+        miniArt.setClipToOutline(true);
+        top.addView(miniArt,new LinearLayout.LayoutParams(dp(46),dp(46)));
 
-        LinearLayout labels = new LinearLayout(this);
-        labels.setOrientation(LinearLayout.VERTICAL);
-        labels.setPadding(dp(10), 0, dp(8), 0);
-        miniTitle = text("Nenhuma música", 14, textPrimary());
-        miniTitle.setTypeface(null, 1);
-        miniArtist = text("Selecione uma faixa", 12, textSecondary());
-        labels.addView(miniTitle, new LinearLayout.LayoutParams(-1, dp(25)));
-        labels.addView(miniArtist, new LinearLayout.LayoutParams(-1, dp(20)));
-        mini.addView(labels, new LinearLayout.LayoutParams(0, dp(50), 1));
+        LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);labels.setPadding(dp(9),0,dp(3),0);
+        miniTitle=text("Nenhuma música",14,textPrimary());miniTitle.setTypeface(null,1);miniTitle.setMaxLines(1);
+        miniArtist=text("Selecione uma faixa",11,textSecondary());miniArtist.setMaxLines(1);
+        labels.addView(miniTitle,new LinearLayout.LayoutParams(-1,dp(25)));
+        labels.addView(miniArtist,new LinearLayout.LayoutParams(-1,dp(19)));
+        top.addView(labels,new LinearLayout.LayoutParams(0,dp(46),1));
+        miniFavorite=miniIcon("♡",24);top.addView(miniFavorite,new LinearLayout.LayoutParams(dp(38),dp(46)));
+        miniFavorite.setOnClickListener(v->toggleCurrentFavorite());
+        miniPlay=miniIcon("▶",20);miniPlay.setBackground(roundAccent(dp(23)));top.addView(miniPlay,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        miniPlay.setOnClickListener(v->togglePlayback());
 
-        miniPlay = circleButton("▶");
-        mini.addView(miniPlay, new LinearLayout.LayoutParams(dp(50), dp(50)));
-        miniPlay.setOnClickListener(v -> togglePlayback());
-        miniSeek = new SeekBar(this);
-        miniSeek.setVisibility(View.GONE);
+        LinearLayout seekRow=new LinearLayout(this);seekRow.setGravity(Gravity.CENTER_VERTICAL);
+        miniCurrent=text("0:00",9,textSecondary());miniTotal=text("0:00",9,textSecondary());miniTotal.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        miniProgress=new SeekBar(this);miniProgress.setMax(1000);
+        seekRow.addView(miniCurrent,new LinearLayout.LayoutParams(dp(30),dp(21)));
+        seekRow.addView(miniProgress,new LinearLayout.LayoutParams(0,dp(22),1));
+        seekRow.addView(miniTotal,new LinearLayout.LayoutParams(dp(30),dp(21)));
+        mini.addView(seekRow,new LinearLayout.LayoutParams(-1,dp(23)));
+        miniProgress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onProgressChanged(SeekBar b,int p,boolean from){miniTracking=from;if(from&&controller!=null&&controller.isConnected()){long d=controller.getDuration();miniCurrent.setText(formatMs(d>0?d*p/1000L:0));}}
+            @Override public void onStartTrackingTouch(SeekBar b){miniTracking=true;}
+            @Override public void onStopTrackingTouch(SeekBar b){miniTracking=false;if(controller!=null&&controller.isConnected()&&controller.getDuration()>0)controller.seekTo((long)controller.getDuration()*b.getProgress()/1000L);}
+        });
+
+        LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);
+        miniShuffle=miniIcon("⤨",18);TextView prev=miniIcon("◀",18);miniAB=miniPill("A-B");TextView next=miniIcon("▶|",18);miniRepeat=miniIcon("↻",18);
+        controls.addView(miniShuffle,new LinearLayout.LayoutParams(0,dp(31),1));
+        controls.addView(prev,new LinearLayout.LayoutParams(0,dp(31),1));
+        controls.addView(miniAB,new LinearLayout.LayoutParams(dp(52),dp(27)));
+        controls.addView(next,new LinearLayout.LayoutParams(0,dp(31),1));
+        controls.addView(miniRepeat,new LinearLayout.LayoutParams(0,dp(31),1));
+        mini.addView(controls,new LinearLayout.LayoutParams(-1,dp(32)));
+        prev.setOnClickListener(v->{if(controller!=null)controller.seekToPreviousMediaItem();});
+        next.setOnClickListener(v->{if(controller!=null)controller.seekToNextMediaItem();});
+        miniShuffle.setOnClickListener(v->{if(controller!=null){controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled());updatePlaybackUi();}});
+        miniRepeat.setOnClickListener(v->cycleRepeat());
+        miniAB.setOnClickListener(v->toggleABRepeat());
+
+        View.OnClickListener open=v->startActivity(new Intent(this,NowPlayingActivity.class));
+        miniArt.setOnClickListener(open);labels.setOnClickListener(open);
     }
+
+    private TextView miniIcon(String icon,int size){TextView t=text(icon,size,textSecondary());t.setGravity(Gravity.CENTER);return t;}
+    private TextView miniPill(String value){TextView t=text(value,10,textSecondary());t.setTypeface(null,1);t.setGravity(Gravity.CENTER);t.setBackground(roundDrawable(darkMode?Color.rgb(44,51,61):Color.rgb(239,241,244),dp(15)));return t;}
 
     private void showEqualizer() {
         currentPage = 1;
