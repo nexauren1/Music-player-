@@ -69,6 +69,30 @@ public final class AudioEffectsController {
         return values;
     }
 
+    public synchronized boolean setUiBandAndReturn(int uiIndex, int uiCount, int percent) {
+        if (equalizer == null) return false;
+        setUiBand(uiIndex, uiCount, percent);
+        return true;
+    }
+
+    public synchronized boolean applyPresetAndReturn(String name, int uiCount) {
+        if (equalizer == null) return false;
+        applyPreset(name, uiCount);
+        return true;
+    }
+
+    public synchronized boolean setBassAndReturn(int percent) {
+        if (bassBoost == null) return false;
+        setBass(percent);
+        return true;
+    }
+
+    public synchronized boolean setPreampAndReturn(int percent) {
+        if (loudnessEnhancer == null) return false;
+        setPreamp(percent);
+        return true;
+    }
+
     public synchronized void setUiBand(int uiIndex, int uiCount, int percent) {
         if (equalizer == null) return;
         short[] range = equalizer.getBandLevelRange();
