@@ -92,7 +92,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(baseBackground);
+        root.setBackground(AppearanceBackgroundDrawable.forContext(this));
 
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
