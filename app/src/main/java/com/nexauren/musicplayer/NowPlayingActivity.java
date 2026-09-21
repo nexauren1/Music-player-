@@ -74,7 +74,9 @@ public final class NowPlayingActivity extends AppCompatActivity {
         heart.setOnClickListener(v -> toggleFavorite());
         TextView queue = icon("≡", 28);
         bar.addView(queue, new LinearLayout.LayoutParams(dp(54), dp(56)));
-        queue.setOnClickListener(v -> Toast.makeText(this, "Fila disponível no menu da biblioteca.", Toast.LENGTH_SHORT).show());
+        queue.setOnClickListener(v -> {
+            Toast.makeText(this, "Abra o menu da biblioteca para editar a fila.", Toast.LENGTH_SHORT).show();
+        });
         root.addView(bar);
 
         LinearLayout body = new LinearLayout(this);
@@ -84,7 +86,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
 
         art = new ImageView(this);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        art.setImageResource(android.R.drawable.ic_menu_gallery);
+        art.setImageResource(R.drawable.music_placeholder);
         body.addView(art, new LinearLayout.LayoutParams(-1, dp(330)));
 
         title = text("Nexauren Player", 22, Color.WHITE);
@@ -112,14 +114,14 @@ public final class NowPlayingActivity extends AppCompatActivity {
 
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
-        TextView prev = button("⏮",64);
-        play = button("▶",82);
-        TextView next = button("⏭",64);
-        controls.addView(prev,new LinearLayout.LayoutParams(dp(70),dp(70)));
+        TextView prev = roundButton("⏮",58);
+        play = roundButton("▶",76);
+        TextView next = roundButton("⏭",58);
+        controls.addView(prev,new LinearLayout.LayoutParams(dp(66),dp(66)));
         LinearLayout.LayoutParams pl=new LinearLayout.LayoutParams(dp(88),dp(82));
         pl.setMargins(dp(12),0,dp(12),0);
         controls.addView(play,pl);
-        controls.addView(next,new LinearLayout.LayoutParams(dp(70),dp(70)));
+        controls.addView(next,new LinearLayout.LayoutParams(dp(66),dp(66)));
         body.addView(controls);
         prev.setOnClickListener(v->{if(controller!=null)controller.seekToPreviousMediaItem();});
         next.setOnClickListener(v->{if(controller!=null)controller.seekToNextMediaItem();});
@@ -179,7 +181,8 @@ public final class NowPlayingActivity extends AppCompatActivity {
         new android.app.AlertDialog.Builder(this).setTitle("Velocidade").setItems(v,(d,w)->controller.setPlaybackSpeed(Float.parseFloat(v[w].replace("x","")))).show();
     }
     private TextView icon(String s,int size){TextView t=text(s,size,Color.WHITE);t.setGravity(Gravity.CENTER);return t;}
-    private TextView button(String s,int size){TextView t=icon(s,size);t.setBackgroundColor(0xFF1A2230);return t;}
+    private TextView button(String s,int size){TextView t=icon(s,size);t.setBackground(round(0xFF1A2230,22));return t;}
+    private TextView roundButton(String s,int size){TextView t=icon(s,size);t.setBackground(round(0xFF1A2230,40));return t;}
     private TextView chip(String s){TextView t=text(s,14,Color.WHITE);t.setGravity(Gravity.CENTER);t.setBackground(round(0xFF2D9DEB,28));return t;}
     private TextView text(String s,float size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);return t;}
     private android.graphics.drawable.GradientDrawable round(int c,int r){android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(c);d.setCornerRadius(dp(r));return d;}
