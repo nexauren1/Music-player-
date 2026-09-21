@@ -210,132 +210,103 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void buildHomeContent() {
-        ScrollView scroll = new ScrollView(this);
+        ScrollView scroll=new ScrollView(this);
         scroll.setFillViewport(true);
-        LinearLayout inside = new LinearLayout(this);
+        LinearLayout inside=new LinearLayout(this);
         inside.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(inside, new ScrollView.LayoutParams(-1, -2));
-        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        inside.setPadding(0,0,0,dp(6));
+        scroll.addView(inside,new ScrollView.LayoutParams(-1,-2));
+        content.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
 
-        LinearLayout nowCard = roundedPanel(surface(), dp(22));
-        nowCard.setOrientation(LinearLayout.VERTICAL);
-        nowCard.setPadding(dp(14), dp(10), dp(14), dp(12));
-        inside.addView(nowCard, new LinearLayout.LayoutParams(-1, dp(315)));
+        LinearLayout nowCard=roundedPanel(surface(),dp(20));
+        nowCard.setPadding(dp(10),dp(8),dp(10),dp(7));
+        inside.addView(nowCard,new LinearLayout.LayoutParams(-1,dp(158)));
 
-        LinearLayout nowHeader = new LinearLayout(this);
-        nowHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView nowLabel = text("A tocar agora", 15, textPrimary());
-        nowLabel.setTypeface(null, 1);
-        nowHeader.addView(nowLabel, new LinearLayout.LayoutParams(0, dp(30), 1));
-        TextView quality = chipText("8/100", accent(), Color.WHITE);
-        nowHeader.addView(quality, new LinearLayout.LayoutParams(dp(72), dp(34)));
-        nowCard.addView(nowHeader);
+        LinearLayout nowTop=new LinearLayout(this);
+        nowTop.setGravity(Gravity.CENTER_VERTICAL);
+        nowCard.addView(nowTop,new LinearLayout.LayoutParams(-1,dp(96)));
 
-        FrameLayout artFrame = new FrameLayout(this);
-        GradientDrawable artBg = roundedDrawable(Color.rgb(235, 238, 242), dp(18));
-        artFrame.setBackground(artBg);
-        artFrame.setClipToOutline(true);
-        artFrame.setOutlineProvider(new android.view.ViewOutlineProvider() {
-            @Override public void getOutline(View view, android.graphics.Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(18));
-            }
-        });
-        nowCard.addView(artFrame, new LinearLayout.LayoutParams(-1, dp(150)));
-
-        bigArt = new ImageView(this);
-        bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        bigArt=new ImageView(this);
         bigArt.setImageResource(R.drawable.music_placeholder);
-        bigArt.setColorFilter(Color.rgb(90, 100, 110));
-        artFrame.addView(bigArt, new FrameLayout.LayoutParams(-1, -1));
+        bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        bigArt.setBackground(roundDrawable(Color.rgb(55,63,74),dp(16)));
+        bigArt.setClipToOutline(true);
+        nowTop.addView(bigArt,new LinearLayout.LayoutParams(dp(86),dp(86)));
 
-        bigTitle = text("Nenhuma música selecionada", 22, Color.WHITE);
+        LinearLayout nowMeta=new LinearLayout(this);
+        nowMeta.setOrientation(LinearLayout.VERTICAL);
+        nowMeta.setGravity(Gravity.CENTER_VERTICAL);
+        nowMeta.setPadding(dp(11),0,dp(6),0);
+        bigTitle=text("Nenhuma música",16,textPrimary());
+        bigTitle.setTypeface(null,1);
         bigTitle.setMaxLines(2);
-        bigTitle.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        bigTitle.setShadowLayer(5f, 0, 2f, Color.BLACK);
-        FrameLayout.LayoutParams bt = new FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM);
-        bt.setMargins(dp(16), 0, dp(16), dp(6));
-        artFrame.addView(bigTitle, bt);
+        bigTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        nowMeta.addView(bigTitle,new LinearLayout.LayoutParams(-1,dp(46)));
+        TextView nowArtist=text("Selecione uma faixa",12,textSecondary());
+        nowArtist.setSingleLine(true);
+        nowMeta.addView(nowArtist,new LinearLayout.LayoutParams(-1,dp(26)));
+        nowTop.addView(nowMeta,new LinearLayout.LayoutParams(0,dp(82),1));
 
-        waveform = new WaveformView(this);
-        nowCard.addView(waveform, new LinearLayout.LayoutParams(-1, dp(44)));
+        homePlay=circleButton("▶");
+        nowTop.addView(homePlay,new LinearLayout.LayoutParams(dp(56),dp(58)));
+        homePlay.setOnClickListener(v->togglePlayback());
 
-        LinearLayout current = new LinearLayout(this);
-        current.setGravity(Gravity.CENTER_VERTICAL);
-        bigPosition = text("0:00", 12, textSecondary());
-        bigDuration = text("0:00", 12, textSecondary());
-        TextView cur = bigPosition;
-        TextView total = bigDuration;
-        total.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        current.addView(cur, new LinearLayout.LayoutParams(0, dp(24), 1));
-        current.addView(total, new LinearLayout.LayoutParams(0, dp(24), 1));
-        nowCard.addView(current);
+        View openNow=nowCard;
+        nowCard.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+        bigArt.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
 
-        LinearLayout mainControls = new LinearLayout(this);
-        mainControls.setGravity(Gravity.CENTER);
-        TextView prev = circleButton("◀");
-        TextView play = circleButton("▶");
-        homePlay = play;
-        TextView next = circleButton("▶|");
-        TextView shuffle = circleButton("⤨");
-        mainControls.addView(shuffle, new LinearLayout.LayoutParams(dp(46), dp(48)));
-        mainControls.addView(prev, new LinearLayout.LayoutParams(dp(50), dp(48)));
-        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(dp(68), dp(58));
-        playLp.setMargins(dp(10), 0, dp(10), 0);
-        mainControls.addView(play, playLp);
-        mainControls.addView(next, new LinearLayout.LayoutParams(dp(50), dp(48)));
-        TextView repeat = circleButton("↻");
-        mainControls.addView(repeat, new LinearLayout.LayoutParams(dp(46), dp(48)));
-        nowCard.addView(mainControls);
+        waveform=new WaveformView(this);
+        nowCard.addView(waveform,new LinearLayout.LayoutParams(-1,dp(26)));
 
-        play.setOnClickListener(v -> togglePlayback());
-        prev.setOnClickListener(v -> { if (controller != null) controller.seekToPreviousMediaItem(); });
-        next.setOnClickListener(v -> { if (controller != null) controller.seekToNextMediaItem(); });
-        shuffle.setOnClickListener(v -> { if (controller != null) controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled()); });
-        repeat.setOnClickListener(v -> cycleRepeat());
+        LinearLayout time=new LinearLayout(this);
+        bigPosition=text("0:00",10,textSecondary());
+        bigDuration=text("0:00",10,textSecondary());
+        bigDuration.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        time.addView(bigPosition,new LinearLayout.LayoutParams(0,dp(22),1));
+        time.addView(bigDuration,new LinearLayout.LayoutParams(0,dp(22),1));
+        nowCard.addView(time,new LinearLayout.LayoutParams(-1,dp(22)));
 
-        HorizontalScrollView libraryTabsScroll = new HorizontalScrollView(this);
+        HorizontalScrollView libraryTabsScroll=new HorizontalScrollView(this);
         libraryTabsScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout libraryTabs = new LinearLayout(this);
-        libraryTabs.setPadding(0, dp(5), dp(8), dp(2));
-        String[] libraryTabNames = {"Músicas","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
-        for (String tabName : libraryTabNames) {
-            TextView tab = chipText(tabName, "Músicas".equals(tabName) ? accent() : surface(),
-                    "Músicas".equals(tabName) ? Color.WHITE : textPrimary());
-            LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(dp(92), dp(40));
-            tabLp.setMargins(dp(3), 0, dp(3), 0);
-            libraryTabs.addView(tab, tabLp);
-            tab.setOnClickListener(v -> {
-                if ("Músicas".equals(tabName)) showHome(true);
-                else if ("Álbuns".equals(tabName)) showAlbums();
-                else if ("Artistas".equals(tabName)) showArtists();
-                else if ("Pastas".equals(tabName)) showFolders();
-                else if ("Favoritos".equals(tabName)) showFavorites();
-                else if ("Recentes".equals(tabName)) showRecent();
-                else if ("Playlist".equals(tabName)) showPlaylist();
+        LinearLayout libraryTabs=new LinearLayout(this);
+        libraryTabs.setPadding(0,dp(5),dp(8),dp(2));
+        String[] libraryTabNames={"Músicas","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
+        for(String tabName:libraryTabNames){
+            TextView tab=chipText(tabName,"Músicas".equals(tabName)?accent():surface(),
+                    "Músicas".equals(tabName)?Color.WHITE:textPrimary());
+            LinearLayout.LayoutParams tabLp=new LinearLayout.LayoutParams(dp(92),dp(40));
+            tabLp.setMargins(dp(3),0,dp(3),0);
+            libraryTabs.addView(tab,tabLp);
+            tab.setOnClickListener(v->{
+                if("Músicas".equals(tabName))showHome(true);
+                else if("Álbuns".equals(tabName))showAlbums();
+                else if("Artistas".equals(tabName))showArtists();
+                else if("Pastas".equals(tabName))showFolders();
+                else if("Favoritos".equals(tabName))showFavorites();
+                else if("Recentes".equals(tabName))showRecent();
+                else if("Playlist".equals(tabName))showPlaylist();
             });
         }
-        libraryTabsScroll.addView(libraryTabs, new ViewGroup.LayoutParams(-2, dp(48)));
-        inside.addView(libraryTabsScroll, new LinearLayout.LayoutParams(-1, dp(50)));
+        libraryTabsScroll.addView(libraryTabs,new ViewGroup.LayoutParams(-2,dp(48)));
+        inside.addView(libraryTabsScroll,new LinearLayout.LayoutParams(-1,dp(50)));
 
-        LinearLayout libraryHeader = new LinearLayout(this);
+        LinearLayout libraryHeader=new LinearLayout(this);
         libraryHeader.setGravity(Gravity.CENTER_VERTICAL);
-        libraryHeader.setPadding(dp(2), dp(14), dp(2), dp(6));
-        TextView title = text("Biblioteca", 20, textPrimary());
-        title.setTypeface(null, 1);
-        libraryHeader.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1));
-        countText = text("A carregar…", 12, textSecondary());
-        countText.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        libraryHeader.addView(countText, new LinearLayout.LayoutParams(dp(180), dp(42)));
+        libraryHeader.setPadding(dp(2),dp(9),dp(2),dp(4));
+        TextView libTitle=text("Biblioteca",20,textPrimary());libTitle.setTypeface(null,1);
+        libraryHeader.addView(libTitle,new LinearLayout.LayoutParams(0,dp(38),1));
+        countText=text("A carregar…",12,textSecondary());countText.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        libraryHeader.addView(countText,new LinearLayout.LayoutParams(dp(120),dp(38)));
         inside.addView(libraryHeader);
 
-        libraryContainer = new LinearLayout(this);
+        libraryContainer=new LinearLayout(this);
         libraryContainer.setOrientation(LinearLayout.VERTICAL);
-        inside.addView(libraryContainer, new LinearLayout.LayoutParams(-1, -2));
+        inside.addView(libraryContainer,new LinearLayout.LayoutParams(-1,-2));
 
-        TextView adSlot = text("Nexauren • experiência sem distrações", 11, textSecondary());
-        adSlot.setGravity(Gravity.CENTER);
-        adSlot.setPadding(0, dp(10), 0, dp(12));
-        inside.addView(adSlot);
+        TextView footer=text("Nexauren • música organizada para ti",10,textSecondary());
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0,dp(8),0,dp(12));
+        inside.addView(footer);
         renderLibrary();
     }
 
@@ -881,6 +852,7 @@ public final class MainActivity extends AppCompatActivity {
             String t = item.mediaMetadata.title == null ? "Nexauren Player" : item.mediaMetadata.title.toString();
             String ar = item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString();
             if (miniTitle != null) miniTitle.setText(t);
+            if (bigTitle != null) bigTitle.setText(t);
             if (miniArtist != null) miniArtist.setText(ar);
             if (miniPlay != null) miniPlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
             syncMiniSpin(controller.isPlaying());
