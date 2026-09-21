@@ -612,7 +612,16 @@ public final class MainActivity extends AppCompatActivity {
         mixCard.addView(ml,new LinearLayout.LayoutParams(-1,dp(30)));
         TextView mv=text(reverbMix+"%",13,textSecondary());mv.setGravity(Gravity.CENTER);
         mixCard.addView(mv,new LinearLayout.LayoutParams(-1,dp(24)));
-        mix.setOnDialChangedListener(p->{reverbMix=p;mv.setText(p+"%");PlaybackService.setReverb(reverbPreset,p);});
+        mix.setOnDialChangedListener(p->{
+            reverbMix=p;
+            mv.setText(p+"%");
+            String preset=reverbPreset;
+            if ("Sinal seco".equals(preset) && p > 0) {
+                preset="Sala";
+                reverbPreset=preset;
+            }
+            PlaybackService.setReverb(preset,p);
+        });
         body.addView(mixCard,new LinearLayout.LayoutParams(-1,dp(292)));
 
         LinearLayout quick=roundedPanel(surface(),dp(18));
@@ -687,7 +696,7 @@ public final class MainActivity extends AppCompatActivity {
         section(list, "Sobre");
         clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.4.0 • player local, efeitos, favoritos, fila e pesquisa."));
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.5.0 • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private LinearLayout basePage(String title) {
