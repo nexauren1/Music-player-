@@ -360,69 +360,105 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void buildMiniPlayer(LinearLayout shell) {
-        LinearLayout mini=roundedPanel(surface(),dp(16));
+        LinearLayout mini = roundedPanel(surface(), dp(15));
         mini.setOrientation(LinearLayout.VERTICAL);
-        mini.setPadding(dp(9),dp(6),dp(9),dp(5));
-        mini.setElevation(dp(5));
-        shell.addView(mini,new LinearLayout.LayoutParams(-1,dp(124)));
+        mini.setPadding(dp(7), dp(6), dp(7), dp(4));
+        mini.setElevation(dp(7));
+        shell.addView(mini, new LinearLayout.LayoutParams(-1, dp(95)));
 
-        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
-        mini.addView(top,new LinearLayout.LayoutParams(-1,dp(50)));
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        mini.addView(top, new LinearLayout.LayoutParams(-1, dp(48)));
 
-        miniArt=new ImageView(this);
+        miniArt = new ImageView(this);
         miniArt.setImageResource(R.drawable.music_placeholder);
-        miniArt.setColorFilter(Color.rgb(80,90,100));
         miniArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        miniArt.setBackground(roundDrawable(Color.rgb(235,238,242),dp(11)));
+        miniArt.setBackground(roundDrawable(Color.rgb(235,238,242), dp(11)));
         miniArt.setClipToOutline(true);
-        top.addView(miniArt,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        miniSpin=ObjectAnimator.ofFloat(miniArt,View.ROTATION,0f,360f);
+        top.addView(miniArt, new LinearLayout.LayoutParams(dp(44), dp(44)));
+
+        miniSpin = ObjectAnimator.ofFloat(miniArt, View.ROTATION, 0f, 360f);
         miniSpin.setDuration(4200L);
         miniSpin.setInterpolator(new LinearInterpolator());
         miniSpin.setRepeatCount(ObjectAnimator.INFINITE);
 
-        LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);labels.setPadding(dp(9),0,dp(3),0);
-        miniTitle=text("Nenhuma música",14,textPrimary());miniTitle.setTypeface(null,1);miniTitle.setMaxLines(1);
-        miniArtist=text("Selecione uma faixa",11,textSecondary());miniArtist.setMaxLines(1);
-        labels.addView(miniTitle,new LinearLayout.LayoutParams(-1,dp(25)));
-        labels.addView(miniArtist,new LinearLayout.LayoutParams(-1,dp(19)));
-        top.addView(labels,new LinearLayout.LayoutParams(0,dp(46),1));
-        miniFavorite=miniIcon("♡",23);top.addView(miniFavorite,new LinearLayout.LayoutParams(dp(36),dp(46)));
-        miniFavorite.setOnClickListener(v->toggleCurrentFavorite());
-        miniMore=miniIcon("⋮",22);top.addView(miniMore,new LinearLayout.LayoutParams(dp(32),dp(46)));
-        miniMore.setOnClickListener(v->showMiniMenu(v));
-        miniPlay=miniIcon("▶",20);miniPlay.setBackground(roundAccent(dp(23)));top.addView(miniPlay,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        miniPlay.setOnClickListener(v->togglePlayback());
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setPadding(dp(9), 0, dp(3), 0);
+        miniTitle = text("Nenhuma música", 13, textPrimary());
+        miniTitle.setTypeface(null, 1);
+        miniTitle.setSingleLine(true);
+        miniArtist = text("Selecione uma faixa", 10, textSecondary());
+        miniArtist.setSingleLine(true);
+        labels.addView(miniTitle, new LinearLayout.LayoutParams(-1, dp(23)));
+        labels.addView(miniArtist, new LinearLayout.LayoutParams(-1, dp(18)));
+        top.addView(labels, new LinearLayout.LayoutParams(0, dp(43), 1));
+        labels.setOnClickListener(v -> startActivity(new Intent(this, NowPlayingActivity.class)));
+        miniArt.setOnClickListener(v -> startActivity(new Intent(this, NowPlayingActivity.class)));
 
-        LinearLayout seekRow=new LinearLayout(this);seekRow.setGravity(Gravity.CENTER_VERTICAL);
-        miniCurrent=text("0:00",9,textSecondary());miniTotal=text("0:00",9,textSecondary());miniTotal.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        miniProgress=new SeekBar(this);miniProgress.setMax(1000);
-        seekRow.addView(miniCurrent,new LinearLayout.LayoutParams(dp(30),dp(21)));
-        seekRow.addView(miniProgress,new LinearLayout.LayoutParams(0,dp(22),1));
-        seekRow.addView(miniTotal,new LinearLayout.LayoutParams(dp(30),dp(21)));
-        mini.addView(seekRow,new LinearLayout.LayoutParams(-1,dp(23)));
-        miniProgress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            @Override public void onProgressChanged(SeekBar b,int p,boolean from){miniTracking=from;if(from&&controller!=null&&controller.isConnected()){long d=controller.getDuration();miniCurrent.setText(formatMs(d>0?d*p/1000L:0));}}
-            @Override public void onStartTrackingTouch(SeekBar b){miniTracking=true;}
-            @Override public void onStopTrackingTouch(SeekBar b){miniTracking=false;if(controller!=null&&controller.isConnected()&&controller.getDuration()>0)controller.seekTo((long)controller.getDuration()*b.getProgress()/1000L);}
+        miniFavorite = miniIcon("♡", 22);
+        top.addView(miniFavorite, new LinearLayout.LayoutParams(dp(34), dp(44)));
+        miniFavorite.setOnClickListener(v -> toggleCurrentFavorite());
+
+        miniMore = miniIcon("⋮", 21);
+        top.addView(miniMore, new LinearLayout.LayoutParams(dp(30), dp(44)));
+        miniMore.setOnClickListener(v -> showMiniMenu(v));
+
+        miniPlay = miniIcon("▶", 19);
+        miniPlay.setBackground(roundAccent(dp(22)));
+        top.addView(miniPlay, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        miniPlay.setOnClickListener(v -> togglePlayback());
+
+        LinearLayout seekRow = new LinearLayout(this);
+        seekRow.setGravity(Gravity.CENTER_VERTICAL);
+        miniCurrent = text("0:00", 8, textSecondary());
+        miniTotal = text("0:00", 8, textSecondary());
+        miniTotal.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        miniProgress = new SeekBar(this);
+        miniProgress.setMax(1000);
+        seekRow.addView(miniCurrent, new LinearLayout.LayoutParams(dp(28), dp(18)));
+        seekRow.addView(miniProgress, new LinearLayout.LayoutParams(0, dp(18), 1));
+        seekRow.addView(miniTotal, new LinearLayout.LayoutParams(dp(28), dp(18)));
+        mini.addView(seekRow, new LinearLayout.LayoutParams(-1, dp(19)));
+        miniProgress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar b, int p, boolean fromUser) {
+                miniTracking = fromUser;
+                if (fromUser && controller != null && controller.isConnected()) {
+                    long d = controller.getDuration();
+                    miniCurrent.setText(formatMs(d > 0 ? d * p / 1000L : 0));
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar b) { miniTracking = true; }
+            @Override public void onStopTrackingTouch(SeekBar b) {
+                miniTracking = false;
+                if (controller != null && controller.isConnected() && controller.getDuration() > 0)
+                    controller.seekTo((long) controller.getDuration() * b.getProgress() / 1000L);
+            }
         });
 
-        LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);
-        miniShuffle=miniIcon("⤨",18);TextView prev=miniIcon("◀",18);miniAB=miniPill("A-B");TextView next=miniIcon("▶|",18);miniRepeat=miniIcon("↻",18);
-        controls.addView(miniShuffle,new LinearLayout.LayoutParams(0,dp(31),1));
-        controls.addView(prev,new LinearLayout.LayoutParams(0,dp(31),1));
-        controls.addView(miniAB,new LinearLayout.LayoutParams(dp(52),dp(27)));
-        controls.addView(next,new LinearLayout.LayoutParams(0,dp(31),1));
-        controls.addView(miniRepeat,new LinearLayout.LayoutParams(0,dp(31),1));
-        mini.addView(controls,new LinearLayout.LayoutParams(-1,dp(32)));
-        prev.setOnClickListener(v->{if(controller!=null)controller.seekToPreviousMediaItem();});
-        next.setOnClickListener(v->{if(controller!=null)controller.seekToNextMediaItem();});
-        miniShuffle.setOnClickListener(v->{if(controller!=null){controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled());updatePlaybackUi();}});
-        miniRepeat.setOnClickListener(v->cycleRepeat());
-        miniAB.setOnClickListener(v->toggleABRepeat());
-
-        View.OnClickListener open=v->startActivity(new Intent(this,NowPlayingActivity.class));
-        miniArt.setOnClickListener(open);labels.setOnClickListener(open);
+        LinearLayout modes = new LinearLayout(this);
+        modes.setGravity(Gravity.CENTER);
+        miniShuffle = miniIcon("⤨", 16);
+        TextView prev = miniIcon("◀", 16);
+        miniAB = miniPill("A-B");
+        TextView next = miniIcon("▶|", 16);
+        miniRepeat = miniIcon("↻", 16);
+        modes.addView(miniShuffle, new LinearLayout.LayoutParams(0, dp(24), 1));
+        modes.addView(prev, new LinearLayout.LayoutParams(0, dp(24), 1));
+        modes.addView(miniAB, new LinearLayout.LayoutParams(dp(48), dp(24)));
+        modes.addView(next, new LinearLayout.LayoutParams(0, dp(24), 1));
+        modes.addView(miniRepeat, new LinearLayout.LayoutParams(0, dp(24), 1));
+        mini.addView(modes, new LinearLayout.LayoutParams(-1, dp(25)));
+        prev.setOnClickListener(v -> { if (controller != null) controller.seekToPreviousMediaItem(); });
+        next.setOnClickListener(v -> { if (controller != null) controller.seekToNextMediaItem(); });
+        miniShuffle.setOnClickListener(v -> {
+            if (controller != null) {
+                controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled());
+                updatePlaybackUi();
+            }
+        });
+        miniRepeat.setOnClickListener(v -> cycleRepeat());
+        miniAB.setOnClickListener(v -> toggleABRepeat());
     }
 
     private TextView miniIcon(String icon,int size){TextView t=text(icon,size,textSecondary());t.setGravity(Gravity.CENTER);return t;}
@@ -809,74 +845,14 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showEditTags() {
-        Track track=currentTrack();
-        if(track==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
-
-        LinearLayout form=new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(18),dp(4),dp(18),0);
-
-        EditText title=tagField("Título",track.title);
-        EditText artist=tagField("Artista",track.artist);
-        EditText album=tagField("Álbum",track.album);
-        EditText albumArtist=tagField("Artista do álbum","");
-        form.addView(title);form.addView(artist);form.addView(album);form.addView(albumArtist);
-
-        AlertDialog dialog=new AlertDialog.Builder(this)
-                .setTitle("Editar etiquetas")
-                .setMessage("Altere os metadados que aparecem no Nexauren.")
-                .setView(form)
-                .setNegativeButton("Cancelar",null)
-                .setPositiveButton("Guardar",null).create();
-
-        dialog.setOnShowListener(v -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(btn -> {
-            android.content.ContentValues values=new android.content.ContentValues();
-            values.put(MediaStore.Audio.Media.TITLE,title.getText().toString().trim());
-            values.put(MediaStore.Audio.Media.ARTIST,artist.getText().toString().trim());
-            values.put(MediaStore.Audio.Media.ALBUM,album.getText().toString().trim());
-            if(Build.VERSION.SDK_INT>=29 && !albumArtist.getText().toString().trim().isEmpty())
-                values.put(MediaStore.Audio.Media.ALBUM_ARTIST,albumArtist.getText().toString().trim());
-            pendingTagUri=track.uri;
-            pendingTagValues=values;
-            requestTagWritePermission();
-            dialog.dismiss();
-        }));
-        dialog.show();
-    }
-
-    private EditText tagField(String hint,String value){
-        EditText e=new EditText(this);e.setHint(hint);e.setSingleLine(true);e.setText(value==null?"":value);e.setPadding(0,dp(8),0,dp(8));
-        e.setTextSize(15);return e;
-    }
-
-    private void requestTagWritePermission() {
-        if(pendingTagUri==null||pendingTagValues==null)return;
-        try {
-            if(Build.VERSION.SDK_INT>=30) {
-                android.app.PendingIntent request=MediaStore.createWriteRequest(getContentResolver(),java.util.Collections.singletonList(pendingTagUri));
-                startIntentSenderForResult(request.getIntentSender(),REQUEST_WRITE_MEDIA,null,0,0,0,null);
-            } else {
-                savePendingTags();
-            }
-        } catch(Exception e) {
-            Toast.makeText(this,"O Android precisa de autorização para editar este ficheiro.",Toast.LENGTH_LONG).show();
+        Track track = currentTrack();
+        if (track == null) {
+            Toast.makeText(this, "Nenhuma faixa em reprodução.", Toast.LENGTH_SHORT).show();
+            return;
         }
-    }
-
-    private void savePendingTags() {
-        if(pendingTagUri==null||pendingTagValues==null)return;
-        new Thread(() -> {
-            try {
-                int rows=getContentResolver().update(pendingTagUri,pendingTagValues,null,null);
-                runOnUiThread(() -> {
-                    if(rows>0){Toast.makeText(this,"Etiquetas guardadas.",Toast.LENGTH_SHORT).show();loadTracks();}
-                    else Toast.makeText(this,"Não foi possível guardar as etiquetas.",Toast.LENGTH_LONG).show();
-                });
-            } catch(Exception e) {
-                runOnUiThread(() -> Toast.makeText(this,"Não foi possível editar esta faixa neste dispositivo.",Toast.LENGTH_LONG).show());
-            }
-            pendingTagUri=null;pendingTagValues=null;
-        }).start();
+        startActivityForResult(
+                new Intent(this, EditTagsActivity.class).putExtra("track_id", track.id),
+                7810);
     }
 
     private void checkForUpdateOnEntry() {
@@ -1052,7 +1028,7 @@ public final class MainActivity extends AppCompatActivity {
     private void showGlobalMenu(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
         String[] entries = {
-                "Pesquisar", "Adicionar à minha playlist", "Eliminar faixa atual",
+                "Pesquisar", "Editar etiquetas", "Cortar áudio", "Adicionar à minha playlist", "Eliminar faixa atual",
                 "Enviar faixa", "Detalhes", "Velocidade de reprodução",
                 "Visualizador de música", "Temporizador de sono", "Letra da música",
                 "Definir como toque", "Mais do artista", "Mais do álbum",
@@ -1062,6 +1038,12 @@ public final class MainActivity extends AppCompatActivity {
         menu.setOnMenuItemClickListener(item -> {
             String value = item.getTitle().toString();
             if ("Pesquisar".equals(value)) { searchMode=true; showHome(true); }
+            else if ("Editar etiquetas".equals(value)) showEditTags();
+            else if ("Cortar áudio".equals(value)) {
+                Track current=currentTrack();
+                if(current!=null) startActivityForResult(new Intent(this,AudioCutterActivity.class)
+                        .putExtra("track_id",current.id).putExtra("duration",current.durationMs).putExtra("title",current.title),7811);
+            }
             else if ("Adicionar à minha playlist".equals(value)) addCurrentToPlaylist();
             else if ("Eliminar faixa atual".equals(value)) deleteCurrentTrack();
             else if ("Enviar faixa".equals(value)) shareCurrent();
@@ -1088,13 +1070,16 @@ public final class MainActivity extends AppCompatActivity {
         PopupMenu menu = new PopupMenu(this, anchor);
         String[] entries = {
                 FavoritesStore.isFavorite(this, track.id) ? "Remover dos favoritos" : "Adicionar aos favoritos",
-                "Adicionar à minha playlist", "Enviar", "Detalhes",
+                "Editar etiquetas", "Cortar áudio", "Adicionar à minha playlist", "Enviar", "Detalhes",
                 "Mais do artista", "Mais do álbum", "Eliminar"
         };
         for (String e : entries) menu.getMenu().add(e);
         menu.setOnMenuItemClickListener(item -> {
             String value=item.getTitle().toString();
-            if(value.contains("favoritos")) {
+            if(value.equals("Editar etiquetas")) startActivityForResult(new Intent(this,EditTagsActivity.class).putExtra("track_id",track.id),7810);
+            else if(value.equals("Cortar áudio")) startActivityForResult(new Intent(this,AudioCutterActivity.class)
+                    .putExtra("track_id",track.id).putExtra("duration",track.durationMs).putExtra("title",track.title),7811);
+            else if(value.contains("favoritos")) {
                 boolean fav=FavoritesStore.toggle(this,track.id);
                 Toast.makeText(this,fav?"Adicionado aos favoritos":"Removido dos favoritos",Toast.LENGTH_SHORT).show();
             } else if(value.equals("Adicionar à minha playlist")) addTrackToPlaylist(track);
