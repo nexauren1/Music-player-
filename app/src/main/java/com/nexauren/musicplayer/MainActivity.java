@@ -985,6 +985,18 @@ private void markCurrentRecent() {
     }
     private void deleteCurrentTrack(){Track t=currentTrack();if(t!=null)deleteTrack(t);}
 
+    private void filterByCurrentArtist() {
+        Track t=currentTrack();
+        if(t!=null) filterByArtist(t.artist);
+        else Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();
+    }
+
+    private void filterByCurrentAlbum() {
+        Track t=currentTrack();
+        if(t!=null) filterByAlbum(t.album);
+        else Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();
+    }
+
     private void filterByArtist(String artist){searchMode=true;showHome(false);if(searchField!=null)searchField.setText(artist);}
     private void filterByAlbum(String album){searchMode=true;showHome(false);if(searchField!=null)searchField.setText(album);}
 
