@@ -25,6 +25,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
+import android.view.animation.LinearInterpolator;
 import android.content.Context;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
@@ -38,6 +39,7 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.animation.ObjectAnimator;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -51,6 +53,12 @@ import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
+import androidx.lifecycle.LiveData;
+import androidx.work.Data;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkInfo;
+import androidx.work.WorkManager;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -85,6 +93,7 @@ public final class MainActivity extends AppCompatActivity {
     private TextView miniRepeat;
     private TextView miniAB;
     private TextView miniFavorite;
+    private TextView miniMore;
     private TextView miniCurrent;
     private TextView miniTotal;
     private SeekBar miniProgress;
@@ -106,6 +115,10 @@ public final class MainActivity extends AppCompatActivity {
     private long sleepEndAtMs = 0L;
     private long lastArtworkId = -1L;
     private boolean effectsEnabled = true;
+    private ObjectAnimator miniSpin;
+    private Uri pendingTagUri;
+    private android.content.ContentValues pendingTagValues;
+    private static final int REQUEST_WRITE_MEDIA = 7801;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
@@ -142,6 +155,10 @@ public final class MainActivity extends AppCompatActivity {
         connectController();
         requestNotificationPermission();
         ensureAudioPermission();
+        UpdateNotifications.ensureChannel(this);
+        UpdateScheduler.ensure(this);
+        checkForUpdateOnEntry();
+        handleUpdateIntent(getIntent());
         handler.post(ticker);
         if ("equalizer".equalsIgnoreCase(getIntent().getStringExtra("page"))) showEqualizer();
     }
@@ -359,6 +376,10 @@ public final class MainActivity extends AppCompatActivity {
         miniArt.setBackground(roundDrawable(Color.rgb(235,238,242),dp(11)));
         miniArt.setClipToOutline(true);
         top.addView(miniArt,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        miniSpin=ObjectAnimator.ofFloat(miniArt,View.ROTATION,0f,360f);
+        miniSpin.setDuration(4200L);
+        miniSpin.setInterpolator(new LinearInterpolator());
+        miniSpin.setRepeatCount(ObjectAnimator.INFINITE);
 
         LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);labels.setPadding(dp(9),0,dp(3),0);
         miniTitle=text("Nenhuma música",14,textPrimary());miniTitle.setTypeface(null,1);miniTitle.setMaxLines(1);
@@ -366,8 +387,10 @@ public final class MainActivity extends AppCompatActivity {
         labels.addView(miniTitle,new LinearLayout.LayoutParams(-1,dp(25)));
         labels.addView(miniArtist,new LinearLayout.LayoutParams(-1,dp(19)));
         top.addView(labels,new LinearLayout.LayoutParams(0,dp(46),1));
-        miniFavorite=miniIcon("♡",24);top.addView(miniFavorite,new LinearLayout.LayoutParams(dp(38),dp(46)));
+        miniFavorite=miniIcon("♡",23);top.addView(miniFavorite,new LinearLayout.LayoutParams(dp(36),dp(46)));
         miniFavorite.setOnClickListener(v->toggleCurrentFavorite());
+        miniMore=miniIcon("⋮",22);top.addView(miniMore,new LinearLayout.LayoutParams(dp(32),dp(46)));
+        miniMore.setOnClickListener(v->showMiniMenu(v));
         miniPlay=miniIcon("▶",20);miniPlay.setBackground(roundAccent(dp(23)));top.addView(miniPlay,new LinearLayout.LayoutParams(dp(46),dp(46)));
         miniPlay.setOnClickListener(v->togglePlayback());
 
@@ -663,7 +686,7 @@ public final class MainActivity extends AppCompatActivity {
         section(list, "Sobre");
         clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.5.0 • player local, efeitos, favoritos, fila e pesquisa."));
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.7.0 • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private LinearLayout basePage(String title) {
@@ -783,6 +806,210 @@ public final class MainActivity extends AppCompatActivity {
         drawerItem(menu, "⚙", "Configurações", () -> { root.removeView(overlay); showSettings(); });
 
         overlay.setOnClickListener(v -> root.removeView(overlay));
+    }
+
+    private void showEditTags() {
+        Track track=currentTrack();
+        if(track==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
+
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(4),dp(18),0);
+
+        EditText title=tagField("Título",track.title);
+        EditText artist=tagField("Artista",track.artist);
+        EditText album=tagField("Álbum",track.album);
+        EditText albumArtist=tagField("Artista do álbum","");
+        form.addView(title);form.addView(artist);form.addView(album);form.addView(albumArtist);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Editar etiquetas")
+                .setMessage("Altere os metadados que aparecem no Nexauren.")
+                .setView(form)
+                .setNegativeButton("Cancelar",null)
+                .setPositiveButton("Guardar",null).create();
+
+        dialog.setOnShowListener(v -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(btn -> {
+            android.content.ContentValues values=new android.content.ContentValues();
+            values.put(MediaStore.Audio.Media.TITLE,title.getText().toString().trim());
+            values.put(MediaStore.Audio.Media.ARTIST,artist.getText().toString().trim());
+            values.put(MediaStore.Audio.Media.ALBUM,album.getText().toString().trim());
+            if(Build.VERSION.SDK_INT>=29 && !albumArtist.getText().toString().trim().isEmpty())
+                values.put(MediaStore.Audio.Media.ALBUM_ARTIST,albumArtist.getText().toString().trim());
+            pendingTagUri=track.uri;
+            pendingTagValues=values;
+            requestTagWritePermission();
+            dialog.dismiss();
+        }));
+        dialog.show();
+    }
+
+    private EditText tagField(String hint,String value){
+        EditText e=new EditText(this);e.setHint(hint);e.setSingleLine(true);e.setText(value==null?"":value);e.setPadding(0,dp(8),0,dp(8));
+        e.setTextSize(15);return e;
+    }
+
+    private void requestTagWritePermission() {
+        if(pendingTagUri==null||pendingTagValues==null)return;
+        try {
+            if(Build.VERSION.SDK_INT>=30) {
+                android.app.PendingIntent request=MediaStore.createWriteRequest(getContentResolver(),java.util.Collections.singletonList(pendingTagUri));
+                startIntentSenderForResult(request.getIntentSender(),REQUEST_WRITE_MEDIA,null,0,0,0,null);
+            } else {
+                savePendingTags();
+            }
+        } catch(Exception e) {
+            Toast.makeText(this,"O Android precisa de autorização para editar este ficheiro.",Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void savePendingTags() {
+        if(pendingTagUri==null||pendingTagValues==null)return;
+        new Thread(() -> {
+            try {
+                int rows=getContentResolver().update(pendingTagUri,pendingTagValues,null,null);
+                runOnUiThread(() -> {
+                    if(rows>0){Toast.makeText(this,"Etiquetas guardadas.",Toast.LENGTH_SHORT).show();loadTracks();}
+                    else Toast.makeText(this,"Não foi possível guardar as etiquetas.",Toast.LENGTH_LONG).show();
+                });
+            } catch(Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,"Não foi possível editar esta faixa neste dispositivo.",Toast.LENGTH_LONG).show());
+            }
+            pendingTagUri=null;pendingTagValues=null;
+        }).start();
+    }
+
+    private void checkForUpdateOnEntry() {
+        UpdateManager.checkAsync(this,new UpdateManager.Callback(){
+            @Override public void onResult(UpdateManager.ReleaseInfo info) {
+                if(!UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME))return;
+                runOnUiThread(() -> showUpdateDialog(info));
+            }
+            @Override public void onError(Exception error) { }
+        });
+    }
+
+    private void handleUpdateIntent(Intent intent) {
+        if(intent==null)return;
+        String action=intent.getAction();
+        if(UpdateManager.ACTION_DOWNLOAD_UPDATE.equals(action)) {
+            String version=intent.getStringExtra(UpdateManager.EXTRA_VERSION);
+            String url=intent.getStringExtra(UpdateManager.EXTRA_URL);
+            String notes=intent.getStringExtra(UpdateManager.EXTRA_NOTES);
+            String digest=intent.getStringExtra(UpdateManager.EXTRA_DIGEST);
+            if(url!=null&&!url.isEmpty()) runOnUiThread(() -> showUpdateDialog(new UpdateManager.ReleaseInfo(version==null?"":version,"Nexauren "+version,notes,url,digest)));
+        } else if(UpdateManager.ACTION_INSTALL_UPDATE.equals(action)) {
+            runOnUiThread(() -> UpdateManager.install(this));
+        }
+    }
+
+    private void showUpdateDialog(UpdateManager.ReleaseInfo info) {
+        if(isFinishing()||info==null||!UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME))return;
+        String notes=info.notes==null?"Novas melhorias e correções.":info.notes.trim();
+        if(notes.length()>900)notes=notes.substring(0,900)+"…";
+
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+
+        TextView spin=text("♫",52,Color.rgb(45,157,235));spin.setGravity(Gravity.CENTER);
+        ObjectAnimator animator=ObjectAnimator.ofFloat(spin,View.ROTATION,0f,360f);animator.setDuration(1200);animator.setRepeatCount(ObjectAnimator.INFINITE);animator.setInterpolator(new LinearInterpolator());animator.start();
+        box.addView(spin,new LinearLayout.LayoutParams(-1,dp(62)));
+
+        TextView v=text("Nexauren "+info.version,20,textPrimary());v.setTypeface(null,1);box.addView(v,new LinearLayout.LayoutParams(-1,dp(34)));
+        TextView n=text("Novidades",13,accent());n.setTypeface(null,1);box.addView(n,new LinearLayout.LayoutParams(-1,dp(25)));
+        TextView body=text(notes,12,textSecondary());box.addView(body,new LinearLayout.LayoutParams(-1,dp(100)));
+
+        final AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Nova versão disponível").setView(box)
+                .setNegativeButton("Baixar depois",(d,w)->deferUpdate(info.version))
+                .setPositiveButton("Baixar atualização",(d,w)->startUpdateDownload(info,box))
+                .create();
+
+        dialog.setOnShowListener(vv -> {});
+        dialog.show();
+    }
+
+    private void deferUpdate(String version) {
+        getSharedPreferences(UpdateManager.PREFS,MODE_PRIVATE).edit()
+                .putString("deferred_version",version)
+                .putLong("deferred_until",System.currentTimeMillis()+24L*60L*60L*1000L).apply();
+    }
+
+    private void startUpdateDownload(UpdateManager.ReleaseInfo info,LinearLayout ignored) {
+        if(info==null||info.apkUrl==null||info.apkUrl.isEmpty())return;
+
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        TextView note=text("♫",58,Color.rgb(45,157,235));note.setGravity(Gravity.CENTER);
+        ObjectAnimator spin=ObjectAnimator.ofFloat(note,View.ROTATION,0f,360f);spin.setDuration(1000);spin.setRepeatCount(ObjectAnimator.INFINITE);spin.setInterpolator(new LinearInterpolator());spin.start();
+        box.addView(note,new LinearLayout.LayoutParams(-1,dp(70)));
+        TextView status=text("A preparar download…",14,textPrimary());status.setGravity(Gravity.CENTER);box.addView(status,new LinearLayout.LayoutParams(-1,dp(30)));
+        android.widget.ProgressBar progress=new android.widget.ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);box.addView(progress,new LinearLayout.LayoutParams(-1,dp(36)));
+        TextView percent=text("0%",12,textSecondary());percent.setGravity(Gravity.CENTER);box.addView(percent,new LinearLayout.LayoutParams(-1,dp(24)));
+
+        final AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Atualizar Nexauren").setView(box)
+                .setNegativeButton("Executar em segundo plano",null).create();
+        dialog.show();
+
+        Data data=new Data.Builder().putString(UpdateDownloadWorker.INPUT_URL,info.apkUrl)
+                .putString(UpdateDownloadWorker.INPUT_VERSION,info.version)
+                .putString(UpdateDownloadWorker.INPUT_DIGEST,info.digest==null?"":info.digest).build();
+
+        OneTimeWorkRequest request=new OneTimeWorkRequest.Builder(UpdateDownloadWorker.class).setInputData(data).build();
+        WorkManager.getInstance(this).enqueueUniqueWork(UpdateManager.WORK_DOWNLOAD,ExistingWorkPolicy.REPLACE,request);
+
+        WorkManager.getInstance(this).getWorkInfoByIdLiveData(request.getId()).observe(this,(WorkInfo work)->{
+            if(work==null)return;
+            int p=work.getProgress().getInt("progress",0);
+            progress.setProgress(p);percent.setText(p+"%");
+            if(work.getState()==WorkInfo.State.RUNNING)status.setText("A baixar atualização "+info.version+"…");
+            if(work.getState()==WorkInfo.State.SUCCEEDED){
+                spin.cancel();status.setText("Download concluído. A abrir instalador do Android…");progress.setProgress(100);percent.setText("100%");
+                new Handler().postDelayed(()->{dialog.dismiss();UpdateManager.install(this);},600);
+            } else if(work.getState()==WorkInfo.State.FAILED){
+                spin.cancel();status.setText("Não foi possível concluir o download.");percent.setText("Falha");
+            }
+        });
+    }
+
+    private void syncMiniSpin(boolean playing) {
+        if (miniSpin == null) return;
+        if (playing) {
+            if (!miniSpin.isStarted()) miniSpin.start();
+        } else {
+            miniSpin.pause();
+        }
+    }
+
+    private void showMiniMenu(View anchor) {
+        PopupMenu menu = new PopupMenu(this, anchor);
+        String[] entries = {
+                "Editar etiquetas", "Adicionar à lista de reprodução", "Eliminar",
+                "Modo de condução", "Enviar", "Detalhes", "Velocidade de reprodução",
+                "Visualizador de música", "Temporizador de sono", "Letra da música",
+                "Definir como toque", "Mais do artista", "Mais do álbum",
+                "Adicionar aos favoritos", "Abrir fila", "Cortar trecho"
+        };
+        for (String e : entries) menu.getMenu().add(e);
+        menu.setOnMenuItemClickListener(item -> {
+            String value=item.getTitle().toString();
+            if ("Editar etiquetas".equals(value)) showEditTags();
+            else if ("Adicionar à lista de reprodução".equals(value)) addCurrentToPlaylist();
+            else if ("Eliminar".equals(value)) deleteCurrentTrack();
+            else if ("Modo de condução".equals(value)) showDrivingMode();
+            else if ("Enviar".equals(value)) shareCurrent();
+            else if ("Detalhes".equals(value)) showCurrentDetails();
+            else if ("Velocidade de reprodução".equals(value)) showSpeedDialog();
+            else if ("Visualizador de música".equals(value)) startActivity(new Intent(this,VisualizerActivity.class));
+            else if ("Temporizador de sono".equals(value)) showSleepTimer();
+            else if ("Letra da música".equals(value)) showLyrics();
+            else if ("Definir como toque".equals(value)) setCurrentAsRingtone();
+            else if ("Mais do artista".equals(value)) filterByCurrentArtist();
+            else if ("Mais do álbum".equals(value)) filterByCurrentAlbum();
+            else if ("Adicionar aos favoritos".equals(value)) toggleCurrentFavorite();
+            else if ("Abrir fila".equals(value)) showQueue();
+            else if ("Cortar trecho".equals(value)) showAbout("Cortar trecho","O editor de trechos será ampliado na próxima atualização.");
+            return true;
+        });
+        menu.show();
     }
 
     private void showGlobalMenu(View anchor) {
