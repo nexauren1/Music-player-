@@ -624,10 +624,14 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private LinearLayout pageBody(LinearLayout shell) {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(14), dp(8), dp(14), dp(12));
-        shell.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
+        body.setPadding(dp(14), dp(8), dp(14), dp(28));
+        scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
+        shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         return body;
     }
 
