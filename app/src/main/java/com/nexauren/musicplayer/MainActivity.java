@@ -581,7 +581,10 @@ public final class MainActivity extends AppCompatActivity {
         controller.setPlaybackSpeed(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getFloat("speed", 1f));
         controller.prepare();
         controller.play();
-        savePlaybackState(    private void savePlaybackState() {
+        savePlaybackState();
+    }
+
+    private void savePlaybackState() {
         if (controller == null || !controller.isConnected()) return;
         ArrayList<Long> ids = new ArrayList<>();
         for (int i = 0; i < controller.getMediaItemCount(); i++) {
@@ -632,9 +635,7 @@ public final class MainActivity extends AppCompatActivity {
         playbackStateRestored = true;
     }
 
-);
-
-private void markCurrentRecent() {
+    private void markCurrentRecent() {
         Track t=currentTrack();
         if(t!=null) markRecent(t);
     }
