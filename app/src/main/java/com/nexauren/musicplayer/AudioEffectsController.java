@@ -187,6 +187,7 @@ public final class AudioEffectsController {
         else if ("Jazz".equalsIgnoreCase(name)) source = new float[]{3, 2, 0, 2, 3, 3, 2, 1, 2, 3};
         else if ("Clássico".equalsIgnoreCase(name)) source = new float[]{4, 3, 2, 1, 0, 0, 2, 3, 4, 4};
         else if ("Bass".equalsIgnoreCase(name)) source = new float[]{6, 5, 4, 2, 1, 0, 0, 0, 0, 0};
+        else if ("Vocal".equalsIgnoreCase(name)) source = new float[]{-1, -1, 0, 3, 4, 4, 3, 1, 0, -1};
         else source = new float[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         for (int i = 0; i < count; i++) {
             flat[i] = source[Math.min(source.length - 1, Math.round(i * (source.length - 1f) / Math.max(1, count - 1f)))];
