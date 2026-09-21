@@ -33,7 +33,7 @@ jobs:
         run: |
           gh release create v0.1.0 \
             app/build/outputs/apk/debug/app-debug.apk \
-            --target "$${GITHUB_SHA}" \
+            --target "${GITHUB_SHA}" \
             --title "Nexauren Music Player v0.1.0" \
             --generate-notes \
             --prerelease
