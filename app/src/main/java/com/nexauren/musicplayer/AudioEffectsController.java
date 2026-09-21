@@ -3,12 +3,15 @@ package com.nexauren.musicplayer;
 import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
+import android.media.audiofx.Virtualizer;
 
 public final class AudioEffectsController {
     private Equalizer equalizer;
     private BassBoost bassBoost;
     private LoudnessEnhancer loudnessEnhancer;
+    private Virtualizer virtualizer;
     private int sessionId = 0;
+    private boolean enabled = true;
 
     public synchronized void attachToSession(int newSessionId) {
         if (newSessionId <= 0 || newSessionId == sessionId) return;
@@ -16,7 +19,7 @@ public final class AudioEffectsController {
         sessionId = newSessionId;
         try {
             equalizer = new Equalizer(1000, sessionId);
-            equalizer.setEnabled(true);
+            equalizer.setEnabled(enabled);
             // Start at a true flat 0 dB curve instead of the device driver's arbitrary default.
             short[] range = equalizer.getBandLevelRange();
             short flat = (short) Math.max(range[0], Math.min(range[1], 0));
@@ -35,7 +38,7 @@ public final class AudioEffectsController {
         if (android.os.Build.VERSION.SDK_INT >= 19) {
             try {
                 loudnessEnhancer = new LoudnessEnhancer(sessionId);
-                loudnessEnhancer.setEnabled(true);
+                loudnessEnhancer.setEnabled(enabled);
                 loudnessEnhancer.setTargetGain(0);
             } catch (Throwable ignored) {
                 loudnessEnhancer = null;
@@ -46,6 +49,16 @@ public final class AudioEffectsController {
     public synchronized boolean isAvailable() {
         return equalizer != null;
     }
+
+    public synchronized void setEnabled(boolean value) {
+        enabled = value;
+        try { if (equalizer != null) equalizer.setEnabled(value); } catch (Throwable ignored) {}
+        try { if (bassBoost != null) bassBoost.setEnabled(value && bassBoost.getRoundedStrength() > 0); } catch (Throwable ignored) {}
+        try { if (loudnessEnhancer != null) loudnessEnhancer.setEnabled(value); } catch (Throwable ignored) {}
+        try { if (virtualizer != null) virtualizer.setEnabled(value && virtualizer.getRoundedStrength() > 0); } catch (Throwable ignored) {}
+    }
+
+    public synchronized boolean isEnabled() { return enabled; }
 
     public synchronized int getBandCount() {
         return equalizer == null ? 0 : equalizer.getNumberOfBands();
@@ -97,6 +110,23 @@ public final class AudioEffectsController {
         if (loudnessEnhancer == null) return false;
         setPreamp(percent);
         return true;
+    }
+
+    public synchronized boolean setVirtualizerAndReturn(int percent) {
+        if (virtualizer == null) return false;
+        int p = Math.max(0, Math.min(100, percent));
+        try {
+            virtualizer.setStrength((short) Math.round(p * 10f));
+            virtualizer.setEnabled(enabled && p > 0);
+        } catch (Throwable ignored) {}
+        return true;
+    }
+
+    public synchronized void resetAll() {
+        applyPreset("Plano", 10);
+        setBass(0);
+        setPreamp(50);
+        setVirtualizerAndReturn(0);
     }
 
     public synchronized void setUiBand(int uiIndex, int uiCount, int percent) {
@@ -161,8 +191,10 @@ public final class AudioEffectsController {
         try { if (equalizer != null) equalizer.release(); } catch (Throwable ignored) {}
         try { if (bassBoost != null) bassBoost.release(); } catch (Throwable ignored) {}
         try { if (loudnessEnhancer != null) loudnessEnhancer.release(); } catch (Throwable ignored) {}
+        try { if (virtualizer != null) virtualizer.release(); } catch (Throwable ignored) {}
         equalizer = null;
         bassBoost = null;
         loudnessEnhancer = null;
+        virtualizer = null;
     }
 }
