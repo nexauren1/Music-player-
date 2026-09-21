@@ -43,6 +43,13 @@ public final class AudioEffectsController {
             } catch (Throwable ignored) {
                 loudnessEnhancer = null;
             }
+            try {
+                virtualizer = new Virtualizer(1000, sessionId);
+                virtualizer.setStrength((short) 0);
+                virtualizer.setEnabled(false);
+            } catch (Throwable ignored) {
+                virtualizer = null;
+            }
         }
     }
 
@@ -153,7 +160,7 @@ public final class AudioEffectsController {
         int p = Math.max(0, Math.min(100, percent));
         try {
             bassBoost.setStrength((short) Math.round(p * 10f));
-            bassBoost.setEnabled(p > 0);
+            bassBoost.setEnabled(enabled && p > 0);
         } catch (Throwable ignored) {}
     }
 
@@ -163,7 +170,7 @@ public final class AudioEffectsController {
         int gainMb = Math.round((p - 50) * 80f);
         try {
             loudnessEnhancer.setTargetGain(gainMb);
-            loudnessEnhancer.setEnabled(gainMb != 0);
+            loudnessEnhancer.setEnabled(enabled && gainMb != 0);
         } catch (Throwable ignored) {}
     }
 
