@@ -146,8 +146,13 @@ public final class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        if (!AppearanceStore.isSetupDone(this)) {
+            startActivity(new Intent(this, AppearanceSetupActivity.class));
+            finish();
+            return;
+        }
         Window window = getWindow();
-        window.setStatusBarColor(Color.rgb(33, 150, 243));
+        window.setStatusBarColor(AppearanceStore.accent(this));
         window.setNavigationBarColor(Color.WHITE);
         if (Build.VERSION.SDK_INT >= 26) {
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
@@ -169,7 +174,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private void buildShell() {
         root = new FrameLayout(this);
-        root.setBackgroundColor(bg());
+        root.setBackground(AppearanceBackgroundDrawable.forContext(this));
         setContentView(root);
         showHome(false);
     }
@@ -310,7 +315,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(6), 0, dp(4), 0);
-        bar.setBackgroundColor(Color.rgb(33, 150, 243));
+        bar.setBackgroundColor(accent());
 
         TextView left = topIcon(back ? "‹" : "☰");
         bar.addView(left, new LinearLayout.LayoutParams(dp(48), -1));
@@ -1054,6 +1059,44 @@ private void markCurrentRecent() {
 
     private void openDrawer(){final FrameLayout overlay=new FrameLayout(this);overlay.setBackgroundColor(0x66000000);root.addView(overlay,new FrameLayout.LayoutParams(-1,-1));LinearLayout drawer=new LinearLayout(this);drawer.setOrientation(LinearLayout.VERTICAL);drawer.setBackgroundColor(darkMode?Color.rgb(20,24,30):Color.WHITE);int width=(int)Math.min(dp(330),getResources().getDisplayMetrics().widthPixels*0.86f);overlay.addView(drawer,new FrameLayout.LayoutParams(width,-1,Gravity.START));LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);hero.setGravity(Gravity.CENTER_HORIZONTAL);hero.setPadding(dp(16),dp(16),dp(16),dp(10));hero.setBackgroundColor(Color.rgb(33,150,243));drawer.addView(hero,new LinearLayout.LayoutParams(-1,dp(190)));TextView logo=text("N",70,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setTypeface(null,1);hero.addView(logo,new LinearLayout.LayoutParams(-1,dp(98)));TextView name=text("NEXAUREN",22,Color.WHITE);name.setGravity(Gravity.CENTER);name.setTypeface(null,1);hero.addView(name,new LinearLayout.LayoutParams(-1,dp(38)));TextView sub=text("MUSIC PLAYER",11,Color.WHITE);sub.setGravity(Gravity.CENTER);hero.addView(sub,new LinearLayout.LayoutParams(-1,dp(25)));ScrollView scroll=new ScrollView(this);LinearLayout menu=new LinearLayout(this);menu.setOrientation(LinearLayout.VERTICAL);scroll.addView(menu,new ScrollView.LayoutParams(-1,-2));drawer.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));drawerItem(menu,"⌂","Biblioteca",()->{root.removeView(overlay);showHome(true);});drawerItem(menu,"♡","Favoritos",()->{root.removeView(overlay);showFavorites();});drawerItem(menu,"◷","Reproduzido recentemente",()->{root.removeView(overlay);showRecent();});drawerItem(menu,"☷","Fila de reprodução",()->{root.removeView(overlay);showQueue();});drawerItem(menu,"▤","Minha playlist",()->{root.removeView(overlay);showPlaylist();});drawerItem(menu,"☷","Áudio",()->{root.removeView(overlay);showAudioLab();});drawerItem(menu,"◉","Visualizador de música",()->{root.removeView(overlay);startActivity(new Intent(this,VisualizerActivity.class));});drawerItem(menu,"▣","Modo de condução",()->{root.removeView(overlay);showDrivingMode();});drawerItem(menu,"⏱","Temporizador de sono",()->{root.removeView(overlay);showSleepTimer();});drawerItem(menu,"⧉","Encontrar duplicados",()->{root.removeView(overlay);showDuplicates();});drawerItem(menu,"◐","Tema claro/escuro",()->{root.removeView(overlay);toggleTheme();showHome(true);});drawerItem(menu,"⚙","Configurações",()->{root.removeView(overlay);showSettings();});overlay.setOnClickListener(v->root.removeView(overlay));}
 
+    private void showAlbums() {
+        currentPage=0; searchMode=false; root.removeAllViews();
+        LinearLayout shell=basePage("Álbuns");
+        LinearLayout body=pageBody(shell);
+        java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<>();
+        for(Track t:tracks){String a=(t.album==null||t.album.isEmpty())?"Álbum desconhecido":t.album;counts.put(a,counts.containsKey(a)?counts.get(a)+1:1);}
+        for(String album:counts.keySet()){
+            LinearLayout card=roundedPanel(surface(),dp(14));card.setPadding(dp(14),dp(10),dp(14),dp(10));
+            TextView n=text(album,16,textPrimary());n.setTypeface(null,1);
+            TextView sub=text(counts.get(album)+" faixa"+(counts.get(album)==1?"":"s"),11,textSecondary());
+            card.setOrientation(LinearLayout.VERTICAL);card.addView(n,new LinearLayout.LayoutParams(-1,dp(28)));card.addView(sub,new LinearLayout.LayoutParams(-1,dp(22)));
+            card.setOnClickListener(v->filterByAlbum(album));
+            body.addView(card,new LinearLayout.LayoutParams(-1,dp(68)));
+            addSpacer(body,6);
+        }
+        if(counts.isEmpty())body.addView(text("Nenhum álbum encontrado.",15,textSecondary()),new LinearLayout.LayoutParams(-1,dp(60)));
+    }
+
+    private void showArtists() {
+        currentPage=0; searchMode=false; root.removeAllViews();
+        LinearLayout shell=basePage("Artistas");
+        LinearLayout body=pageBody(shell);
+        java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<>();
+        for(Track t:tracks){String a=(t.artist==null||t.artist.isEmpty())?"Artista desconhecido":t.artist;counts.put(a,counts.containsKey(a)?counts.get(a)+1:1);}
+        for(String artist:counts.keySet()){
+            LinearLayout card=roundedPanel(surface(),dp(14));card.setPadding(dp(14),dp(10),dp(14),dp(10));
+            TextView n=text(artist,16,textPrimary());n.setTypeface(null,1);
+            TextView sub=text(counts.get(artist)+" faixa"+(counts.get(artist)==1?"":"s"),11,textSecondary());
+            card.setOrientation(LinearLayout.VERTICAL);card.addView(n,new LinearLayout.LayoutParams(-1,dp(28)));card.addView(sub,new LinearLayout.LayoutParams(-1,dp(22)));
+            card.setOnClickListener(v->filterByArtist(artist));
+            body.addView(card,new LinearLayout.LayoutParams(-1,dp(68)));
+            addSpacer(body,6);
+        }
+        if(counts.isEmpty())body.addView(text("Nenhum artista encontrado.",15,textSecondary()),new LinearLayout.LayoutParams(-1,dp(60)));
+    }
+
+    private void addSpacer(LinearLayout body,int height){View v=new View(this);body.addView(v,new LinearLayout.LayoutParams(1,dp(height)));}
+
     private void showGlobalMenu(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
         String[] entries = {
@@ -1311,6 +1354,7 @@ private void markCurrentRecent() {
         clickableRow(list, "Atualizar biblioteca", "Procurar novas faixas no dispositivo", "↻", this::loadTracks);
         checkboxRow(list, "Mostrar controlos de notificação", "Controle a música a partir da barra de notificações.", true, v -> {});
         clickableRow(list, "Tema", darkMode ? "Escuro" : "Claro", "◐", () -> { toggleTheme(); showSettings(); });
+        clickableRow(list, "Personalizar aparência", "Tema e fundo são independentes", "◆", () -> startActivityForResult(new Intent(this,AppearanceSetupActivity.class).putExtra("edit",true),7901));
 
         section(list, "Reprodução");
         clickableRow(list, "Mostrar apenas ficheiros de áudio", "Biblioteca padrão", "♫", () -> {});
@@ -1625,10 +1669,15 @@ private void markCurrentRecent() {
     }
 
     private int bg() { return darkMode ? Color.rgb(12, 15, 19) : Color.rgb(247, 248, 250); }
-    private int surface() { return darkMode ? Color.rgb(25, 30, 37) : Color.WHITE; }
+    private int surface() {
+        if (AppearanceStore.BG_PLAIN.equals(AppearanceStore.background(this))) {
+            return darkMode ? Color.rgb(25, 30, 37) : Color.WHITE;
+        }
+        return darkMode ? 0xE91B222C : 0xF2FFFFFF;
+    }
     private int textPrimary() { return darkMode ? Color.WHITE : Color.rgb(38, 39, 42); }
     private int textSecondary() { return darkMode ? Color.rgb(160, 168, 177) : Color.rgb(103, 108, 115); }
-    private int accent() { return Color.rgb(45, 157, 235); }
+    private int accent() { return AppearanceStore.accent(this); }
     private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density + 0.5f); }
 
     private static String clean(String value, String fallback) {
@@ -1654,6 +1703,7 @@ private void markCurrentRecent() {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if ((requestCode == 7810 || requestCode == 7811) && resultCode == RESULT_OK) loadTracks();
+        else if (requestCode == 7901 && resultCode == RESULT_OK) recreate();
     }
 
     @Override
