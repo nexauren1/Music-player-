@@ -168,7 +168,7 @@ public final class AudioCutterActivity extends AppCompatActivity {
             try{
                 String base=getIntent().getStringExtra("title");
                 if(base==null||base.trim().isEmpty())base="Nexauren Clip";
-                String name=base.replaceAll("[\\/:*?"<>|]","_")+" - "+format(startMs).replace(':','_')+"-"+format(endMs).replace(':','_')+".m4a";
+                String name=base.replaceAll("[\\\\/:*?\"<>|]", "_") + " - " + format(startMs).replace(':','_') + "-" + format(endMs).replace(':','_') + ".m4a";
                 Uri dest;
                 if(Build.VERSION.SDK_INT>=29){
                     ContentValues v=new ContentValues();
