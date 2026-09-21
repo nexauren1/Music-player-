@@ -51,7 +51,7 @@ public final class EditTagsActivity extends AppCompatActivity {
     }
 
     private void buildUi() {
-        getWindow().setStatusBarColor(Color.rgb(33,150,243));
+        getWindow().setStatusBarColor(AppearanceStore.accent(this));
         getWindow().setNavigationBarColor(Color.BLACK);
 
         LinearLayout root = new LinearLayout(this);
@@ -60,7 +60,7 @@ public final class EditTagsActivity extends AppCompatActivity {
 
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(Color.rgb(33,150,243));
+        bar.setBackgroundColor(AppearanceStore.accent(this));
         TextView back = icon("‹", 38);
         bar.addView(back, new LinearLayout.LayoutParams(dp(52), dp(56)));
         back.setOnClickListener(v -> finish());
