@@ -280,52 +280,56 @@ public final class MainActivity extends AppCompatActivity {
     private View topBar(String title, boolean back) {
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(8), 0, dp(6), 0);
+        bar.setPadding(dp(6), 0, dp(4), 0);
         bar.setBackgroundColor(Color.rgb(33, 150, 243));
 
         TextView left = topIcon(back ? "‹" : "☰");
         bar.addView(left, new LinearLayout.LayoutParams(dp(48), -1));
         left.setOnClickListener(v -> { if (back) showHome(true); else openDrawer(); });
 
-        if (searchMode) {
+        if (searchMode && !back) {
             searchField = new EditText(this);
             searchField.setSingleLine(true);
-            searchField.setHint("Pesquisar música");
+            searchField.setHint("Pesquisar música, artista ou álbum");
             searchField.setTextColor(Color.WHITE);
             searchField.setHintTextColor(0xCCFFFFFF);
-            searchField.setTextSize(17);
+            searchField.setTextSize(16);
             searchField.setBackgroundColor(Color.TRANSPARENT);
-            searchField.setPadding(0, 0, dp(8), 0);
+            searchField.setPadding(0, 0, dp(4), 0);
             bar.addView(searchField, new LinearLayout.LayoutParams(0, -1, 1));
+
+            TextView close = topIcon("×");
+            bar.addView(close, new LinearLayout.LayoutParams(dp(50), -1));
+            close.setOnClickListener(v -> { searchMode=false; showHome(true); });
+
             searchField.addTextChangedListener(new TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                @Override public void beforeTextChanged(CharSequence s, int st, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int st, int before, int count) { filterLibrary(s.toString()); }
                 @Override public void afterTextChanged(Editable e) {}
             });
             searchField.requestFocus();
-            ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(searchField, InputMethodManager.SHOW_IMPLICIT);
-        } else {
-            pageTitle = text(title, 18, Color.WHITE);
-            bar.addView(pageTitle, new LinearLayout.LayoutParams(0, -1, 1));
+            ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(searchField,InputMethodManager.SHOW_IMPLICIT);
+            return bar;
         }
 
-        TextView search = topIcon(searchMode ? "×" : "⌕");
-        bar.addView(search, new LinearLayout.LayoutParams(dp(48), -1));
-        search.setOnClickListener(v -> {
-            searchMode = !searchMode;
-            showHome(true);
-        });
+        pageTitle = text(title, 18, Color.WHITE);
+        pageTitle.setTypeface(null, 0);
+        bar.addView(pageTitle, new LinearLayout.LayoutParams(0, -1, 1));
+
+        TextView search = topIcon("⌕");
+        bar.addView(search, new LinearLayout.LayoutParams(dp(44), -1));
+        search.setOnClickListener(v -> { searchMode=true; showHome(true); });
 
         TextView cast = topIcon("▣");
-        bar.addView(cast, new LinearLayout.LayoutParams(dp(48), -1));
-        cast.setOnClickListener(v -> Toast.makeText(this, "Dispositivo de transmissão: em breve", Toast.LENGTH_SHORT).show());
+        bar.addView(cast, new LinearLayout.LayoutParams(dp(44), -1));
+        cast.setOnClickListener(v -> Toast.makeText(this,"Seleção de dispositivo: utilize o painel de saída de áudio do sistema.",Toast.LENGTH_SHORT).show());
 
         TextView eq = topIcon("☷");
-        bar.addView(eq, new LinearLayout.LayoutParams(dp(48), -1));
+        bar.addView(eq, new LinearLayout.LayoutParams(dp(44), -1));
         eq.setOnClickListener(v -> showEqualizer());
 
         TextView more = topIcon("⋮");
-        bar.addView(more, new LinearLayout.LayoutParams(dp(42), -1));
+        bar.addView(more, new LinearLayout.LayoutParams(dp(40), -1));
         more.setOnClickListener(v -> showGlobalMenu(more));
         return bar;
     }
@@ -650,17 +654,19 @@ public final class MainActivity extends AppCompatActivity {
         root.removeAllViews();
         LinearLayout shell = basePage("Configurações");
         LinearLayout body = pageBody(shell);
-        ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(list, new ScrollView.LayoutParams(-1, -2));
-        body.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        body.addView(list, new LinearLayout.LayoutParams(-1, -2));
 
         section(list, "Reprodução");
-        checkboxRow(list, "Repetir ganho", "Volume igual para todas as faixas.", false, v -> {});
-        checkboxRow(list, "Utilize o equalizador do sistema", "", false, v -> showEqualizer());
-        checkboxRow(list, "Transmita a faixa de música", "", true, v -> Toast.makeText(this, "Transmissão pronta para integração", Toast.LENGTH_SHORT).show());
-        checkboxRow(list, "Fazer scrobble no Last.FM", "", false, v -> {});
+        checkboxRow(list, "Efeitos de áudio", "Equalizador, graves, 3D e pré-amplificador.", effectsEnabled, v -> {
+            effectsEnabled = !effectsEnabled;
+            getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", effectsEnabled).apply();
+            PlaybackService.setEffectsEnabled(effectsEnabled);
+        });
+        checkboxRow(list, "Silenciar pausas longas", "Ignora automaticamente trechos de silêncio.", false, v -> PlaybackService.setSkipSilence(true));
+        checkboxRow(list, "Equalizador interno", "Usa o equalizador Nexauren em vez do sistema.", true, v -> showEqualizer());
+        checkboxRow(list, "Controlos na notificação", "Play, pausa, anterior e próxima faixa.", true, v -> {});
         sliderRow(list, "Apagar músicas com menos de", "0 segundos", 0, 120);
 
         section(list, "Geral");
@@ -673,15 +679,15 @@ public final class MainActivity extends AppCompatActivity {
         clickableRow(list, "Ordem da biblioteca", "Escolher ordenação", "☷", this::showSortDialog);
         clickableRow(list, "Lista de reprodução padrão", "Minha playlist", "≡", this::showPlaylist);
 
-        section(list, "Ação de agitação");
-        checkboxRow(list, "Ativar agitação", "", false, v -> {});
-        disabledRow(list, "Ação de agitação", "Nenhuma ação");
-        sliderRow(list, "Força de agitação", "70", 0, 100);
+        section(list, "Biblioteca");
+        clickableRow(list, "Favoritos", "Abrir as faixas marcadas", "♡", this::showFavorites);
+        clickableRow(list, "Reproduzido recentemente", "Últimas faixas tocadas", "◷", this::showRecent);
+        clickableRow(list, "Encontrar duplicados", "Comparar título, artista e duração", "⧉", this::showDuplicates);
 
         section(list, "Sobre");
         clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.3.0 • player local, efeitos, favoritos, fila e pesquisa."));
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.4.0 • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private LinearLayout basePage(String title) {
