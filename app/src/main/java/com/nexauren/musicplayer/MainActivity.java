@@ -1325,7 +1325,7 @@ private void markCurrentRecent() {
         section(list, "Sobre");
         clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.7.0 • player local, efeitos, favoritos, fila e pesquisa."));
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.9.0 • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private void showEditTags() {
