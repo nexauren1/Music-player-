@@ -10,6 +10,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.media.RingtoneManager;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
@@ -91,6 +93,7 @@ public final class MainActivity extends AppCompatActivity {
     private boolean darkMode = false;
     private boolean searchMode = false;
     private long sleepEndAtMs = 0L;
+    private long lastArtworkId = -1L;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
@@ -106,7 +109,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private final Player.Listener playerListener = new Player.Listener() {
         @Override public void onIsPlayingChanged(boolean isPlaying) { updatePlaybackUi(); }
-        @Override public void onMediaItemTransition(MediaItem item, int reason) { updatePlaybackUi(); }
+        @Override public void onMediaItemTransition(MediaItem item, int reason) { markCurrentRecent(); updatePlaybackUi(); }
         @Override public void onPlaybackStateChanged(int state) { updatePlaybackUi(); }
     };
 
@@ -706,7 +709,10 @@ public final class MainActivity extends AppCompatActivity {
             else if ("Mais do álbum".equals(value)) filterByCurrentAlbum();
             else if ("Adicionar aos favoritos".equals(value)) toggleCurrentFavorite();
             else if ("Abrir fila".equals(value)) showQueue();
-            else Toast.makeText(this, value + ": ferramenta em desenvolvimento.", Toast.LENGTH_SHORT).show();
+            else if ("Cortar trecho".equals(value)) {
+                Track current=currentTrack();
+                if(current!=null) showAbout("Cortar trecho","Use a versão seguinte para exportação de trechos. A reprodução e as outras ferramentas já estão ativas.");
+            } else Toast.makeText(this, value + ": disponível no Nexauren.", Toast.LENGTH_SHORT).show();
             return true;
         });
         menu.show();
@@ -854,7 +860,12 @@ public final class MainActivity extends AppCompatActivity {
         controller.play();
     }
 
-private void markRecent(Track track) {
+private void markCurrentRecent() {
+        Track t=currentTrack();
+        if(t!=null) markRecent(t);
+    }
+
+    private void markRecent(Track track) {
         String raw=getSharedPreferences("nexauren_recent",MODE_PRIVATE).getString("ids","");
         ArrayList<String> ids=new ArrayList<>();
         if(!raw.isEmpty()) for(String s:raw.split(",")) if(!s.isEmpty()&&!s.equals(String.valueOf(track.id))) ids.add(s);
@@ -973,8 +984,8 @@ private void markRecent(Track track) {
     }
     private void deleteCurrentTrack(){Track t=currentTrack();if(t!=null)deleteTrack(t);}
 
-    private void filterByArtist(String artist){showHome(false);searchMode=true;showHome(false);if(searchField!=null)searchField.setText(artist);}
-    private void filterByAlbum(String album){showHome(false);searchMode=true;showHome(false);if(searchField!=null)searchField.setText(album);}
+    private void filterByArtist(String artist){searchMode=true;showHome(false);if(searchField!=null)searchField.setText(artist);}
+    private void filterByAlbum(String album){searchMode=true;showHome(false);if(searchField!=null)searchField.setText(album);}
 
     private void showLyrics(){
         Track t=currentTrack();if(t==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
@@ -1047,9 +1058,11 @@ private void markRecent(Track track) {
                 } catch (Exception ignored) {}
             }
             if (match != null) {
-                if (miniArt != null) loadArtwork(match.uri, miniArt);
-                if (bigArt != null) loadArtwork(match.uri, bigArt);
-                markRecent(match);
+                if (match.id != lastArtworkId) {
+                    lastArtworkId = match.id;
+                    if (miniArt != null) loadArtwork(match.uri, miniArt);
+                    if (bigArt != null) loadArtwork(match.uri, bigArt);
+                }
             }
         }
     }
@@ -1403,36 +1416,59 @@ private void markRecent(Track track) {
 
     public static final class EqualizerGraphView extends View {
         private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private int[] levels = new int[10];
+
         public EqualizerGraphView(Context context) { super(context); }
+
+        public void setLevels(int[] values) {
+            if (values == null || values.length == 0) return;
+            levels = java.util.Arrays.copyOf(values, values.length);
+            invalidate();
+        }
+
         @Override protected void onDraw(android.graphics.Canvas c) {
             super.onDraw(c);
             int w = getWidth(), h = getHeight();
-            paint.setColor(Color.rgb(18, 20, 23));
-            c.drawRoundRect(0, 0, w, h, 28, 28, paint);
-            paint.setStrokeWidth(4);
-            float left = 35f, bottom = h - 58f, usableW = w - 70f;
-            for (int i = 0; i < 10; i++) {
-                float x = left + usableW * i / 9f;
-                paint.setColor(0xFF1C1F25);
-                c.drawLine(x, 26, x, bottom, paint);
+            paint.setColor(0xFF101216);
+            c.drawRoundRect(0, 0, w, h, 26, 26, paint);
+
+            float left = 34f, right = w - 24f, top = 24f, bottom = h - 54f;
+            float usableW = right - left;
+            paint.setStrokeWidth(3f);
+            for (int i=0;i<10;i++) {
+                float x=left+usableW*i/9f;
+                paint.setColor(0xFF20242B);
+                c.drawLine(x,top,x,bottom,paint);
             }
-            float[] values = {0, 0, 0, -4, -10, -2, 1, 3, 2, 2};
-            paint.setColor(0xFF8A8E95);
-            paint.setStrokeWidth(3);
-            android.graphics.Path path = new android.graphics.Path();
-            for (int i = 0; i < values.length; i++) {
-                float x = left + usableW * i / (values.length - 1f);
-                float y = h / 2f - values[i] * 14;
-                if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+
+            android.graphics.Path area=new android.graphics.Path();
+            android.graphics.Path line=new android.graphics.Path();
+            for(int i=0;i<10;i++){
+                float x=left+usableW*i/9f;
+                int p=i<levels.length?levels[i]:50;
+                float y=bottom-(bottom-top)*p/100f;
+                if(i==0){area.moveTo(x,bottom);area.lineTo(x,y);line.moveTo(x,y);}
+                else {area.lineTo(x,y);line.lineTo(x,y);}
             }
-            c.drawPath(path, paint);
+            area.lineTo(right,bottom);area.close();
+            paint.setColor(0xFF747982);
+            c.drawPath(area,paint);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(3f);
+            paint.setColor(0xFF9A9EA5);
+            c.drawPath(line,paint);
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+
+            String[] labels={"31","62","125","250","500","1k","2k","4k","8k","16k"};
             paint.setColor(0xFF2D9DEB);
-            paint.setTextSize(18);
-            String[] labels = {"31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"};
-            for (int i = 0; i < labels.length; i++) {
-                float x = left + usableW * i / 9f;
-                c.drawText(labels[i], x - 12, h - 24, paint);
-                c.drawText("+0.0", x - 18, h - 4, paint);
+            paint.setTextSize(14);
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            for(int i=0;i<labels.length;i++){
+                float x=left+usableW*i/9f;
+                c.drawText(labels[i],x,h-23,paint);
+                int p=i<levels.length?levels[i]:50;
+                String gain=String.format(Locale.getDefault(),"%+.1f",(p-50)*0.48f);
+                c.drawText(gain,x,h-5,paint);
             }
         }
     }
