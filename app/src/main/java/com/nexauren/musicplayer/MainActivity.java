@@ -626,9 +626,56 @@ public final class MainActivity extends AppCompatActivity {
     private LinearLayout basePage(String title) {
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
-        shell.addView(topBar(title, true), new LinearLayout.LayoutParams(-1, dp(56)));
+        if (currentPage >= 1 && currentPage <= 3) shell.addView(audioTopBar(title, currentPage), new LinearLayout.LayoutParams(-1, dp(56)));
+        else shell.addView(topBar(title, true), new LinearLayout.LayoutParams(-1, dp(56)));
         root.addView(shell, new FrameLayout.LayoutParams(-1, -1));
         return shell;
+    }
+
+    private View audioTopBar(String title, int activePage) {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(6), 0, dp(6), 0);
+        bar.setBackgroundColor(Color.rgb(33, 150, 243));
+
+        TextView back = topIcon("‹");
+        bar.addView(back, new LinearLayout.LayoutParams(dp(48), -1));
+        back.setOnClickListener(v -> showHome(true));
+
+        TextView label = text(title, 18, Color.WHITE);
+        bar.addView(label, new LinearLayout.LayoutParams(0, -1, 1));
+
+        TextView eq = audioTool("☷", activePage == 1);
+        TextView sound = audioTool("◖", activePage == 2);
+        TextView reverb = audioTool("◎", activePage == 3);
+        bar.addView(eq, new LinearLayout.LayoutParams(dp(46), -1));
+        bar.addView(sound, new LinearLayout.LayoutParams(dp(46), -1));
+        bar.addView(reverb, new LinearLayout.LayoutParams(dp(46), -1));
+
+        Switch master = new Switch(this);
+        master.setChecked(effectsEnabled);
+        master.setShowText(false);
+        master.setScaleX(0.82f);
+        master.setScaleY(0.82f);
+        master.setContentDescription("Efeitos de áudio");
+        bar.addView(master, new LinearLayout.LayoutParams(dp(56), -1));
+        master.setOnCheckedChangeListener((buttonView, checked) -> {
+            effectsEnabled = checked;
+            getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", checked).apply();
+            PlaybackService.setEffectsEnabled(checked);
+        });
+
+        eq.setOnClickListener(v -> showEqualizer());
+        sound.setOnClickListener(v -> showSound());
+        reverb.setOnClickListener(v -> showReverb());
+        return bar;
+    }
+
+    private TextView audioTool(String icon, boolean active) {
+        TextView t = topIcon(icon);
+        t.setTextSize(25);
+        t.setBackground(active ? roundDrawable(0x3358B7F0, dp(16)) : roundDrawable(Color.TRANSPARENT, dp(16)));
+        return t;
     }
 
     private LinearLayout pageBody(LinearLayout shell) {
