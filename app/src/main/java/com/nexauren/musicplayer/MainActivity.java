@@ -117,6 +117,7 @@ public final class MainActivity extends AppCompatActivity {
     private long sleepEndAtMs = 0L;
     private long lastArtworkId = -1L;
     private boolean effectsEnabled = true;
+    private boolean playbackStateRestored = false;
     private String reverbPreset = "Sinal seco";
     private int reverbMix = 0;
     private ObjectAnimator miniSpin;
@@ -126,7 +127,10 @@ public final class MainActivity extends AppCompatActivity {
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
-            if (controller != null && controller.isConnected()) updatePlaybackUi();
+            if (controller != null && controller.isConnected()) {
+                updatePlaybackUi();
+                savePlaybackState();
+            }
             if (sleepEndAtMs > 0 && System.currentTimeMillis() >= sleepEndAtMs && controller != null && controller.isConnected()) {
                 controller.pause();
                 sleepEndAtMs = 0L;
@@ -288,6 +292,30 @@ public final class MainActivity extends AppCompatActivity {
         next.setOnClickListener(v -> { if (controller != null) controller.seekToNextMediaItem(); });
         shuffle.setOnClickListener(v -> { if (controller != null) controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled()); });
         repeat.setOnClickListener(v -> cycleRepeat());
+
+        HorizontalScrollView libraryTabsScroll = new HorizontalScrollView(this);
+        libraryTabsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout libraryTabs = new LinearLayout(this);
+        libraryTabs.setPadding(0, dp(5), dp(8), dp(2));
+        String[] libraryTabNames = {"Músicas","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
+        for (String tabName : libraryTabNames) {
+            TextView tab = chipText(tabName, "Músicas".equals(tabName) ? accent() : surface(),
+                    "Músicas".equals(tabName) ? Color.WHITE : textPrimary());
+            LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(dp(92), dp(40));
+            tabLp.setMargins(dp(3), 0, dp(3), 0);
+            libraryTabs.addView(tab, tabLp);
+            tab.setOnClickListener(v -> {
+                if ("Músicas".equals(tabName)) showHome(true);
+                else if ("Álbuns".equals(tabName)) showAlbums();
+                else if ("Artistas".equals(tabName)) showArtists();
+                else if ("Pastas".equals(tabName)) showFolders();
+                else if ("Favoritos".equals(tabName)) showFavorites();
+                else if ("Recentes".equals(tabName)) showRecent();
+                else if ("Playlist".equals(tabName)) showPlaylist();
+            });
+        }
+        libraryTabsScroll.addView(libraryTabs, new ViewGroup.LayoutParams(-2, dp(48)));
+        inside.addView(libraryTabsScroll, new LinearLayout.LayoutParams(-1, dp(50)));
 
         LinearLayout libraryHeader = new LinearLayout(this);
         libraryHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -548,9 +576,63 @@ public final class MainActivity extends AppCompatActivity {
             items.add(new MediaItem.Builder().setMediaId(String.valueOf(t.id)).setUri(t.uri).setMediaMetadata(metadata).build());
         }
         controller.setMediaItems(items, selectedIndex, 0);
+        controller.setShuffleModeEnabled(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getBoolean("shuffle", false));
+        controller.setRepeatMode(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getInt("repeat_mode", Player.REPEAT_MODE_OFF));
+        controller.setPlaybackSpeed(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getFloat("speed", 1f));
         controller.prepare();
         controller.play();
+        savePlaybackState(    private void savePlaybackState() {
+        if (controller == null || !controller.isConnected()) return;
+        ArrayList<Long> ids = new ArrayList<>();
+        for (int i = 0; i < controller.getMediaItemCount(); i++) {
+            try { ids.add(Long.parseLong(controller.getMediaItemAt(i).mediaId)); } catch (Exception ignored) {}
+        }
+        long currentId = -1L;
+        if (controller.getCurrentMediaItem() != null) {
+            try { currentId = Long.parseLong(controller.getCurrentMediaItem().mediaId); } catch (Exception ignored) {}
+        }
+        float speed = controller.getPlaybackParameters().speed;
+        float pitch = controller.getPlaybackParameters().pitch;
+        float volume = controller.getVolume();
+        PlaybackStateStore.save(this, ids, currentId, controller.getCurrentPosition(),
+                controller.getRepeatMode(), controller.getShuffleModeEnabled(), speed, pitch, volume);
     }
+
+    private void maybeRestorePlaybackState() {
+        if (playbackStateRestored || controller == null || !controller.isConnected() || tracks.isEmpty()) return;
+        List<Long> savedIds = PlaybackStateStore.queue(this);
+        long currentId = PlaybackStateStore.currentId(this);
+        if (savedIds.isEmpty() || currentId < 0) {
+            playbackStateRestored = true;
+            return;
+        }
+
+        ArrayList<MediaItem> items = new ArrayList<>();
+        int currentIndex = 0;
+        for (Long id : savedIds) {
+            Track match = null;
+            for (Track track : tracks) if (track.id == id) { match = track; break; }
+            if (match == null) continue;
+            MediaMetadata metadata = new MediaMetadata.Builder()
+                    .setTitle(match.title).setArtist(match.artist).setAlbumTitle(match.album).build();
+            items.add(new MediaItem.Builder().setMediaId(String.valueOf(match.id))
+                    .setUri(match.uri).setMediaMetadata(metadata).build());
+            if (match.id == currentId) currentIndex = items.size() - 1;
+        }
+
+        if (items.isEmpty()) { playbackStateRestored = true; return; }
+
+        controller.setMediaItems(items, currentIndex, PlaybackStateStore.positionMs(this));
+        controller.setRepeatMode(PlaybackStateStore.repeatMode(this));
+        controller.setShuffleModeEnabled(PlaybackStateStore.shuffle(this));
+        controller.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(
+                PlaybackStateStore.speed(this), PlaybackStateStore.pitch(this)));
+        controller.setVolume(PlaybackStateStore.volume(this));
+        controller.prepare();
+        playbackStateRestored = true;
+    }
+
+);
 
 private void markCurrentRecent() {
         Track t=currentTrack();
@@ -823,6 +905,7 @@ private void markCurrentRecent() {
             try {
                 controller = controllerFuture.get();
                 controller.addListener(playerListener);
+                maybeRestorePlaybackState();
                 updatePlaybackUi();
             } catch (Exception e) {
                 Toast.makeText(this, "Não foi possível iniciar o áudio.", Toast.LENGTH_LONG).show();
@@ -891,6 +974,7 @@ private void markCurrentRecent() {
                 tracks.addAll(found);
                 renderLibrary();
                 countText.setText(found.size() + (found.size() == 1 ? " faixa" : " faixas"));
+                maybeRestorePlaybackState();
             });
         });
     }
@@ -1712,6 +1796,7 @@ private void markCurrentRecent() {
         queryExecutor.shutdownNow();
         if (controller != null) controller.removeListener(playerListener);
         if (controllerFuture != null) MediaController.releaseFuture(controllerFuture);
+        savePlaybackState();
         if (miniSpin != null) miniSpin.cancel();
         super.onDestroy();
     }
