@@ -369,13 +369,15 @@ public final class MainActivity extends AppCompatActivity {
         header.addView(reset, new LinearLayout.LayoutParams(dp(150), dp(42)));
         body.addView(header);
 
+        HorizontalScrollView presetScroll = new HorizontalScrollView(this);
+        presetScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout presets = new LinearLayout(this);
         presets.setGravity(Gravity.CENTER_VERTICAL);
-        presets.setPadding(0, 0, 0, dp(8));
+        presets.setPadding(0, 0, dp(8), dp(8));
         String[] names = {"Plano", "Rock", "Jazz", "Clássico", "Bass"};
         for (String name : names) {
             TextView chip = chipText(name, "Plano".equals(name) ? accent() : surface(), "Plano".equals(name) ? Color.WHITE : textPrimary());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(92), dp(42));
             lp.setMargins(dp(3), 0, dp(3), 0);
             presets.addView(chip, lp);
             chip.setOnClickListener(v -> {
@@ -387,10 +389,11 @@ public final class MainActivity extends AppCompatActivity {
                 }
             });
         }
-        body.addView(presets);
+        presetScroll.addView(presets, new ViewGroup.LayoutParams(-2, dp(50)));
+        body.addView(presetScroll);
 
         EqualizerGraphView graph = new EqualizerGraphView(this);
-        body.addView(graph, new LinearLayout.LayoutParams(-1, dp(285)));
+        body.addView(graph, new LinearLayout.LayoutParams(-1, dp(235)));
 
         LinearLayout bands = new LinearLayout(this);
         bands.setGravity(Gravity.CENTER);
@@ -408,7 +411,7 @@ public final class MainActivity extends AppCompatActivity {
                 int[] now = PlaybackService.getEqualizerLevels(10);
                 graph.setLevels(now);
             });
-            bands.addView(band, new LinearLayout.LayoutParams(0, dp(220), 1f));
+            bands.addView(band, new LinearLayout.LayoutParams(0, dp(195), 1f));
         }
         body.addView(bands);
 
