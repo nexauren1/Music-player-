@@ -177,7 +177,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout nowCard = roundedPanel(surface(), dp(22));
         nowCard.setOrientation(LinearLayout.VERTICAL);
         nowCard.setPadding(dp(14), dp(10), dp(14), dp(12));
-        inside.addView(nowCard, new LinearLayout.LayoutParams(-1, dp(520)));
+        inside.addView(nowCard, new LinearLayout.LayoutParams(-1, dp(315)));
 
         LinearLayout nowHeader = new LinearLayout(this);
         nowHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -197,7 +197,7 @@ public final class MainActivity extends AppCompatActivity {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(18));
             }
         });
-        nowCard.addView(artFrame, new LinearLayout.LayoutParams(-1, dp(280)));
+        nowCard.addView(artFrame, new LinearLayout.LayoutParams(-1, dp(150)));
 
         bigArt = new ImageView(this);
         bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -214,7 +214,7 @@ public final class MainActivity extends AppCompatActivity {
         artFrame.addView(bigTitle, bt);
 
         waveform = new WaveformView(this);
-        nowCard.addView(waveform, new LinearLayout.LayoutParams(-1, dp(80)));
+        nowCard.addView(waveform, new LinearLayout.LayoutParams(-1, dp(44)));
 
         LinearLayout current = new LinearLayout(this);
         current.setGravity(Gravity.CENTER_VERTICAL);
@@ -234,14 +234,14 @@ public final class MainActivity extends AppCompatActivity {
         homePlay = play;
         TextView next = circleButton("▶|");
         TextView shuffle = circleButton("⤨");
-        mainControls.addView(shuffle, new LinearLayout.LayoutParams(dp(52), dp(54)));
-        mainControls.addView(prev, new LinearLayout.LayoutParams(dp(58), dp(54)));
-        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(dp(84), dp(72));
+        mainControls.addView(shuffle, new LinearLayout.LayoutParams(dp(46), dp(48)));
+        mainControls.addView(prev, new LinearLayout.LayoutParams(dp(50), dp(48)));
+        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(dp(68), dp(58));
         playLp.setMargins(dp(10), 0, dp(10), 0);
         mainControls.addView(play, playLp);
-        mainControls.addView(next, new LinearLayout.LayoutParams(dp(58), dp(54)));
+        mainControls.addView(next, new LinearLayout.LayoutParams(dp(50), dp(48)));
         TextView repeat = circleButton("↻");
-        mainControls.addView(repeat, new LinearLayout.LayoutParams(dp(52), dp(54)));
+        mainControls.addView(repeat, new LinearLayout.LayoutParams(dp(46), dp(48)));
         nowCard.addView(mainControls);
 
         play.setOnClickListener(v -> togglePlayback());
@@ -328,14 +328,14 @@ public final class MainActivity extends AppCompatActivity {
     private void buildMiniPlayer(LinearLayout shell) {
         LinearLayout mini = roundedPanel(surface(), dp(18));
         mini.setPadding(dp(8), dp(6), dp(6), dp(6));
-        shell.addView(mini, new LinearLayout.LayoutParams(-1, dp(78)));
+        shell.addView(mini, new LinearLayout.LayoutParams(-1, dp(66)));
         mini.setOnClickListener(v -> startActivity(new Intent(this, NowPlayingActivity.class)));
 
         miniArt = new ImageView(this);
         miniArt.setImageResource(android.R.drawable.ic_menu_gallery);
         miniArt.setColorFilter(Color.rgb(80, 90, 100));
         miniArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        mini.addView(miniArt, new LinearLayout.LayoutParams(dp(56), dp(56)));
+        mini.addView(miniArt, new LinearLayout.LayoutParams(dp(50), dp(50)));
 
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
@@ -343,12 +343,12 @@ public final class MainActivity extends AppCompatActivity {
         miniTitle = text("Nenhuma música", 14, textPrimary());
         miniTitle.setTypeface(null, 1);
         miniArtist = text("Selecione uma faixa", 12, textSecondary());
-        labels.addView(miniTitle, new LinearLayout.LayoutParams(-1, dp(28)));
-        labels.addView(miniArtist, new LinearLayout.LayoutParams(-1, dp(22)));
-        mini.addView(labels, new LinearLayout.LayoutParams(0, dp(56), 1));
+        labels.addView(miniTitle, new LinearLayout.LayoutParams(-1, dp(25)));
+        labels.addView(miniArtist, new LinearLayout.LayoutParams(-1, dp(20)));
+        mini.addView(labels, new LinearLayout.LayoutParams(0, dp(50), 1));
 
         miniPlay = circleButton("▶");
-        mini.addView(miniPlay, new LinearLayout.LayoutParams(dp(60), dp(56)));
+        mini.addView(miniPlay, new LinearLayout.LayoutParams(dp(50), dp(50)));
         miniPlay.setOnClickListener(v -> togglePlayback());
         miniSeek = new SeekBar(this);
         miniSeek.setVisibility(View.GONE);
