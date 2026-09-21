@@ -32,9 +32,12 @@ public final class UpdateDownloadWorker extends Worker {
 
     @NonNull @Override
     public Result doWork() {
-        String urlString = getInputData().getString(INPUT_URL, "");
-        String version = getInputData().getString(INPUT_VERSION, "");
-        String digest = getInputData().getString(INPUT_DIGEST, "");
+        String urlString = getInputData().getString(INPUT_URL);
+        String version = getInputData().getString(INPUT_VERSION);
+        String digest = getInputData().getString(INPUT_DIGEST);
+        if (urlString == null) urlString = "";
+        if (version == null) version = "";
+        if (digest == null) digest = "";
         if (urlString.isEmpty() || version.isEmpty()) return Result.failure();
 
         try {
