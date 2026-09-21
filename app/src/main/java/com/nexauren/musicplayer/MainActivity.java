@@ -1526,6 +1526,48 @@ private void markCurrentRecent() {
         dialog.show();
     }
 
+    private void deferUpdate(String version) {
+        getSharedPreferences(UpdateManager.PREFS,MODE_PRIVATE).edit()
+                .putString("deferred_version",version)
+                .putLong("deferred_until",System.currentTimeMillis()+24L*60L*60L*1000L).apply();
+    }
+
+    private void startUpdateDownload(UpdateManager.ReleaseInfo info,LinearLayout ignored) {
+        if(info==null||info.apkUrl==null||info.apkUrl.isEmpty())return;
+
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        TextView note=text("♫",58,Color.rgb(45,157,235));note.setGravity(Gravity.CENTER);
+        ObjectAnimator spin=ObjectAnimator.ofFloat(note,View.ROTATION,0f,360f);spin.setDuration(1000);spin.setRepeatCount(ObjectAnimator.INFINITE);spin.setInterpolator(new LinearInterpolator());spin.start();
+        box.addView(note,new LinearLayout.LayoutParams(-1,dp(70)));
+        TextView status=text("A preparar download…",14,textPrimary());status.setGravity(Gravity.CENTER);box.addView(status,new LinearLayout.LayoutParams(-1,dp(30)));
+        android.widget.ProgressBar progress=new android.widget.ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);box.addView(progress,new LinearLayout.LayoutParams(-1,dp(36)));
+        TextView percent=text("0%",12,textSecondary());percent.setGravity(Gravity.CENTER);box.addView(percent,new LinearLayout.LayoutParams(-1,dp(24)));
+
+        final AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Atualizar Nexauren").setView(box)
+                .setNegativeButton("Executar em segundo plano",null).create();
+        dialog.show();
+
+        Data data=new Data.Builder().putString(UpdateDownloadWorker.INPUT_URL,info.apkUrl)
+                .putString(UpdateDownloadWorker.INPUT_VERSION,info.version)
+                .putString(UpdateDownloadWorker.INPUT_DIGEST,info.digest==null?"":info.digest).build();
+
+        OneTimeWorkRequest request=new OneTimeWorkRequest.Builder(UpdateDownloadWorker.class).setInputData(data).build();
+        WorkManager.getInstance(this).enqueueUniqueWork(UpdateManager.WORK_DOWNLOAD,ExistingWorkPolicy.REPLACE,request);
+
+        WorkManager.getInstance(this).getWorkInfoByIdLiveData(request.getId()).observe(this,(WorkInfo work)->{
+            if(work==null)return;
+            int p=work.getProgress().getInt("progress",0);
+            progress.setProgress(p);percent.setText(p+"%");
+            if(work.getState()==WorkInfo.State.RUNNING)status.setText("A baixar atualização "+info.version+"…");
+            if(work.getState()==WorkInfo.State.SUCCEEDED){
+                spin.cancel();status.setText("Download concluído. A abrir instalador do Android…");progress.setProgress(100);percent.setText("100%");
+                new Handler().postDelayed(()->{dialog.dismiss();UpdateManager.install(this);},600);
+            } else if(work.getState()==WorkInfo.State.FAILED){
+                spin.cancel();status.setText("Não foi possível concluir o download.");percent.setText("Falha");
+            }
+        });
+    }
+
     private TextView actionButton(String text) {
         TextView t = chipText(text, Color.rgb(45, 157, 235), Color.WHITE);
         t.setTypeface(null, 1);
