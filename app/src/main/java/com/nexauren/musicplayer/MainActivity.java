@@ -122,7 +122,6 @@ public final class MainActivity extends AppCompatActivity {
 
     private void showHome(boolean animate) {
         currentPage = 0;
-        searchMode = false;
         root.removeAllViews();
 
         LinearLayout shell = new LinearLayout(this);
@@ -283,12 +282,8 @@ public final class MainActivity extends AppCompatActivity {
         TextView search = topIcon(searchMode ? "×" : "⌕");
         bar.addView(search, new LinearLayout.LayoutParams(dp(48), -1));
         search.setOnClickListener(v -> {
-            if (searchMode) {
-                showHome(false);
-            } else {
-                searchMode = true;
-                showHome(true);
-            }
+            searchMode = !searchMode;
+            showHome(true);
         });
 
         TextView cast = topIcon("▣");
@@ -450,6 +445,7 @@ public final class MainActivity extends AppCompatActivity {
         body.addView(mixBox, new LinearLayout.LayoutParams(-1, dp(300)));
 
         LinearLayout locked = roundedPanel(0xFFE0E0E2, dp(2));
+        locked.setOrientation(LinearLayout.VERTICAL);
         locked.setPadding(dp(14), dp(14), dp(14), dp(8));
         body.addView(locked, new LinearLayout.LayoutParams(-1, dp(370)));
         locked.setAlpha(0.78f);
