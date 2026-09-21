@@ -3,7 +3,7 @@ name: Release Android APK
 on:
   push:
     branches:
-      - 'release-v1.0.0'
+      - 'release-v1.1.0'
     tags:
       - 'v*'
 
@@ -59,7 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create v1.0.0             app/build/outputs/apk/release/app-release.apk             app/build/outputs/bundle/release/app-release.aab             --target "${GITHUB_SHA}"             --title "Nexauren Music Player v1.0.0"             --generate-notes
+          gh release create v1.1.0             app/build/outputs/apk/release/app-release.apk             app/build/outputs/bundle/release/app-release.aab             --target "${GITHUB_SHA}"             --title "Nexauren Music Player v1.1.0"             --notes "Nexauren Music Player 1.1.0\n\n• Mini-player compacto e premium com menu próprio\n• Player completo com aleatório, repetir, A-B, fila e ferramentas\n• Biblioteca organizada por músicas, álbuns, artistas, pastas, favoritos e recentes\n• Estado da reprodução e equalizador persistentes\n• Verificação automática de atualizações, download dentro do app e instalação pelo Android\n• Ecrã de novidades após atualização"
 
       - name: Remove signing material
         if: always()
