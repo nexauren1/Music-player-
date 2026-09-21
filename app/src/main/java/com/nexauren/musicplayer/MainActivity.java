@@ -1333,6 +1333,7 @@ public final class MainActivity extends AppCompatActivity {
             effectsEnabled = checked;
             getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", checked).apply();
             PlaybackService.setEffectsEnabled(checked);
+            PlaybackService.saveAudioPrefs(this);
         });
         body.addView(master, new LinearLayout.LayoutParams(-1, dp(64)));
 
@@ -1348,7 +1349,10 @@ public final class MainActivity extends AppCompatActivity {
             lp.setMargins(dp(3),0,dp(3),0);
             presetBox.addView(chip,lp);
             chip.setOnClickListener(v -> {
-                if (PlaybackService.applyEqualizerPreset(name,10)) showAudioLab();
+                if (PlaybackService.applyEqualizerPreset(name,10)) {
+                    PlaybackService.saveAudioPrefs(this);
+                    showAudioLab();
+                }
                 else Toast.makeText(this,"Toque uma música para ativar o equalizador.",Toast.LENGTH_SHORT).show();
             });
         }
@@ -1369,7 +1373,12 @@ public final class MainActivity extends AppCompatActivity {
             final int idx=i;
             EqBandView band=new EqBandView(this);
             band.setData(bandLabels[i],PlaybackService.getEqualizerBandCount()>0?bandLevels[i]:50);
-            band.setListener(percent->{if(PlaybackService.setEqualizerBand(idx,10,percent))graph.setLevels(PlaybackService.getEqualizerLevels(10));});
+            band.setListener(percent->{
+                if(PlaybackService.setEqualizerBand(idx,10,percent)){
+                    PlaybackService.saveAudioPrefs(this);
+                    graph.setLevels(PlaybackService.getEqualizerLevels(10));
+                }
+            });
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(55),dp(180));lp.setMargins(dp(2),0,dp(2),0);bandBox.addView(band,lp);
         }
         bandScroll.addView(bandBox,new ViewGroup.LayoutParams(-2,dp(187)));
@@ -1659,6 +1668,7 @@ public final class MainActivity extends AppCompatActivity {
         d.setOnDialChangedListener(p -> {
             value.setText(p + "%");
             if (preamp) PlaybackService.setPreamp(p); else PlaybackService.setBass(p);
+            PlaybackService.saveAudioPrefs(this);
         });
         return box;
     }
