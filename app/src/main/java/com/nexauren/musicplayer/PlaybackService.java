@@ -30,6 +30,8 @@ public final class PlaybackService extends MediaSessionService {
     private ChannelMixingAudioProcessor channelMixer;
     private PresetReverb reverb;
     private boolean mono;
+    private float balance;
+    private boolean skipSilence;
 
     private final Player.Listener audioListener = new Player.Listener() {
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
@@ -98,6 +100,20 @@ public final class PlaybackService extends MediaSessionService {
     public static boolean setBass(int percent) {
         return instance != null && instance.effects.setBassAndReturn(percent);
     }
+    public static boolean setVirtualizer(int percent) {
+        return instance != null && instance.effects.setVirtualizerAndReturn(percent);
+    }
+    public static void setEffectsEnabled(boolean enabled) {
+        if (instance != null) instance.effects.setEnabled(enabled);
+    }
+    public static boolean areEffectsEnabled() {
+        return instance == null || instance.effects.isEnabled();
+    }
+    public static void setSkipSilence(boolean enabled) {
+        if (instance == null || instance.player == null) return;
+        instance.skipSilence = enabled;
+        instance.player.setSkipSilenceEnabled(enabled);
+    }
     public static boolean setPreamp(int percent) {
         return instance != null && instance.effects.setPreampAndReturn(percent);
     }
@@ -105,22 +121,33 @@ public final class PlaybackService extends MediaSessionService {
     public static void setMonoMode(boolean enable) {
         if (instance == null || instance.player == null || instance.channelMixer == null) return;
         instance.mono = enable;
-        boolean playing = instance.player.isPlaying();
-        int index = Math.max(0, instance.player.getCurrentMediaItemIndex());
-        long position = Math.max(0, instance.player.getCurrentPosition());
+        instance.applyChannelMix();
+    }
+
+    public static void setBalance(float value) {
+        if (instance == null || instance.channelMixer == null) return;
+        instance.balance = Math.max(-1f, Math.min(1f, value));
+        if (!instance.mono) instance.applyChannelMix();
+    }
+
+    private void applyChannelMix() {
+        if (player == null || channelMixer == null) return;
+        boolean playing = player.isPlaying();
+        int index = Math.max(0, player.getCurrentMediaItemIndex());
+        long position = Math.max(0, player.getCurrentPosition());
         try {
-            if (enable) {
-                instance.channelMixer.putChannelMixingMatrix(
-                        new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
+            if (mono) {
+                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
             } else {
-                instance.channelMixer.putChannelMixingMatrix(
-                        new ChannelMixingMatrix(2, 2, new float[]{1f, 0f, 0f, 1f}));
+                float left = balance < 0 ? 1f : 1f - balance;
+                float right = balance > 0 ? 1f : 1f + balance;
+                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
             }
-            if (instance.player.getMediaItemCount() > 0) {
-                instance.player.stop();
-                instance.player.prepare();
-                instance.player.seekTo(index, position);
-                if (playing) instance.player.play();
+            if (player.getMediaItemCount() > 0) {
+                player.stop();
+                player.prepare();
+                player.seekTo(index, position);
+                if (playing) player.play();
             }
         } catch (Throwable ignored) {}
     }
