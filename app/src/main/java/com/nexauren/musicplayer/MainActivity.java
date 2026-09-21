@@ -334,7 +334,7 @@ public final class MainActivity extends AppCompatActivity {
 
         TextView eq = topIcon("☷");
         bar.addView(eq, new LinearLayout.LayoutParams(dp(44), -1));
-        eq.setOnClickListener(v -> showEqualizer());
+        eq.setOnClickListener(v -> showAudioLab());
 
         TextView more = topIcon("⋮");
         bar.addView(more, new LinearLayout.LayoutParams(dp(40), -1));
@@ -776,8 +776,6 @@ public final class MainActivity extends AppCompatActivity {
         drawerItem(menu, "▤", "Minha playlist", () -> { root.removeView(overlay); showPlaylist(); });
         drawerItem(menu, "☰", "Equalizador", () -> { root.removeView(overlay); showEqualizer(); });
         drawerItem(menu, "◉", "Visualizador de música", () -> startActivity(new Intent(this, VisualizerActivity.class)));
-        drawerItem(menu, "◈", "Som", () -> { root.removeView(overlay); showSound(); });
-        drawerItem(menu, "◌", "Reverberação", () -> { root.removeView(overlay); showReverb(); });
         drawerItem(menu, "▣", "Modo de condução", () -> { root.removeView(overlay); showDrivingMode(); });
         drawerItem(menu, "⏱", "Temporizador de sono", this::showSleepTimer);
         drawerItem(menu, "⧉", "Encontrar duplicados", () -> { root.removeView(overlay); showDuplicates(); });
