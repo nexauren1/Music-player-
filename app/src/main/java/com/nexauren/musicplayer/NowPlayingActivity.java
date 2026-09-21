@@ -40,7 +40,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private MediaController controller;
     private ListenableFuture<MediaController> future;
     private ImageView art;
-    private TextView title, artist, position, duration, play;
+    private TextView title, artist, position, duration, play, shuffle, repeat, ab;
     private SeekBar seek;
 
     private final Runnable ticker = new Runnable() {
@@ -131,11 +131,30 @@ public final class NowPlayingActivity extends AppCompatActivity {
         quick.setGravity(Gravity.CENTER);
         TextView eq=chip("Equalizador");
         TextView speed=chip("Velocidade");
-        quick.addView(eq,new LinearLayout.LayoutParams(dp(150),dp(48)));
-        quick.addView(speed,new LinearLayout.LayoutParams(dp(150),dp(48)));
+        quick.addView(eq,new LinearLayout.LayoutParams(0,dp(46),1));
+        quick.addView(speed,new LinearLayout.LayoutParams(0,dp(46),1));
         body.addView(quick);
-        eq.setOnClickListener(v->{startActivity(new Intent(this,MainActivity.class).putExtra("page","equalizer"));});
+
+        LinearLayout modes=new LinearLayout(this);
+        modes.setGravity(Gravity.CENTER);
+        shuffle=modeChip("Aleatório");
+        repeat=modeChip("Repetir");
+        ab=modeChip("A-B");
+        modes.addView(shuffle,new LinearLayout.LayoutParams(0,dp(42),1));
+        modes.addView(repeat,new LinearLayout.LayoutParams(0,dp(42),1));
+        modes.addView(ab,new LinearLayout.LayoutParams(0,dp(42),1));
+        body.addView(modes,new LinearLayout.LayoutParams(-1,dp(50)));
+
+        eq.setOnClickListener(v->{startActivity(new Intent(this,MainActivity.class).putExtra("page","audio"));});
         speed.setOnClickListener(v->showSpeed());
+        shuffle.setOnClickListener(v->{if(controller!=null){controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled());update();}});
+        repeat.setOnClickListener(v->{if(controller!=null){int mode=controller.getRepeatMode();int next=mode==Player.REPEAT_MODE_OFF?Player.REPEAT_MODE_ALL:mode==Player.REPEAT_MODE_ALL?Player.REPEAT_MODE_ONE:Player.REPEAT_MODE_OFF;controller.setRepeatMode(next);update();}});
+        ab.setOnClickListener(v->{
+            int state=PlaybackService.toggleABRepeat();
+            ab.setText(state==1?"A •":"A-B");
+            ab.setTextColor(state>0?0xFF2D9DEB:Color.WHITE);
+            Toast.makeText(this,state==1?"Ponto A definido":state==2?"Repetição A-B ativada":"Repetição A-B desligada",Toast.LENGTH_SHORT).show();
+        });
 
         root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
@@ -159,6 +178,9 @@ public final class NowPlayingActivity extends AppCompatActivity {
         long d=Math.max(0,controller.getDuration()),p=Math.max(0,controller.getCurrentPosition());
         seek.setMax((int)Math.min(Integer.MAX_VALUE,d));seek.setProgress((int)Math.min(Integer.MAX_VALUE,p));
         position.setText(format(p));duration.setText(format(d));play.setText(controller.isPlaying()?"Ⅱ":"▶");
+        if(shuffle!=null)shuffle.setTextColor(controller.getShuffleModeEnabled()?0xFF2D9DEB:Color.WHITE);
+        if(repeat!=null)repeat.setTextColor(controller.getRepeatMode()==Player.REPEAT_MODE_OFF?Color.WHITE:0xFF2D9DEB);
+        if(ab!=null){int state=PlaybackService.getABState();ab.setText(state==1?"A •":"A-B");ab.setTextColor(state>0?0xFF2D9DEB:Color.WHITE);}
     }
 
     private void loadArtwork(long id){
@@ -184,6 +206,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private TextView button(String s,int size){TextView t=icon(s,size);t.setBackground(round(0xFF1A2230,22));return t;}
     private TextView roundButton(String s,int size){TextView t=icon(s,size);t.setBackground(round(0xFF1A2230,40));return t;}
     private TextView chip(String s){TextView t=text(s,14,Color.WHITE);t.setGravity(Gravity.CENTER);t.setBackground(round(0xFF2D9DEB,28));return t;}
+    private TextView modeChip(String s){TextView t=text(s,13,Color.WHITE);t.setGravity(Gravity.CENTER);t.setBackground(round(0xFF151C27,20));return t;}
     private TextView text(String s,float size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);return t;}
     private android.graphics.drawable.GradientDrawable round(int c,int r){android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(c);d.setCornerRadius(dp(r));return d;}
     private int dp(int v){return(int)(v*getResources().getDisplayMetrics().density+.5f);}
