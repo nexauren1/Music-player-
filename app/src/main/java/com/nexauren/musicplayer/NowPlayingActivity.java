@@ -83,7 +83,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
         super.onCreate(state);
         getWindow().setStatusBarColor(Color.rgb(33, 150, 243));
         getWindow().setNavigationBarColor(Color.BLACK);
-        setKeepScreenOn(true);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         buildUi();
         connect();
         handler.post(ticker);
