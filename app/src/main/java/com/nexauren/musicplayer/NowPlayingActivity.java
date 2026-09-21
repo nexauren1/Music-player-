@@ -148,7 +148,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
         eq.setOnClickListener(v->{startActivity(new Intent(this,MainActivity.class).putExtra("page","audio"));});
         speed.setOnClickListener(v->showSpeed());
         shuffle.setOnClickListener(v->{if(controller!=null){controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled());update();}});
-        repeat.setOnClickListener(v->{if(controller!=null){int mode=controller.getRepeatMode();int next=mode==Player.REPEAT_MODE_OFF?Player.REPEAT_MODE_ALL:mode==Player.REPEAT_MODE_ALL?Player.REPEAT_MODE_ONE:Player.REPEAT_MODE_OFF;controller.setRepeatMode(next);update();}});
+        repeat.setOnClickListener(v->{if(controller!=null){int mode=controller.getRepeatMode();int nextMode=mode==Player.REPEAT_MODE_OFF?Player.REPEAT_MODE_ALL:mode==Player.REPEAT_MODE_ALL?Player.REPEAT_MODE_ONE:Player.REPEAT_MODE_OFF;controller.setRepeatMode(nextMode);update();}});
         ab.setOnClickListener(v->{
             int state=PlaybackService.toggleABRepeat();
             ab.setText(state==1?"A •":"A-B");
