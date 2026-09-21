@@ -145,6 +145,10 @@ public final class PlaybackService extends MediaSessionService {
         } catch (Throwable ignored) {}
     }
 
+    public static void stop() {
+        if (instance != null && instance.player != null) instance.player.stop();
+    }
+
     public static void setPlaybackSpeedPitch(float speed, float pitch) {
         if (instance != null && instance.player != null) {
             instance.player.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(speed, pitch));
