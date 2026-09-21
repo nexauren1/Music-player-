@@ -187,7 +187,9 @@ public final class NowPlayingActivity extends AppCompatActivity {
         if(ContextCompat.checkSelfPermission(this,Build.VERSION.SDK_INT>=33?Manifest.permission.READ_MEDIA_AUDIO:Manifest.permission.READ_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED)return;
         Uri uri=ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id);
         new Thread(()->{
-            Bitmap b=null;MediaMetadataRetriever r=new MediaMetadataRetriever();
+            Bitmap b=null;
+            if(ArtworkStore.exists(this,id)) b=BitmapFactory.decodeFile(ArtworkStore.file(this,id).getAbsolutePath());
+            MediaMetadataRetriever r=new MediaMetadataRetriever();
             try{r.setDataSource(this,uri);byte[]data=r.getEmbeddedPicture();if(data!=null)b=BitmapFactory.decodeByteArray(data,0,data.length);}catch(Exception ignored){}finally{try{r.release();}catch(Exception ignored){}}
             Bitmap result=b;runOnUiThread(()->{if(result!=null){art.clearColorFilter();art.setImageBitmap(result);}});
         }).start();
