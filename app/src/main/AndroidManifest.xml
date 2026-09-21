@@ -24,7 +24,12 @@
         </service>
             <activity android:name=".NowPlayingActivity" android:exported="false" />
         <activity android:name=".VisualizerActivity" android:exported="false" />
-            <provider
+            <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.nexauren.musicplayer.fileprovider"
             android:exported="false"
