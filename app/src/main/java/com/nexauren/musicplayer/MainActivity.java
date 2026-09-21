@@ -981,36 +981,72 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showMiniMenu(View anchor) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        String[] entries = {
-                "Editar etiquetas", "Adicionar à lista de reprodução", "Eliminar",
-                "Modo de condução", "Enviar", "Detalhes", "Velocidade de reprodução",
-                "Visualizador de música", "Temporizador de sono", "Letra da música",
-                "Definir como toque", "Mais do artista", "Mais do álbum",
-                "Adicionar aos favoritos", "Abrir fila", "Cortar trecho"
+        Track track = currentTrack();
+        if (track == null) {
+            Toast.makeText(this, "Nenhuma faixa em reprodução.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final PopupWindow[] popupRef = new PopupWindow[1];
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(8), dp(8), dp(8));
+        list.setBackground(roundDrawable(darkMode ? Color.rgb(20,25,33) : Color.WHITE, dp(18)));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(list, new ViewGroup.LayoutParams(dp(330), -2));
+
+        String[] labels = {
+                "✎  Editar etiquetas",
+                "✂  Cortar áudio",
+                "♫  Definir como toque",
+                "☷  Adicionar à lista de reprodução",
+                "♡  Adicionar aos favoritos",
+                "⌁  Enviar",
+                "ⓘ  Detalhes",
+                "◉  Velocidade de reprodução",
+                "〰  Visualizador de música",
+                "◷  Temporizador de sono",
+                "♫  Letra da música",
+                "♙  Mais do artista",
+                "☷  Mais do álbum",
+                "≡  Abrir fila",
+                "▣  Modo de condução"
         };
-        for (String e : entries) menu.getMenu().add(e);
-        menu.setOnMenuItemClickListener(item -> {
-            String value=item.getTitle().toString();
-            if ("Editar etiquetas".equals(value)) showEditTags();
-            else if ("Adicionar à lista de reprodução".equals(value)) addCurrentToPlaylist();
-            else if ("Eliminar".equals(value)) deleteCurrentTrack();
-            else if ("Modo de condução".equals(value)) showDrivingMode();
-            else if ("Enviar".equals(value)) shareCurrent();
-            else if ("Detalhes".equals(value)) showCurrentDetails();
-            else if ("Velocidade de reprodução".equals(value)) showSpeedDialog();
-            else if ("Visualizador de música".equals(value)) startActivity(new Intent(this,VisualizerActivity.class));
-            else if ("Temporizador de sono".equals(value)) showSleepTimer();
-            else if ("Letra da música".equals(value)) showLyrics();
-            else if ("Definir como toque".equals(value)) setCurrentAsRingtone();
-            else if ("Mais do artista".equals(value)) filterByCurrentArtist();
-            else if ("Mais do álbum".equals(value)) filterByCurrentAlbum();
-            else if ("Adicionar aos favoritos".equals(value)) toggleCurrentFavorite();
-            else if ("Abrir fila".equals(value)) showQueue();
-            else if ("Cortar trecho".equals(value)) showAbout("Cortar trecho","O editor de trechos será ampliado na próxima atualização.");
-            return true;
-        });
-        menu.show();
+        for (String label : labels) {
+            TextView row = text(label, 14, darkMode ? Color.WHITE : Color.rgb(35,38,42));
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), 0, dp(8), 0);
+            list.addView(row, new LinearLayout.LayoutParams(-1, dp(48)));
+            row.setOnClickListener(v -> {
+                if (popupRef[0] != null) popupRef[0].dismiss();
+                if (label.contains("Editar etiquetas")) {
+                    startActivityForResult(new Intent(this, EditTagsActivity.class).putExtra("track_id", track.id), 7810);
+                } else if (label.contains("Cortar áudio")) {
+                    startActivityForResult(new Intent(this, AudioCutterActivity.class)
+                            .putExtra("track_id", track.id).putExtra("duration", track.durationMs).putExtra("title", track.title), 7811);
+                } else if (label.contains("Definir como toque")) setCurrentAsRingtone();
+                else if (label.contains("lista de reprodução")) addCurrentToPlaylist();
+                else if (label.contains("favoritos")) toggleCurrentFavorite();
+                else if (label.contains("Enviar")) shareCurrent();
+                else if (label.contains("Detalhes")) showCurrentDetails();
+                else if (label.contains("Velocidade")) showSpeedDialog();
+                else if (label.contains("Visualizador")) startActivity(new Intent(this, VisualizerActivity.class));
+                else if (label.contains("Temporizador")) showSleepTimer();
+                else if (label.contains("Letra")) showLyrics();
+                else if (label.contains("artista")) filterByCurrentArtist();
+                else if (label.contains("álbum")) filterByCurrentAlbum();
+                else if (label.contains("fila")) showQueue();
+                else if (label.contains("condução")) showDrivingMode();
+            });
+        }
+
+        PopupWindow popup = new PopupWindow(scroll, dp(346), Math.min(dp(620), dp(48) * labels.length + dp(20)), true);
+        popupRef[0] = popup;
+        popup.setBackgroundDrawable(roundDrawable(darkMode ? Color.rgb(20,25,33) : Color.WHITE, dp(18)));
+        popup.setOutsideTouchable(true);
+        popup.setElevation(dp(12));
+        popup.setOverlapAnchor(false);
+        popup.showAsDropDown(anchor, -dp(310), -Math.min(dp(620), dp(48) * labels.length + dp(68)));
     }
 
     private void showGlobalMenu(View anchor) {
@@ -1157,11 +1193,13 @@ public final class MainActivity extends AppCompatActivity {
         rowLp.setMargins(0, 0, 0, dp(6));
         libraryContainer.addView(row, rowLp);
 
+        // The artwork loader is asynchronous to keep large libraries responsive.
         ImageView art = new ImageView(this);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        art.setImageResource(android.R.drawable.ic_menu_gallery);
+        art.setImageResource(R.drawable.music_placeholder);
         art.setColorFilter(0xFF65707C);
         row.addView(art, new LinearLayout.LayoutParams(dp(62), dp(62)));
+        loadArtwork(track.uri, art, track.id);
 
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
@@ -1394,6 +1432,7 @@ private void markCurrentRecent() {
             if (miniTitle != null) miniTitle.setText(t);
             if (miniArtist != null) miniArtist.setText(ar);
             if (miniPlay != null) miniPlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
+            syncMiniSpin(controller.isPlaying());
             if (homePlay != null) homePlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
             if (miniShuffle != null) miniShuffle.setTextColor(controller.getShuffleModeEnabled() ? accent() : textSecondary());
             if (miniRepeat != null) miniRepeat.setTextColor(controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? textSecondary() : accent());
@@ -1433,21 +1472,32 @@ private void markCurrentRecent() {
         }
     }
 
-    private void loadArtwork(final android.net.Uri uri, final ImageView target) {
+    private void loadArtwork(final Uri uri, final ImageView target) {
+        long guessedId=-1L;
+        try{guessedId=ContentUris.parseId(uri);}catch(Exception ignored){}
+        loadArtwork(uri,target,guessedId);
+    }
+
+    private void loadArtwork(final Uri uri, final ImageView target, final long trackId) {
         queryExecutor.execute(() -> {
             Bitmap bitmap = null;
-            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-            try {
-                retriever.setDataSource(this, uri);
-                byte[] data = retriever.getEmbeddedPicture();
-                if (data != null) bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-            } catch (Exception ignored) {
-            } finally {
-                try { retriever.release(); } catch (Exception ignored) {}
+            if (trackId >= 0 && ArtworkStore.exists(this, trackId)) {
+                bitmap = BitmapFactory.decodeFile(ArtworkStore.file(this, trackId).getAbsolutePath());
             }
-            final Bitmap result = bitmap;
+            if (bitmap == null) {
+                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                try {
+                    retriever.setDataSource(this, uri);
+                    byte[] data = retriever.getEmbeddedPicture();
+                    if (data != null) bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                } catch (Exception ignored) {
+                } finally {
+                    try { retriever.release(); } catch (Exception ignored) {}
+                }
+            }
+            Bitmap result = bitmap;
             runOnUiThread(() -> {
-                if (result != null) {
+                if (result != null && target.getWindowToken() != null) {
                     target.clearColorFilter();
                     target.setImageBitmap(result);
                 }
@@ -1515,6 +1565,9 @@ private void markCurrentRecent() {
                         String title = clean(c.getString(titleCol), "Sem título");
                         String artist = clean(c.getString(artistCol), "Artista desconhecido");
                         String album = clean(c.getString(albumCol), "Álbum desconhecido");
+                        title = TagStore.get(MainActivity.this, id, "title", title);
+                        artist = TagStore.get(MainActivity.this, id, "artist", artist);
+                        album = TagStore.get(MainActivity.this, id, "album", album);
                         long duration = c.getLong(durationCol);
                         found.add(new Track(id, title, artist, album, duration,
                                 ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)));
@@ -1775,6 +1828,13 @@ private void markCurrentRecent() {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_WRITE_MEDIA && resultCode == RESULT_OK) savePendingTags();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_WRITE_MEDIA && resultCode == RESULT_OK) savePendingTags();
+        else if ((requestCode == 7810 || requestCode == 7811) && resultCode == RESULT_OK) loadTracks();
     }
 
     @Override
