@@ -17,6 +17,12 @@ public final class AudioEffectsController {
         try {
             equalizer = new Equalizer(1000, sessionId);
             equalizer.setEnabled(true);
+            // Start at a true flat 0 dB curve instead of the device driver's arbitrary default.
+            short[] range = equalizer.getBandLevelRange();
+            short flat = (short) Math.max(range[0], Math.min(range[1], 0));
+            for (short b = 0; b < equalizer.getNumberOfBands(); b++) {
+                try { equalizer.setBandLevel(b, flat); } catch (Throwable ignored) {}
+            }
         } catch (Throwable ignored) {
             equalizer = null;
         }
