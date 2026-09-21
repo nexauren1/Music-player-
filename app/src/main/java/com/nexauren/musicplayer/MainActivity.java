@@ -1239,34 +1239,45 @@ private void markCurrentRecent() {
         MediaItem item = controller.getCurrentMediaItem();
         if (item != null && item.mediaMetadata != null) {
             String t = item.mediaMetadata.title == null ? "Nexauren Player" : item.mediaMetadata.title.toString();
-            String a = item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString();
+            String ar = item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString();
             if (miniTitle != null) miniTitle.setText(t);
-            if (miniArtist != null) miniArtist.setText(a);
+            if (miniArtist != null) miniArtist.setText(ar);
             if (miniPlay != null) miniPlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
             if (homePlay != null) homePlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
-            if (bigTitle != null) bigTitle.setText(t);
+            if (miniShuffle != null) miniShuffle.setTextColor(controller.getShuffleModeEnabled() ? accent() : textSecondary());
+            if (miniRepeat != null) miniRepeat.setTextColor(controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? textSecondary() : accent());
+
+            int ab = PlaybackService.getABState();
+            if (miniAB != null) {
+                miniAB.setText(ab == 1 ? "A •" : "A-B");
+                miniAB.setTextColor(ab > 0 ? accent() : textSecondary());
+            }
+
+            long duration = Math.max(0, controller.getDuration());
+            long position = Math.max(0, controller.getCurrentPosition());
+            if (miniProgress != null && !miniTracking) {
+                miniProgress.setProgress(duration > 0 ? (int) Math.min(1000L, position * 1000L / duration) : 0);
+            }
+            if (miniCurrent != null) miniCurrent.setText(formatMs(position));
+            if (miniTotal != null) miniTotal.setText(formatMs(duration));
+            if (bigPosition != null) bigPosition.setText(formatMs(position));
+            if (bigDuration != null) bigDuration.setText(formatMs(duration));
+
             if (waveform != null) {
                 waveform.setPlaying(controller.isPlaying());
-                waveform.setProgress(controller.getDuration() > 0 ? (float) controller.getCurrentPosition() / (float) controller.getDuration() : 0f);
+                waveform.setProgress(duration > 0 ? (float) position / duration : 0f);
             }
-            long d=Math.max(0,controller.getDuration()), p=Math.max(0,controller.getCurrentPosition());
-            if(bigPosition!=null)bigPosition.setText(formatMs(p));
-            if(bigDuration!=null)bigDuration.setText(formatMs(d));
 
             Track match = null;
-            String id = item.mediaId;
-            if (id != null) {
-                try {
-                    long trackId = Long.parseLong(id);
-                    for (Track tr : tracks) if (tr.id == trackId) { match = tr; break; }
-                } catch (Exception ignored) {}
-            }
-            if (match != null) {
-                if (match.id != lastArtworkId) {
-                    lastArtworkId = match.id;
-                    if (miniArt != null) loadArtwork(match.uri, miniArt);
-                    if (bigArt != null) loadArtwork(match.uri, bigArt);
-                }
+            try {
+                long trackId = Long.parseLong(item.mediaId);
+                for (Track tr : tracks) if (tr.id == trackId) { match = tr; break; }
+            } catch (Exception ignored) {}
+
+            if (match != null && match.id != lastArtworkId) {
+                lastArtworkId = match.id;
+                if (miniArt != null) loadArtwork(match.uri, miniArt);
+                if (bigArt != null) loadArtwork(match.uri, bigArt);
             }
         }
     }
