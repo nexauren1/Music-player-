@@ -773,6 +773,20 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void connectController() {
+        SessionToken token = new SessionToken(this, new ComponentName(this, PlaybackService.class));
+        controllerFuture = new MediaController.Builder(this, token).buildAsync();
+        controllerFuture.addListener(() -> {
+            try {
+                controller = controllerFuture.get();
+                controller.addListener(playerListener);
+                updatePlaybackUi();
+            } catch (Exception e) {
+                Toast.makeText(this, "Não foi possível iniciar o áudio.", Toast.LENGTH_LONG).show();
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
     private void ensureAudioPermission() {
         String permission = Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
         if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) loadTracks();
