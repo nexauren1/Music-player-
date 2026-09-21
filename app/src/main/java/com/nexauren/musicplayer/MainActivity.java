@@ -1046,6 +1046,411 @@ private void markCurrentRecent() {
         return t;
     }
 
+    private LinearLayout basePage(String title){LinearLayout shell=new LinearLayout(this);shell.setOrientation(LinearLayout.VERTICAL);shell.addView(topBar(title,true),new LinearLayout.LayoutParams(-1,dp(56)));root.addView(shell,new FrameLayout.LayoutParams(-1,-1));return shell;}
+
+    private LinearLayout pageBody(LinearLayout shell){ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(14),dp(8),dp(14),dp(28));scroll.addView(body,new ScrollView.LayoutParams(-1,-2));shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));return body;}
+
+    private void openDrawer(){final FrameLayout overlay=new FrameLayout(this);overlay.setBackgroundColor(0x66000000);root.addView(overlay,new FrameLayout.LayoutParams(-1,-1));LinearLayout drawer=new LinearLayout(this);drawer.setOrientation(LinearLayout.VERTICAL);drawer.setBackgroundColor(darkMode?Color.rgb(20,24,30):Color.WHITE);int width=(int)Math.min(dp(330),getResources().getDisplayMetrics().widthPixels*0.86f);overlay.addView(drawer,new FrameLayout.LayoutParams(width,-1,Gravity.START));LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);hero.setGravity(Gravity.CENTER_HORIZONTAL);hero.setPadding(dp(16),dp(16),dp(16),dp(10));hero.setBackgroundColor(Color.rgb(33,150,243));drawer.addView(hero,new LinearLayout.LayoutParams(-1,dp(190)));TextView logo=text("N",70,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setTypeface(null,1);hero.addView(logo,new LinearLayout.LayoutParams(-1,dp(98)));TextView name=text("NEXAUREN",22,Color.WHITE);name.setGravity(Gravity.CENTER);name.setTypeface(null,1);hero.addView(name,new LinearLayout.LayoutParams(-1,dp(38)));TextView sub=text("MUSIC PLAYER",11,Color.WHITE);sub.setGravity(Gravity.CENTER);hero.addView(sub,new LinearLayout.LayoutParams(-1,dp(25)));ScrollView scroll=new ScrollView(this);LinearLayout menu=new LinearLayout(this);menu.setOrientation(LinearLayout.VERTICAL);scroll.addView(menu,new ScrollView.LayoutParams(-1,-2));drawer.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));drawerItem(menu,"⌂","Biblioteca",()->{root.removeView(overlay);showHome(true);});drawerItem(menu,"♡","Favoritos",()->{root.removeView(overlay);showFavorites();});drawerItem(menu,"◷","Reproduzido recentemente",()->{root.removeView(overlay);showRecent();});drawerItem(menu,"☷","Fila de reprodução",()->{root.removeView(overlay);showQueue();});drawerItem(menu,"▤","Minha playlist",()->{root.removeView(overlay);showPlaylist();});drawerItem(menu,"☷","Áudio",()->{root.removeView(overlay);showAudioLab();});drawerItem(menu,"◉","Visualizador de música",()->{root.removeView(overlay);startActivity(new Intent(this,VisualizerActivity.class));});drawerItem(menu,"▣","Modo de condução",()->{root.removeView(overlay);showDrivingMode();});drawerItem(menu,"⏱","Temporizador de sono",()->{root.removeView(overlay);showSleepTimer();});drawerItem(menu,"⧉","Encontrar duplicados",()->{root.removeView(overlay);showDuplicates();});drawerItem(menu,"◐","Tema claro/escuro",()->{root.removeView(overlay);toggleTheme();showHome(true);});drawerItem(menu,"⚙","Configurações",()->{root.removeView(overlay);showSettings();});overlay.setOnClickListener(v->root.removeView(overlay));}
+
+    private void showGlobalMenu(View anchor) {
+        PopupMenu menu = new PopupMenu(this, anchor);
+        String[] entries = {
+                "Pesquisar", "Editar etiquetas", "Cortar áudio", "Adicionar à minha playlist", "Eliminar faixa atual",
+                "Enviar faixa", "Detalhes", "Velocidade de reprodução",
+                "Visualizador de música", "Temporizador de sono", "Letra da música",
+                "Definir como toque", "Mais do artista", "Mais do álbum",
+                "Adicionar aos favoritos", "Abrir fila", "Cortar trecho"
+        };
+        for (String e : entries) menu.getMenu().add(e);
+        menu.setOnMenuItemClickListener(item -> {
+            String value = item.getTitle().toString();
+            if ("Pesquisar".equals(value)) { searchMode=true; showHome(true); }
+            else if ("Editar etiquetas".equals(value)) showEditTags();
+            else if ("Cortar áudio".equals(value)) {
+                Track current=currentTrack();
+                if(current!=null) startActivityForResult(new Intent(this,AudioCutterActivity.class)
+                        .putExtra("track_id",current.id).putExtra("duration",current.durationMs).putExtra("title",current.title),7811);
+            }
+            else if ("Adicionar à minha playlist".equals(value)) addCurrentToPlaylist();
+            else if ("Eliminar faixa atual".equals(value)) deleteCurrentTrack();
+            else if ("Enviar faixa".equals(value)) shareCurrent();
+            else if ("Detalhes".equals(value)) showCurrentDetails();
+            else if ("Velocidade de reprodução".equals(value)) showSpeedDialog();
+            else if ("Visualizador de música".equals(value)) startActivity(new Intent(this, VisualizerActivity.class));
+            else if ("Temporizador de sono".equals(value)) showSleepTimer();
+            else if ("Letra da música".equals(value)) showLyrics();
+            else if ("Definir como toque".equals(value)) setCurrentAsRingtone();
+            else if ("Mais do artista".equals(value)) filterByCurrentArtist();
+            else if ("Mais do álbum".equals(value)) filterByCurrentAlbum();
+            else if ("Adicionar aos favoritos".equals(value)) toggleCurrentFavorite();
+            else if ("Abrir fila".equals(value)) showQueue();
+            else if ("Cortar trecho".equals(value)) {
+                Track current=currentTrack();
+                if(current!=null) showAbout("Cortar trecho","Use a versão seguinte para exportação de trechos. A reprodução e as outras ferramentas já estão ativas.");
+            } else Toast.makeText(this, value + ": disponível no Nexauren.", Toast.LENGTH_SHORT).show();
+            return true;
+        });
+        menu.show();
+    }
+
+    private void showTrackMenu(View anchor, Track track) {
+        PopupMenu menu = new PopupMenu(this, anchor);
+        String[] entries = {
+                FavoritesStore.isFavorite(this, track.id) ? "Remover dos favoritos" : "Adicionar aos favoritos",
+                "Editar etiquetas", "Cortar áudio", "Adicionar à minha playlist", "Enviar", "Detalhes",
+                "Mais do artista", "Mais do álbum", "Eliminar"
+        };
+        for (String e : entries) menu.getMenu().add(e);
+        menu.setOnMenuItemClickListener(item -> {
+            String value=item.getTitle().toString();
+            if(value.equals("Editar etiquetas")) startActivityForResult(new Intent(this,EditTagsActivity.class).putExtra("track_id",track.id),7810);
+            else if(value.equals("Cortar áudio")) startActivityForResult(new Intent(this,AudioCutterActivity.class)
+                    .putExtra("track_id",track.id).putExtra("duration",track.durationMs).putExtra("title",track.title),7811);
+            else if(value.contains("favoritos")) {
+                boolean fav=FavoritesStore.toggle(this,track.id);
+                Toast.makeText(this,fav?"Adicionado aos favoritos":"Removido dos favoritos",Toast.LENGTH_SHORT).show();
+            } else if(value.equals("Adicionar à minha playlist")) addTrackToPlaylist(track);
+            else if(value.equals("Enviar")) shareTrack(track);
+            else if(value.equals("Detalhes")) showDetails(track);
+            else if(value.equals("Mais do artista")) filterByArtist(track.artist);
+            else if(value.equals("Mais do álbum")) filterByAlbum(track.album);
+            else if(value.equals("Eliminar")) deleteTrack(track);
+            return true;
+        });
+        menu.show();
+    }
+
+    private void showAudioLab() {
+        currentPage = 1;
+        searchMode = false;
+        root.removeAllViews();
+
+        LinearLayout shell = basePage("Áudio");
+        LinearLayout body = pageBody(shell);
+
+        LinearLayout master = roundedPanel(surface(), dp(16));
+        master.setOrientation(LinearLayout.VERTICAL);
+        master.setPadding(dp(12), dp(7), dp(12), dp(7));
+        LinearLayout masterLine = new LinearLayout(this);
+        masterLine.setGravity(Gravity.CENTER_VERTICAL);
+        TextView masterTitle = text("Efeitos de áudio", 16, textPrimary());
+        masterTitle.setTypeface(null, 1);
+        masterLine.addView(masterTitle, new LinearLayout.LayoutParams(0, dp(27), 1));
+        Switch masterSwitch = new Switch(this);
+        masterSwitch.setChecked(effectsEnabled);
+        masterSwitch.setShowText(false);
+        masterLine.addView(masterSwitch, new LinearLayout.LayoutParams(dp(50), dp(34)));
+        master.addView(masterLine);
+        master.addView(text("Equalizador • Som • Reverberação", 11, textSecondary()), new LinearLayout.LayoutParams(-1, dp(18)));
+        masterSwitch.setOnCheckedChangeListener((button, checked) -> {
+            effectsEnabled = checked;
+            getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", checked).apply();
+            PlaybackService.setEffectsEnabled(checked);
+        });
+        body.addView(master, new LinearLayout.LayoutParams(-1, dp(64)));
+
+        body.addView(sectionTitleView("EQUALIZADOR", "10 bandas"));
+        HorizontalScrollView presetScroll = new HorizontalScrollView(this);
+        presetScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout presetBox = new LinearLayout(this);
+        presetBox.setPadding(0, 0, dp(8), dp(5));
+        String[] presetNames = {"Plano","Rock","Jazz","Clássico","Bass","Vocal"};
+        for (String name : presetNames) {
+            TextView chip = chipText(name, "Plano".equals(name) ? accent() : surface(), "Plano".equals(name) ? Color.WHITE : textPrimary());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(82), dp(39));
+            lp.setMargins(dp(3),0,dp(3),0);
+            presetBox.addView(chip,lp);
+            chip.setOnClickListener(v -> {
+                if (PlaybackService.applyEqualizerPreset(name,10)) showAudioLab();
+                else Toast.makeText(this,"Toque uma música para ativar o equalizador.",Toast.LENGTH_SHORT).show();
+            });
+        }
+        presetScroll.addView(presetBox,new ViewGroup.LayoutParams(-2,dp(44)));
+        body.addView(presetScroll);
+
+        EqualizerGraphView graph = new EqualizerGraphView(this);
+        graph.setLevels(PlaybackService.getEqualizerLevels(10));
+        body.addView(graph,new LinearLayout.LayoutParams(-1,dp(196)));
+
+        HorizontalScrollView bandScroll = new HorizontalScrollView(this);
+        bandScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout bandBox = new LinearLayout(this);
+        bandBox.setPadding(dp(2),dp(4),dp(12),dp(2));
+        String[] bandLabels={"31","62","125","250","500","1k","2k","4k","8k","16k"};
+        int[] bandLevels=PlaybackService.getEqualizerLevels(10);
+        for(int i=0;i<10;i++){
+            final int idx=i;
+            EqBandView band=new EqBandView(this);
+            band.setData(bandLabels[i],PlaybackService.getEqualizerBandCount()>0?bandLevels[i]:50);
+            band.setListener(percent->{if(PlaybackService.setEqualizerBand(idx,10,percent))graph.setLevels(PlaybackService.getEqualizerLevels(10));});
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(55),dp(180));lp.setMargins(dp(2),0,dp(2),0);bandBox.addView(band,lp);
+        }
+        bandScroll.addView(bandBox,new ViewGroup.LayoutParams(-2,dp(187)));
+        body.addView(bandScroll);
+        LinearLayout eqFx=new LinearLayout(this);eqFx.setGravity(Gravity.CENTER);
+        eqFx.addView(dialEffect("Pré-amplificador",50,true),new LinearLayout.LayoutParams(0,dp(164),1));
+        eqFx.addView(dialEffect("Graves",0,false),new LinearLayout.LayoutParams(0,dp(164),1));
+        body.addView(eqFx);
+
+        body.addView(sectionTitleView("SOM","Balanço • 3D • velocidade • altura"));
+        body.addView(dialRow(dialBalance(),dialVirtualizer()));
+        body.addView(dialRow(dialSpeed("Velocidade",50,true),dialSpeed("Altura",50,false)));
+
+        LinearLayout output=new LinearLayout(this);output.setGravity(Gravity.CENTER);
+        TextView stereo=segmented("Estéreo",true),mono=segmented("Mono",false);
+        output.addView(stereo,new LinearLayout.LayoutParams(0,dp(46),1));
+        output.addView(mono,new LinearLayout.LayoutParams(0,dp(46),1));
+        body.addView(output,new LinearLayout.LayoutParams(-1,dp(56)));
+        stereo.setOnClickListener(v->{PlaybackService.setMonoMode(false);stereo.setBackground(roundAccent(dp(23)));mono.setBackground(roundDrawable(0xFFD1D2D5,dp(23)));});
+        mono.setOnClickListener(v->{PlaybackService.setMonoMode(true);mono.setBackground(roundAccent(dp(23)));stereo.setBackground(roundDrawable(0xFFD1D2D5,dp(23)));});
+
+        LinearLayout volume=roundedPanel(surface(),dp(15));volume.setOrientation(LinearLayout.VERTICAL);volume.setPadding(dp(10),dp(5),dp(10),dp(5));
+        TextView volumeTitle=text("Volume do player",15,textPrimary());volumeTitle.setTypeface(null,1);volume.addView(volumeTitle,new LinearLayout.LayoutParams(-1,dp(24)));
+        SeekBar volumeBar=new SeekBar(this);volumeBar.setMax(100);int vol0=controller!=null&&controller.isConnected()?Math.round(controller.getVolume()*100f):75;volumeBar.setProgress(vol0);volume.addView(volumeBar,new LinearLayout.LayoutParams(-1,dp(36)));
+        TextView volumeValue=text(vol0+"%",11,textSecondary());volumeValue.setGravity(Gravity.CENTER);volume.addView(volumeValue,new LinearLayout.LayoutParams(-1,dp(18)));
+        volumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int p,boolean from){volumeValue.setText(p+"%");if(from&&controller!=null&&controller.isConnected())controller.setVolume(p/100f);}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});
+        body.addView(volume,new LinearLayout.LayoutParams(-1,dp(86)));
+
+        body.addView(sectionTitleView("REVERBERAÇÃO","Ambiente e profundidade"));
+        HorizontalScrollView reverbScroll=new HorizontalScrollView(this);reverbScroll.setHorizontalScrollBarEnabled(false);LinearLayout reverbBox=new LinearLayout(this);reverbBox.setPadding(0,0,dp(8),dp(5));
+        String[] reverbs={"Sinal seco","Sala","Studio","Hall"};
+        for(String name:reverbs){
+            TextView chip=chipText(name,reverbPreset.equals(name)?accent():surface(),reverbPreset.equals(name)?Color.WHITE:textPrimary());
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(95),dp(39));lp.setMargins(dp(3),0,dp(3),0);reverbBox.addView(chip,lp);
+            chip.setOnClickListener(v->{reverbPreset=name;if("Sinal seco".equals(name))reverbMix=0;PlaybackService.setReverb(name,reverbMix);showAudioLab();});
+        }
+        reverbScroll.addView(reverbBox,new ViewGroup.LayoutParams(-2,dp(44)));body.addView(reverbScroll);
+
+        LinearLayout mixCard=roundedPanel(surface(),dp(16));mixCard.setOrientation(LinearLayout.VERTICAL);mixCard.setGravity(Gravity.CENTER);
+        DialView mixDial=new DialView(this);mixDial.setPercent(reverbMix);mixCard.addView(mixDial,new LinearLayout.LayoutParams(dp(205),dp(180)));
+        TextView mixValue=text("Mistura  "+reverbMix+"%",16,textPrimary());mixValue.setTypeface(null,1);mixValue.setGravity(Gravity.CENTER);mixCard.addView(mixValue,new LinearLayout.LayoutParams(-1,dp(28)));
+        mixDial.setOnDialChangedListener(p->{reverbMix=p;if(p>0&&"Sinal seco".equals(reverbPreset))reverbPreset="Sala";mixValue.setText("Mistura  "+p+"%");PlaybackService.setReverb(reverbPreset,p);});
+        body.addView(mixCard,new LinearLayout.LayoutParams(-1,dp(218)));
+
+        LinearLayout quick=roundedPanel(surface(),dp(15));quick.setOrientation(LinearLayout.VERTICAL);quick.setPadding(dp(9),dp(5),dp(9),dp(5));
+        TextView quickTitle=text("Perfis rápidos",14,textPrimary());quickTitle.setTypeface(null,1);quick.addView(quickTitle,new LinearLayout.LayoutParams(-1,dp(24)));
+        addReverbPresetRow(quick,"Pequeno","Sala",25);addReverbPresetRow(quick,"Studio","Studio",35);addReverbPresetRow(quick,"Grande","Hall",45);
+        body.addView(quick,new LinearLayout.LayoutParams(-1,dp(182)));
+        body.addView(text("Os efeitos dependem do suporte de áudio do dispositivo.",11,textSecondary()),new LinearLayout.LayoutParams(-1,dp(38)));
+    }
+
+    private void showEqualizer(){showAudioLab();}
+
+    private void showSound(){showAudioLab();}
+
+    private void showReverb(){showAudioLab();}
+
+    private View dialBalance() {
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER);
+        DialView d=new DialView(this);d.setPercent(50);box.addView(d,new LinearLayout.LayoutParams(dp(155),dp(150)));
+        TextView l=text("Balanço",15,textPrimary());l.setTypeface(null,1);l.setGravity(Gravity.CENTER);box.addView(l,new LinearLayout.LayoutParams(-1,dp(26)));
+        TextView v=text("0.00",12,textSecondary());v.setGravity(Gravity.CENTER);box.addView(v,new LinearLayout.LayoutParams(-1,dp(22)));
+        d.setOnDialChangedListener(p->{float balance=(p-50)/50f;v.setText(String.format(Locale.getDefault(),"%+.2f",balance));PlaybackService.setBalance(balance);});
+        return box;
+    }
+
+    private View dialVirtualizer() {
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER);
+        DialView d=new DialView(this);d.setPercent(0);box.addView(d,new LinearLayout.LayoutParams(dp(155),dp(150)));
+        TextView l=text("Som surround 3D",15,textPrimary());l.setTypeface(null,1);l.setGravity(Gravity.CENTER);box.addView(l,new LinearLayout.LayoutParams(-1,dp(26)));
+        TextView v=text("0%",12,textSecondary());v.setGravity(Gravity.CENTER);box.addView(v,new LinearLayout.LayoutParams(-1,dp(22)));
+        d.setOnDialChangedListener(p->{v.setText(p+"%");if(!PlaybackService.setVirtualizer(p))Toast.makeText(this,"Surround 3D não é suportado neste dispositivo.",Toast.LENGTH_SHORT).show();});
+        return box;
+    }
+
+    private View dialSpeed(String label, int percent, boolean speed) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        DialView d = new DialView(this);
+        d.setPercent(percent);
+        box.addView(d, new LinearLayout.LayoutParams(dp(155), dp(150)));
+        TextView l = text(label, 16, textPrimary());
+        l.setTypeface(null, 1);
+        l.setGravity(Gravity.CENTER);
+        box.addView(l, new LinearLayout.LayoutParams(-1, dp(28)));
+        TextView v = text("1.00x", 13, textSecondary());
+        v.setGravity(Gravity.CENTER);
+        box.addView(v, new LinearLayout.LayoutParams(-1, dp(24)));
+        d.setOnDialChangedListener(p -> {
+            float value = 0.5f + p / 100f * 1.5f;
+            v.setText(String.format(Locale.getDefault(), "%.2fx", value));
+            if (controller != null && controller.isConnected()) {
+                float currentSpeed = controller.getPlaybackParameters().speed;
+                float currentPitch = controller.getPlaybackParameters().pitch;
+                if (speed) PlaybackService.setPlaybackSpeedPitch(value, currentPitch);
+                else PlaybackService.setPlaybackSpeedPitch(currentSpeed, value);
+            }
+        });
+        return box;
+    }
+
+    private void showSettings() {
+        currentPage = 4;
+        root.removeAllViews();
+        LinearLayout shell = basePage("Configurações");
+        LinearLayout body = pageBody(shell);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        body.addView(list, new LinearLayout.LayoutParams(-1, -2));
+
+        section(list, "Reprodução");
+        checkboxRow(list, "Efeitos de áudio", "Equalizador, graves, 3D e pré-amplificador.", effectsEnabled, v -> {
+            effectsEnabled = !effectsEnabled;
+            getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", effectsEnabled).apply();
+            PlaybackService.setEffectsEnabled(effectsEnabled);
+        });
+        checkboxRow(list, "Silenciar pausas longas", "Ignora automaticamente trechos de silêncio.", false, v -> PlaybackService.setSkipSilence(true));
+        checkboxRow(list, "Equalizador interno", "Usa o equalizador Nexauren em vez do sistema.", true, v -> showEqualizer());
+        checkboxRow(list, "Controlos na notificação", "Play, pausa, anterior e próxima faixa.", true, v -> {});
+        sliderRow(list, "Apagar músicas com menos de", "0 segundos", 0, 120);
+
+        section(list, "Geral");
+        clickableRow(list, "Atualizar biblioteca", "Procurar novas faixas no dispositivo", "↻", this::loadTracks);
+        checkboxRow(list, "Mostrar controlos de notificação", "Controle a música a partir da barra de notificações.", true, v -> {});
+        clickableRow(list, "Tema", darkMode ? "Escuro" : "Claro", "◐", () -> { toggleTheme(); showSettings(); });
+
+        section(list, "Reprodução");
+        clickableRow(list, "Mostrar apenas ficheiros de áudio", "Biblioteca padrão", "♫", () -> {});
+        clickableRow(list, "Ordem da biblioteca", "Escolher ordenação", "☷", this::showSortDialog);
+        clickableRow(list, "Lista de reprodução padrão", "Minha playlist", "≡", this::showPlaylist);
+
+        section(list, "Biblioteca");
+        clickableRow(list, "Favoritos", "Abrir as faixas marcadas", "♡", this::showFavorites);
+        clickableRow(list, "Reproduzido recentemente", "Últimas faixas tocadas", "◷", this::showRecent);
+        clickableRow(list, "Encontrar duplicados", "Comparar título, artista e duração", "⧉", this::showDuplicates);
+
+        section(list, "Sobre");
+        clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
+        clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.7.0 • player local, efeitos, favoritos, fila e pesquisa."));
+    }
+
+    private void showEditTags() {
+        Track track = currentTrack();
+        if (track == null) {
+            Toast.makeText(this, "Nenhuma faixa em reprodução.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        startActivityForResult(
+                new Intent(this, EditTagsActivity.class).putExtra("track_id", track.id),
+                7810);
+    }
+
+    private void showSleepTimer() {
+        String[] values = {"Desligado", "15 minutos", "30 minutos", "45 minutos", "60 minutos"};
+        new AlertDialog.Builder(this).setTitle("Temporizador de sono").setItems(values, (d, which) -> {
+            if (which == 0) sleepEndAtMs = 0L;
+            else sleepEndAtMs = System.currentTimeMillis() + Long.parseLong(values[which].split(" ")[0]) * 60_000L;
+            Toast.makeText(this, which == 0 ? "Temporizador desligado." : "A música vai parar em " + values[which] + ".", Toast.LENGTH_SHORT).show();
+        }).show();
+    }
+
+    private void syncMiniSpin(boolean playing) {
+        if (miniSpin == null) return;
+        if (playing) {
+            if (miniSpin.isPaused()) miniSpin.resume();
+            else if (!miniSpin.isStarted()) miniSpin.start();
+        } else if (miniSpin.isStarted()) {
+            miniSpin.pause();
+        }
+    }
+
+    private void showMiniMenu(View anchor) {
+        Track track = currentTrack();
+        if (track == null) {
+            Toast.makeText(this, "Nenhuma faixa em reprodução.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final PopupWindow[] popupRef = new PopupWindow[1];
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(8), dp(8), dp(8));
+        list.setBackground(roundDrawable(darkMode ? Color.rgb(20,25,33) : Color.WHITE, dp(18)));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(list, new ViewGroup.LayoutParams(dp(330), -2));
+
+        String[] labels = {
+                "✎  Editar etiquetas",
+                "✂  Cortar áudio",
+                "♫  Definir como toque",
+                "☷  Adicionar à lista de reprodução",
+                "♡  Adicionar aos favoritos",
+                "⌁  Enviar",
+                "ⓘ  Detalhes",
+                "◉  Velocidade de reprodução",
+                "〰  Visualizador de música",
+                "◷  Temporizador de sono",
+                "♫  Letra da música",
+                "♙  Mais do artista",
+                "☷  Mais do álbum",
+                "≡  Abrir fila",
+                "▣  Modo de condução"
+        };
+        for (String label : labels) {
+            TextView row = text(label, 14, darkMode ? Color.WHITE : Color.rgb(35,38,42));
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), 0, dp(8), 0);
+            list.addView(row, new LinearLayout.LayoutParams(-1, dp(48)));
+            row.setOnClickListener(v -> {
+                if (popupRef[0] != null) popupRef[0].dismiss();
+                if (label.contains("Editar etiquetas")) {
+                    startActivityForResult(new Intent(this, EditTagsActivity.class).putExtra("track_id", track.id), 7810);
+                } else if (label.contains("Cortar áudio")) {
+                    startActivityForResult(new Intent(this, AudioCutterActivity.class)
+                            .putExtra("track_id", track.id).putExtra("duration", track.durationMs).putExtra("title", track.title), 7811);
+                } else if (label.contains("Definir como toque")) setCurrentAsRingtone();
+                else if (label.contains("lista de reprodução")) addCurrentToPlaylist();
+                else if (label.contains("favoritos")) toggleCurrentFavorite();
+                else if (label.contains("Enviar")) shareCurrent();
+                else if (label.contains("Detalhes")) showCurrentDetails();
+                else if (label.contains("Velocidade")) showSpeedDialog();
+                else if (label.contains("Visualizador")) startActivity(new Intent(this, VisualizerActivity.class));
+                else if (label.contains("Temporizador")) showSleepTimer();
+                else if (label.contains("Letra")) showLyrics();
+                else if (label.contains("artista")) filterByCurrentArtist();
+                else if (label.contains("álbum")) filterByCurrentAlbum();
+                else if (label.contains("fila")) showQueue();
+                else if (label.contains("condução")) showDrivingMode();
+            });
+        }
+
+        PopupWindow popup = new PopupWindow(scroll, dp(346), Math.min(dp(620), dp(48) * labels.length + dp(20)), true);
+        popupRef[0] = popup;
+        popup.setBackgroundDrawable(roundDrawable(darkMode ? Color.rgb(20,25,33) : Color.WHITE, dp(18)));
+        popup.setOutsideTouchable(true);
+        popup.setElevation(dp(12));
+        popup.setOverlapAnchor(false);
+        popup.showAsDropDown(anchor, -dp(310), -Math.min(dp(620), dp(48) * labels.length + dp(68)));
+    }
+
+    private void checkForUpdateOnEntry() {
+        UpdateManager.checkAsync(this,new UpdateManager.Callback(){
+            @Override public void onResult(UpdateManager.ReleaseInfo info) {
+                if(!UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME))return;
+                runOnUiThread(() -> showUpdateDialog(info));
+            }
+            @Override public void onError(Exception error) { }
+        });
+    }
+
+    private void handleUpdateIntent(Intent intent) {
+        if(intent==null)return;
+        String action=intent.getAction();
+        if(UpdateManager.ACTION_DOWNLOAD_UPDATE.equals(action)) {
+            String version=intent.getStringExtra(UpdateManager.EXTRA_VERSION);
+            String url=intent.getStringExtra(UpdateManager.EXTRA_URL);
+            String notes=intent.getStringExtra(UpdateManager.EXTRA_NOTES);
+            String digest=intent.getStringExtra(UpdateManager.EXTRA_DIGEST);
+            if(url!=null&&!url.isEmpty()) runOnUiThread(() -> showUpdateDialog(new UpdateManager.ReleaseInfo(version==null?"":version,"Nexauren "+version,notes,url,digest)));
+        } else if(UpdateManager.ACTION_INSTALL_UPDATE.equals(action)) {
+            runOnUiThread(() -> UpdateManager.install(this));
+        }
+    }
+
+    private TextView miniIcon(String icon,int size){TextView t=text(icon,size,textSecondary());t.setGravity(Gravity.CENTER);return t;}
+
     private TextView actionButton(String text) {
         TextView t = chipText(text, Color.rgb(45, 157, 235), Color.WHITE);
         t.setTypeface(null, 1);
