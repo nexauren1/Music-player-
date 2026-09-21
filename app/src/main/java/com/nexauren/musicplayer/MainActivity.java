@@ -592,12 +592,12 @@ public final class MainActivity extends AppCompatActivity {
         section(list, "Geral");
         clickableRow(list, "Atualizar biblioteca", "Procurar novas faixas no dispositivo", "↻", this::loadTracks);
         checkboxRow(list, "Mostrar controlos de notificação", "Controle a música a partir da barra de notificações.", true, v -> {});
-        clickableRow(list, "Tema", darkMode ? "Escuro" : "Claro", "◐", this::toggleTheme);
+        clickableRow(list, "Tema", darkMode ? "Escuro" : "Claro", "◐", () -> { toggleTheme(); showSettings(); });
 
         section(list, "Reprodução");
         clickableRow(list, "Mostrar apenas ficheiros de áudio", "Biblioteca padrão", "♫", () -> {});
-        clickableRow(list, "Ordem da biblioteca", "Título · artista · álbum", "☷", () -> {});
-        clickableRow(list, "Lista de reprodução padrão", "Todas as faixas", "≡", () -> {});
+        clickableRow(list, "Ordem da biblioteca", "Escolher ordenação", "☷", this::showSortDialog);
+        clickableRow(list, "Lista de reprodução padrão", "Minha playlist", "≡", this::showPlaylist);
 
         section(list, "Ação de agitação");
         checkboxRow(list, "Ativar agitação", "", false, v -> {});
@@ -605,9 +605,9 @@ public final class MainActivity extends AppCompatActivity {
         sliderRow(list, "Força de agitação", "70", 0, 100);
 
         section(list, "Sobre");
-        clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> Toast.makeText(this, "Premium: em preparação", Toast.LENGTH_SHORT).show());
+        clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.2.0", "ⓘ", () -> {});
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 0.3.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 0.3.0 • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private LinearLayout basePage(String title) {
@@ -634,26 +634,27 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout drawer = new LinearLayout(this);
         drawer.setOrientation(LinearLayout.VERTICAL);
         drawer.setBackgroundColor(darkMode ? Color.rgb(20,24,30) : Color.WHITE);
-        overlay.addView(drawer, new FrameLayout.LayoutParams(dp(496), -1, Gravity.START));
+        int width = (int)Math.min(dp(330), getResources().getDisplayMetrics().widthPixels * 0.86f);
+        overlay.addView(drawer, new FrameLayout.LayoutParams(width, -1, Gravity.START));
 
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER_HORIZONTAL);
-        hero.setPadding(dp(16), dp(18), dp(16), dp(14));
+        hero.setPadding(dp(16), dp(16), dp(16), dp(10));
         hero.setBackgroundColor(Color.rgb(33, 150, 243));
-        drawer.addView(hero, new LinearLayout.LayoutParams(-1, dp(210)));
+        drawer.addView(hero, new LinearLayout.LayoutParams(-1, dp(190)));
 
-        TextView logo = text("N", 82, Color.WHITE);
+        TextView logo = text("N", 70, Color.WHITE);
         logo.setGravity(Gravity.CENTER);
         logo.setTypeface(null, 1);
-        hero.addView(logo, new LinearLayout.LayoutParams(-1, dp(126)));
+        hero.addView(logo, new LinearLayout.LayoutParams(-1, dp(98)));
         TextView name = text("NEXAUREN", 22, Color.WHITE);
         name.setGravity(Gravity.CENTER);
         name.setTypeface(null, 1);
         hero.addView(name, new LinearLayout.LayoutParams(-1, dp(38)));
         TextView sub = text("MUSIC PLAYER", 11, Color.WHITE);
         sub.setGravity(Gravity.CENTER);
-        hero.addView(sub, new LinearLayout.LayoutParams(-1, dp(28)));
+        hero.addView(sub, new LinearLayout.LayoutParams(-1, dp(25)));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout menu = new LinearLayout(this);
@@ -661,16 +662,20 @@ public final class MainActivity extends AppCompatActivity {
         scroll.addView(menu, new ScrollView.LayoutParams(-1, -2));
         drawer.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        drawerItem(menu, "♛", "Remover anúncios", () -> {});
-        drawerItem(menu, "≡", "Biblioteca", () -> { overlay.setVisibility(View.GONE); showHome(true); });
-        drawerItem(menu, "☷", "Equalizador", () -> { overlay.setVisibility(View.GONE); showEqualizer(); });
-        drawerItem(menu, "▰", "Modo de condução", () -> Toast.makeText(this, "Modo de condução: em preparação", Toast.LENGTH_SHORT).show());
-        drawerItem(menu, "◷", "Temporizador de sono", this::showSleepTimer);
-        drawerItem(menu, "✂", "Cortador de MP3", () -> Toast.makeText(this, "Cortador de MP3: em preparação", Toast.LENGTH_SHORT).show());
-        drawerItem(menu, "◉", "Tema", this::toggleTheme);
-        drawerItem(menu, "▣", "Encontrar duplicados", () -> Toast.makeText(this, "Análise de duplicados: em preparação", Toast.LENGTH_SHORT).show());
-        drawerItem(menu, "▢", "Adicionar aos favoritos", () -> Toast.makeText(this, "Favoritos serão adicionados à biblioteca", Toast.LENGTH_SHORT).show());
-        drawerItem(menu, "⚙", "Configurações", () -> { overlay.setVisibility(View.GONE); showSettings(); });
+        drawerItem(menu, "⌂", "Biblioteca", () -> { root.removeView(overlay); showHome(true); });
+        drawerItem(menu, "♡", "Favoritos", () -> { root.removeView(overlay); showFavorites(); });
+        drawerItem(menu, "◷", "Reproduzido recentemente", () -> { root.removeView(overlay); showRecent(); });
+        drawerItem(menu, "☷", "Fila de reprodução", () -> { root.removeView(overlay); showQueue(); });
+        drawerItem(menu, "▤", "Minha playlist", () -> { root.removeView(overlay); showPlaylist(); });
+        drawerItem(menu, "☰", "Equalizador", () -> { root.removeView(overlay); showEqualizer(); });
+        drawerItem(menu, "◉", "Visualizador de música", () -> startActivity(new Intent(this, VisualizerActivity.class)));
+        drawerItem(menu, "◈", "Som", () -> { root.removeView(overlay); showSound(); });
+        drawerItem(menu, "◌", "Reverberação", () -> { root.removeView(overlay); showReverb(); });
+        drawerItem(menu, "▣", "Modo de condução", () -> { root.removeView(overlay); showDrivingMode(); });
+        drawerItem(menu, "⏱", "Temporizador de sono", this::showSleepTimer);
+        drawerItem(menu, "⧉", "Encontrar duplicados", () -> { root.removeView(overlay); showDuplicates(); });
+        drawerItem(menu, "◐", "Tema claro/escuro", () -> { root.removeView(overlay); toggleTheme(); showHome(true); });
+        drawerItem(menu, "⚙", "Configurações", () -> { root.removeView(overlay); showSettings(); });
 
         overlay.setOnClickListener(v -> root.removeView(overlay));
     }
@@ -678,18 +683,30 @@ public final class MainActivity extends AppCompatActivity {
     private void showGlobalMenu(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
         String[] entries = {
-                "Adicionar à lista de reprodução", "Eliminar", "Modo de condução",
-                "Enviar", "Detalhes", "Velocidade de reprodução",
+                "Pesquisar", "Adicionar à minha playlist", "Eliminar faixa atual",
+                "Enviar faixa", "Detalhes", "Velocidade de reprodução",
                 "Visualizador de música", "Temporizador de sono", "Letra da música",
                 "Definir como toque", "Mais do artista", "Mais do álbum",
-                "Adicionar aos favoritos", "Limpar fila", "Cortar"
+                "Adicionar aos favoritos", "Abrir fila", "Cortar trecho"
         };
         for (String e : entries) menu.getMenu().add(e);
         menu.setOnMenuItemClickListener(item -> {
             String value = item.getTitle().toString();
-            if ("Velocidade de reprodução".equals(value)) showSpeedDialog();
+            if ("Pesquisar".equals(value)) { searchMode=true; showHome(true); }
+            else if ("Adicionar à minha playlist".equals(value)) addCurrentToPlaylist();
+            else if ("Eliminar faixa atual".equals(value)) deleteCurrentTrack();
+            else if ("Enviar faixa".equals(value)) shareCurrent();
+            else if ("Detalhes".equals(value)) showCurrentDetails();
+            else if ("Velocidade de reprodução".equals(value)) showSpeedDialog();
+            else if ("Visualizador de música".equals(value)) startActivity(new Intent(this, VisualizerActivity.class));
             else if ("Temporizador de sono".equals(value)) showSleepTimer();
-            else Toast.makeText(this, value + ": disponível no Nexauren.", Toast.LENGTH_SHORT).show();
+            else if ("Letra da música".equals(value)) showLyrics();
+            else if ("Definir como toque".equals(value)) setCurrentAsRingtone();
+            else if ("Mais do artista".equals(value)) filterByCurrentArtist();
+            else if ("Mais do álbum".equals(value)) filterByCurrentAlbum();
+            else if ("Adicionar aos favoritos".equals(value)) toggleCurrentFavorite();
+            else if ("Abrir fila".equals(value)) showQueue();
+            else Toast.makeText(this, value + ": ferramenta em desenvolvimento.", Toast.LENGTH_SHORT).show();
             return true;
         });
         menu.show();
@@ -698,13 +715,22 @@ public final class MainActivity extends AppCompatActivity {
     private void showTrackMenu(View anchor, Track track) {
         PopupMenu menu = new PopupMenu(this, anchor);
         String[] entries = {
-                "Adicionar à lista de reprodução", "Enviar", "Detalhes",
-                "Adicionar aos favoritos", "Mais do artista", "Mais do álbum",
-                "Eliminar"
+                FavoritesStore.isFavorite(this, track.id) ? "Remover dos favoritos" : "Adicionar aos favoritos",
+                "Adicionar à minha playlist", "Enviar", "Detalhes",
+                "Mais do artista", "Mais do álbum", "Eliminar"
         };
         for (String e : entries) menu.getMenu().add(e);
         menu.setOnMenuItemClickListener(item -> {
-            Toast.makeText(this, item.getTitle() + " · " + track.title, Toast.LENGTH_SHORT).show();
+            String value=item.getTitle().toString();
+            if(value.contains("favoritos")) {
+                boolean fav=FavoritesStore.toggle(this,track.id);
+                Toast.makeText(this,fav?"Adicionado aos favoritos":"Removido dos favoritos",Toast.LENGTH_SHORT).show();
+            } else if(value.equals("Adicionar à minha playlist")) addTrackToPlaylist(track);
+            else if(value.equals("Enviar")) shareTrack(track);
+            else if(value.equals("Detalhes")) showDetails(track);
+            else if(value.equals("Mais do artista")) filterByArtist(track.artist);
+            else if(value.equals("Mais do álbum")) filterByAlbum(track.album);
+            else if(value.equals("Eliminar")) deleteTrack(track);
             return true;
         });
         menu.show();
@@ -722,11 +748,12 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showSleepTimer() {
-        final String[] values = {"Desligado", "15 minutos", "30 minutos", "60 minutos"};
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Temporizador de sono")
-                .setItems(values, (d, which) -> Toast.makeText(this, "Temporizador: " + values[which], Toast.LENGTH_SHORT).show())
-                .show();
+        String[] values = {"Desligado", "15 minutos", "30 minutos", "45 minutos", "60 minutos"};
+        new AlertDialog.Builder(this).setTitle("Temporizador de sono").setItems(values, (d, which) -> {
+            if (which == 0) sleepEndAtMs = 0L;
+            else sleepEndAtMs = System.currentTimeMillis() + Long.parseLong(values[which].split(" ")[0]) * 60_000L;
+            Toast.makeText(this, which == 0 ? "Temporizador desligado." : "A música vai parar em " + values[which] + ".", Toast.LENGTH_SHORT).show();
+        }).show();
     }
 
     private void cycleRepeat() {
@@ -827,30 +854,203 @@ public final class MainActivity extends AppCompatActivity {
         controller.play();
     }
 
+private void markRecent(Track track) {
+        String raw=getSharedPreferences("nexauren_recent",MODE_PRIVATE).getString("ids","");
+        ArrayList<String> ids=new ArrayList<>();
+        if(!raw.isEmpty()) for(String s:raw.split(",")) if(!s.isEmpty()&&!s.equals(String.valueOf(track.id))) ids.add(s);
+        ids.add(0,String.valueOf(track.id));
+        if(ids.size()>20) ids=new ArrayList<>(ids.subList(0,20));
+        getSharedPreferences("nexauren_recent",MODE_PRIVATE).edit().putString("ids",String.join(",",ids)).apply();
+    }
+
+    private Track currentTrack() {
+        if(controller==null||controller.getCurrentMediaItem()==null)return null;
+        String id=controller.getCurrentMediaItem().mediaId;
+        if(id==null)return null;
+        try{long n=Long.parseLong(id);for(Track t:tracks)if(t.id==n)return t;}catch(Exception ignored){}
+        return null;
+    }
+
+    private void toggleCurrentFavorite() {
+        Track t=currentTrack(); if(t==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
+        boolean fav=FavoritesStore.toggle(this,t.id);
+        Toast.makeText(this,fav?"Adicionado aos favoritos":"Removido dos favoritos",Toast.LENGTH_SHORT).show();
+    }
+
+    private void addCurrentToPlaylist() { Track t=currentTrack(); if(t!=null) addTrackToPlaylist(t); }
+
+    private void addTrackToPlaylist(Track t) {
+        Set<String> ids=new HashSet<>(getSharedPreferences("nexauren_playlist",MODE_PRIVATE).getStringSet("ids",new HashSet<>()));
+        ids.add(String.valueOf(t.id));
+        getSharedPreferences("nexauren_playlist",MODE_PRIVATE).edit().putStringSet("ids",ids).apply();
+        Toast.makeText(this,"Adicionado à Minha playlist.",Toast.LENGTH_SHORT).show();
+    }
+
+    private List<Track> tracksFromIds(Set<String> ids) {
+        ArrayList<Track> out=new ArrayList<>();
+        for(Track t:tracks)if(ids.contains(String.valueOf(t.id)))out.add(t);
+        return out;
+    }
+
+    private void showFavorites() { showTrackCollection("Favoritos", tracksFromIds(FavoritesStore.get(this))); }
+    private void showPlaylist() { showTrackCollection("Minha playlist", tracksFromIds(getSharedPreferences("nexauren_playlist",MODE_PRIVATE).getStringSet("ids",new HashSet<>()))); }
+
+    private void showRecent() {
+        String raw=getSharedPreferences("nexauren_recent",MODE_PRIVATE).getString("ids","");
+        ArrayList<Track> out=new ArrayList<>();
+        if(!raw.isEmpty()) for(String s:raw.split(",")) try{long id=Long.parseLong(s);for(Track t:tracks)if(t.id==id){out.add(t);break;}}catch(Exception ignored){}
+        showTrackCollection("Reproduzido recentemente",out);
+    }
+
+    private void showTrackCollection(String title,List<Track> list) {
+        root.removeAllViews();
+        LinearLayout shell=basePage(title);
+        LinearLayout body=pageBody(shell);
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(box,new ScrollView.LayoutParams(-1,-2));
+        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        if(list.isEmpty()){
+            TextView empty=text("Ainda não há faixas nesta coleção.",16,textSecondary());empty.setGravity(Gravity.CENTER);box.addView(empty,new LinearLayout.LayoutParams(-1,dp(120)));
+        } else for(int i=0;i<list.size();i++)addCollectionRow(box,list.get(i),i);
+    }
+
+    private void addCollectionRow(LinearLayout box,Track t,int index){
+        LinearLayout row=roundedPanel(surface(),dp(16));row.setOrientation(LinearLayout.HORIZONTAL);row.setPadding(dp(8),dp(5),dp(6),dp(5));
+        ImageView art=new ImageView(this);art.setScaleType(ImageView.ScaleType.CENTER_CROP);art.setImageResource(android.R.drawable.ic_menu_gallery);art.setColorFilter(0xFF65707C);
+        row.addView(art,new LinearLayout.LayoutParams(dp(58),dp(58)));
+        row.addView(labels(t.title,t.artist),new LinearLayout.LayoutParams(0,dp(58),1));
+        TextView more=topIconSmall("⋮");row.addView(more,new LinearLayout.LayoutParams(dp(38),dp(58)));
+        more.setOnClickListener(v->showTrackMenu(more,t));row.setOnClickListener(v->playTrack(t));box.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
+        loadArtwork(t.uri,art);
+    }
+
+    private void showQueue() {
+        root.removeAllViews();
+        LinearLayout shell=basePage("Fila de reprodução");
+        LinearLayout body=pageBody(shell);
+        ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);scroll.addView(box,new ScrollView.LayoutParams(-1,-2));
+        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        if(controller==null||controller.getMediaItemCount()==0){TextView e=text("A fila está vazia.",16,textSecondary());e.setGravity(Gravity.CENTER);box.addView(e,new LinearLayout.LayoutParams(-1,dp(120)));return;}
+        for(int i=0;i<controller.getMediaItemCount();i++){MediaItem m=controller.getMediaItemAt(i);String t=m.mediaMetadata.title==null?"Faixa":m.mediaMetadata.title.toString();String a=m.mediaMetadata.artist==null?"":m.mediaMetadata.artist.toString();box.addView(labels((i+1)+". "+t,a),new LinearLayout.LayoutParams(-1,dp(58)));} 
+    }
+
+    private void showSortDialog() {
+        String[] values={"Título (A–Z)","Artista (A–Z)","Álbum (A–Z)","Duração (maior primeiro)","Mais recentes adicionadas"};
+        new AlertDialog.Builder(this).setTitle("Ordem da biblioteca").setItems(values,(d,w)->{
+            if(w==0)tracks.sort(Comparator.comparing(t->t.title.toLowerCase(Locale.getDefault())));
+            else if(w==1)tracks.sort(Comparator.comparing(t->t.artist.toLowerCase(Locale.getDefault())));
+            else if(w==2)tracks.sort(Comparator.comparing(t->t.album.toLowerCase(Locale.getDefault())));
+            else if(w==3)tracks.sort((a,b)->Long.compare(b.durationMs,a.durationMs));
+            renderLibrary();
+        }).show();
+    }
+
+    private void showDuplicates() {
+        java.util.Map<String,Integer> counts=new java.util.LinkedHashMap<>();
+        for(Track t:tracks){String key=t.title+"|"+t.artist+"|"+t.durationMs;counts.put(key,counts.getOrDefault(key,0)+1);}
+        ArrayList<Track> dupes=new ArrayList<>();
+        for(Track t:tracks)if(counts.get(t.title+"|"+t.artist+"|"+t.durationMs)>1)dupes.add(t);
+        showTrackCollection("Encontrar duplicados",dupes);
+    }
+
+    private void shareTrack(Track t) {
+        Intent send=new Intent(Intent.ACTION_SEND);send.setType("audio/*");send.putExtra(Intent.EXTRA_STREAM,t.uri);send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try{startActivity(Intent.createChooser(send,"Enviar faixa"));}catch(Exception e){Toast.makeText(this,"Não existe app para partilhar áudio.",Toast.LENGTH_SHORT).show();}
+    }
+    private void shareCurrent(){Track t=currentTrack();if(t!=null)shareTrack(t);}
+    private void showDetails(Track t){new AlertDialog.Builder(this).setTitle(t.title).setMessage("Artista: "+t.artist+"\nÁlbum: "+t.album+"\nDuração: "+formatMs(t.durationMs)+"\nID: "+t.id).setPositiveButton("OK",null).show();}
+    private void showCurrentDetails(){Track t=currentTrack();if(t!=null)showDetails(t);}
+
+    private void deleteTrack(Track t) {
+        try{
+            if(Build.VERSION.SDK_INT>=30){
+                startIntentSenderForResult(MediaStore.createDeleteRequest(getContentResolver(),java.util.Collections.singletonList(t.uri)).getIntentSender(),77,null,0,0,0,null);
+            }else{
+                getContentResolver().delete(t.uri,null,null);loadTracks();
+            }
+        }catch(Exception e){Toast.makeText(this,"Não foi possível eliminar a faixa.",Toast.LENGTH_SHORT).show();}
+    }
+    private void deleteCurrentTrack(){Track t=currentTrack();if(t!=null)deleteTrack(t);}
+
+    private void filterByArtist(String artist){showHome(false);searchMode=true;showHome(false);if(searchField!=null)searchField.setText(artist);}
+    private void filterByAlbum(String album){showHome(false);searchMode=true;showHome(false);if(searchField!=null)searchField.setText(album);}
+
+    private void showLyrics(){
+        Track t=currentTrack();if(t==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
+        MediaMetadataRetriever r=new MediaMetadataRetriever();String path=null;
+        try{r.setDataSource(this,t.uri);path=r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);}catch(Exception ignored){}finally{try{r.release();}catch(Exception ignored){}}
+        showAbout("Letra da música","Não foi encontrada uma fonte de letras integrada para esta faixa. A reprodução local continua normalmente.");
+    }
+
+    private void setCurrentAsRingtone(){
+        Track t=currentTrack();if(t==null){Toast.makeText(this,"Nenhuma faixa em reprodução.",Toast.LENGTH_SHORT).show();return;}
+        try{
+            android.content.ContentValues values=new android.content.ContentValues();
+            values.put(MediaStore.Audio.Media.IS_RINGTONE,1);
+            values.put(MediaStore.Audio.Media.TITLE,t.title);
+            values.put(MediaStore.Audio.Media.MIME_TYPE,"audio/*");
+            Uri dest=getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,values);
+            if(dest==null)throw new IllegalStateException();
+            try(java.io.InputStream in=getContentResolver().openInputStream(t.uri);java.io.OutputStream out=getContentResolver().openOutputStream(dest)){
+                if(in==null||out==null)throw new java.io.IOException();
+                byte[]buf=new byte[8192];int n;while((n=in.read(buf))>0)out.write(buf,0,n);
+            }
+            RingtoneManager.setActualDefaultRingtoneUri(this,RingtoneManager.TYPE_RINGTONE,dest);
+            Toast.makeText(this,"Toque definido.",Toast.LENGTH_SHORT).show();
+        }catch(Exception e){Toast.makeText(this,"O sistema não permitiu definir o toque.",Toast.LENGTH_SHORT).show();}
+    }
+
+    private void showDrivingMode(){
+        root.removeAllViews();LinearLayout shell=basePage("Modo de condução");LinearLayout body=pageBody(shell);
+        TextView big=text("CONTROLO SIMPLIFICADO",20,textPrimary());big.setTypeface(null,1);big.setGravity(Gravity.CENTER);
+        body.addView(big,new LinearLayout.LayoutParams(-1,dp(54)));
+        body.addView(dialRow(circleAction("⏮","Anterior",()->{if(controller!=null)controller.seekToPreviousMediaItem();}),circleAction("⏭","Próxima",()->{if(controller!=null)controller.seekToNextMediaItem();})));
+        TextView p=actionButton(controller!=null&&controller.isPlaying()?"Pausar":"Reproduzir");p.setTextSize(22);body.addView(p,new LinearLayout.LayoutParams(-1,dp(72)));p.setOnClickListener(v->togglePlayback());
+        TextView stop=chipText("■  Parar",surface(),textPrimary());stop.setGravity(Gravity.CENTER);body.addView(stop,new LinearLayout.LayoutParams(-1,dp(54)));stop.setOnClickListener(v->PlaybackService.stop());
+    }
+
+    private View circleAction(String icon,String label,Runnable action){
+        LinearLayout b=new LinearLayout(this);b.setOrientation(LinearLayout.VERTICAL);b.setGravity(Gravity.CENTER);
+        TextView i=circleButton(icon);b.addView(i,new LinearLayout.LayoutParams(dp(86),dp(76)));
+        TextView l=text(label,13,textSecondary());l.setGravity(Gravity.CENTER);b.addView(l,new LinearLayout.LayoutParams(-1,dp(28)));
+        b.setOnClickListener(v->action.run());return b;
+    }
+
+    private void showAbout(String title,String message){new AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK",null).show();}
+
     private void updatePlaybackUi() {
         if (controller == null || !controller.isConnected()) return;
         MediaItem item = controller.getCurrentMediaItem();
         if (item != null && item.mediaMetadata != null) {
-            String title = item.mediaMetadata.title == null ? "Nexauren Player" : item.mediaMetadata.title.toString();
-            String artist = item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString();
-            if (miniTitle != null) miniTitle.setText(title);
-            if (miniArtist != null) miniArtist.setText(artist);
+            String t = item.mediaMetadata.title == null ? "Nexauren Player" : item.mediaMetadata.title.toString();
+            String a = item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString();
+            if (miniTitle != null) miniTitle.setText(t);
+            if (miniArtist != null) miniArtist.setText(a);
             if (miniPlay != null) miniPlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
-
+            if (homePlay != null) homePlay.setText(controller.isPlaying() ? "Ⅱ" : "▶");
+            if (bigTitle != null) bigTitle.setText(t);
             if (waveform != null) {
                 waveform.setPlaying(controller.isPlaying());
                 waveform.setProgress(controller.getDuration() > 0 ? (float) controller.getCurrentPosition() / (float) controller.getDuration() : 0f);
             }
+            long d=Math.max(0,controller.getDuration()), p=Math.max(0,controller.getCurrentPosition());
+            if(bigPosition!=null)bigPosition.setText(formatMs(p));
+            if(bigDuration!=null)bigDuration.setText(formatMs(d));
 
             Track match = null;
             String id = item.mediaId;
             if (id != null) {
                 try {
                     long trackId = Long.parseLong(id);
-                    for (Track t : tracks) if (t.id == trackId) { match = t; break; }
+                    for (Track tr : tracks) if (tr.id == trackId) { match = tr; break; }
                 } catch (Exception ignored) {}
             }
-            if (match != null && miniArt != null) loadArtwork(match.uri, miniArt);
+            if (match != null) {
+                if (miniArt != null) loadArtwork(match.uri, miniArt);
+                if (bigArt != null) loadArtwork(match.uri, bigArt);
+                markRecent(match);
+            }
         }
     }
 
