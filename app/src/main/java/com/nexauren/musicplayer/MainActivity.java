@@ -206,7 +206,7 @@ public final class MainActivity extends AppCompatActivity {
 
         bigArt = new ImageView(this);
         bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bigArt.setImageResource(android.R.drawable.ic_menu_gallery);
+        bigArt.setImageResource(R.drawable.music_placeholder);
         bigArt.setColorFilter(Color.rgb(90, 100, 110));
         artFrame.addView(bigArt, new FrameLayout.LayoutParams(-1, -1));
 
