@@ -973,8 +973,9 @@ public final class MainActivity extends AppCompatActivity {
     private void syncMiniSpin(boolean playing) {
         if (miniSpin == null) return;
         if (playing) {
-            if (!miniSpin.isStarted()) miniSpin.start();
-        } else {
+            if (miniSpin.isPaused()) miniSpin.resume();
+            else if (!miniSpin.isStarted()) miniSpin.start();
+        } else if (miniSpin.isStarted()) {
             miniSpin.pause();
         }
     }
@@ -1771,11 +1772,18 @@ private void markCurrentRecent() {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_WRITE_MEDIA && resultCode == RESULT_OK) savePendingTags();
+    }
+
+    @Override
     protected void onDestroy() {
         handler.removeCallbacks(ticker);
         queryExecutor.shutdownNow();
         if (controller != null) controller.removeListener(playerListener);
         if (controllerFuture != null) MediaController.releaseFuture(controllerFuture);
+        if (miniSpin != null) miniSpin.cancel();
         super.onDestroy();
     }
 
