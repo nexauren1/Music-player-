@@ -1,6 +1,7 @@
 package com.nexauren.musicplayer;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.pm.PackageManager;
@@ -49,8 +50,11 @@ import androidx.media3.session.SessionToken;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -73,6 +77,11 @@ public final class MainActivity extends AppCompatActivity {
     private SeekBar miniSeek;
     private TextView miniPlay;
     private TextView countText;
+    private TextView bigTitle;
+    private TextView bigPosition;
+    private TextView bigDuration;
+    private ImageView bigArt;
+    private TextView homePlay;
     private EditText searchField;
     private WaveformView waveform;
 
@@ -81,10 +90,16 @@ public final class MainActivity extends AppCompatActivity {
     private int currentPage = 0;
     private boolean darkMode = false;
     private boolean searchMode = false;
+    private long sleepEndAtMs = 0L;
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             if (controller != null && controller.isConnected()) updatePlaybackUi();
+            if (sleepEndAtMs > 0 && System.currentTimeMillis() >= sleepEndAtMs && controller != null && controller.isConnected()) {
+                controller.pause();
+                sleepEndAtMs = 0L;
+                Toast.makeText(MainActivity.this, "Temporizador de sono terminou.", Toast.LENGTH_SHORT).show();
+            }
             handler.postDelayed(this, 500);
         }
     };
@@ -155,8 +170,9 @@ public final class MainActivity extends AppCompatActivity {
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout nowCard = roundedPanel(surface(), dp(22));
+        nowCard.setOrientation(LinearLayout.VERTICAL);
         nowCard.setPadding(dp(14), dp(10), dp(14), dp(12));
-        inside.addView(nowCard, new LinearLayout.LayoutParams(-1, dp(440)));
+        inside.addView(nowCard, new LinearLayout.LayoutParams(-1, dp(520)));
 
         LinearLayout nowHeader = new LinearLayout(this);
         nowHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -176,15 +192,16 @@ public final class MainActivity extends AppCompatActivity {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(18));
             }
         });
-        nowCard.addView(artFrame, new LinearLayout.LayoutParams(-1, dp(245)));
+        nowCard.addView(artFrame, new LinearLayout.LayoutParams(-1, dp(280)));
 
-        ImageView bigArt = new ImageView(this);
+        bigArt = new ImageView(this);
         bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
         bigArt.setImageResource(android.R.drawable.ic_menu_gallery);
         bigArt.setColorFilter(Color.rgb(90, 100, 110));
         artFrame.addView(bigArt, new FrameLayout.LayoutParams(-1, -1));
 
-        TextView bigTitle = text("Nenhuma música selecionada", 22, Color.WHITE);
+        bigTitle = text("Nenhuma música selecionada", 22, Color.WHITE);
+        bigTitle.setMaxLines(2);
         bigTitle.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         bigTitle.setShadowLayer(5f, 0, 2f, Color.BLACK);
         FrameLayout.LayoutParams bt = new FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM);
@@ -192,12 +209,14 @@ public final class MainActivity extends AppCompatActivity {
         artFrame.addView(bigTitle, bt);
 
         waveform = new WaveformView(this);
-        nowCard.addView(waveform, new LinearLayout.LayoutParams(-1, dp(88)));
+        nowCard.addView(waveform, new LinearLayout.LayoutParams(-1, dp(80)));
 
         LinearLayout current = new LinearLayout(this);
         current.setGravity(Gravity.CENTER_VERTICAL);
-        TextView cur = text("0:00", 12, textSecondary());
-        TextView total = text("0:00", 12, textSecondary());
+        bigPosition = text("0:00", 12, textSecondary());
+        bigDuration = text("0:00", 12, textSecondary());
+        TextView cur = bigPosition;
+        TextView total = bigDuration;
         total.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         current.addView(cur, new LinearLayout.LayoutParams(0, dp(24), 1));
         current.addView(total, new LinearLayout.LayoutParams(0, dp(24), 1));
@@ -207,6 +226,7 @@ public final class MainActivity extends AppCompatActivity {
         mainControls.setGravity(Gravity.CENTER);
         TextView prev = circleButton("◀");
         TextView play = circleButton("▶");
+        homePlay = play;
         TextView next = circleButton("▶|");
         TextView shuffle = circleButton("⤨");
         mainControls.addView(shuffle, new LinearLayout.LayoutParams(dp(52), dp(54)));
@@ -304,6 +324,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout mini = roundedPanel(surface(), dp(18));
         mini.setPadding(dp(8), dp(6), dp(6), dp(6));
         shell.addView(mini, new LinearLayout.LayoutParams(-1, dp(78)));
+        mini.setOnClickListener(v -> startActivity(new Intent(this, NowPlayingActivity.class)));
 
         miniArt = new ImageView(this);
         miniArt.setImageResource(android.R.drawable.ic_menu_gallery);
@@ -330,142 +351,224 @@ public final class MainActivity extends AppCompatActivity {
 
     private void showEqualizer() {
         currentPage = 1;
+        searchMode = false;
         root.removeAllViews();
         LinearLayout shell = basePage("Equalizador");
         LinearLayout body = pageBody(shell);
 
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView info = text("Equalizador gráfico de 10 bandas", 14, textSecondary());
+        header.addView(info, new LinearLayout.LayoutParams(0, dp(42), 1));
+        TextView reset = actionButton("↻  Repor tudo");
+        header.addView(reset, new LinearLayout.LayoutParams(dp(150), dp(42)));
+        body.addView(header);
+
         LinearLayout presets = new LinearLayout(this);
         presets.setGravity(Gravity.CENTER_VERTICAL);
-        presets.setPadding(0, dp(4), 0, dp(12));
-        String[] names = {"Plano", "Rock", "Jazz", "Clássico", "Mais"};
+        presets.setPadding(0, 0, 0, dp(8));
+        String[] names = {"Plano", "Rock", "Jazz", "Clássico", "Bass"};
         for (String name : names) {
-            TextView chip = chipText(name, name.equals("Plano") ? accent() : surface(), name.equals("Plano") ? Color.WHITE : textPrimary());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(name.equals("Mais") ? dp(58) : -2, dp(46));
-            lp.setMargins(dp(4), 0, dp(6), 0);
+            TextView chip = chipText(name, "Plano".equals(name) ? accent() : surface(), "Plano".equals(name) ? Color.WHITE : textPrimary());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            lp.setMargins(dp(3), 0, dp(3), 0);
             presets.addView(chip, lp);
             chip.setOnClickListener(v -> {
-                if (!name.equals("Mais")) Toast.makeText(this, "Predefinição " + name + " selecionada", Toast.LENGTH_SHORT).show();
+                if (PlaybackService.applyEqualizerPreset(name, 10)) {
+                    rebuildEqualizerBands();
+                    Toast.makeText(this, "Predefinição " + name + " aplicada.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Inicie uma música para ativar o equalizador.", Toast.LENGTH_SHORT).show();
+                }
             });
         }
         body.addView(presets);
 
         EqualizerGraphView graph = new EqualizerGraphView(this);
-        body.addView(graph, new LinearLayout.LayoutParams(-1, dp(380)));
+        body.addView(graph, new LinearLayout.LayoutParams(-1, dp(285)));
 
-        body.addView(dialRow(
-                dial("Pré-amplificador", 83),
-                dial("Graves", 95)));
-        body.addView(dialRow(
-                dial("Médios", 50),
-                dial("Agudos", 50)));
+        LinearLayout bands = new LinearLayout(this);
+        bands.setGravity(Gravity.CENTER);
+        bands.setPadding(0, dp(8), 0, dp(4));
+        for (int i = 0; i < 10; i++) {
+            final int bandIndex = i;
+            EqBandView band = new EqBandView(this);
+            String label = new String[]{"31","62","125","250","500","1k","2k","4k","8k","16k"}[i];
+            int[] levels = PlaybackService.getEqualizerLevels(10);
+            band.setData(label, levels[i] == 0 ? 50 : levels[i]);
+            band.setListener(percent -> {
+                if (!PlaybackService.setEqualizerBand(bandIndex, 10, percent)) {
+                    Toast.makeText(this, "Reproduza uma faixa para ativar o equalizador.", Toast.LENGTH_SHORT).show();
+                }
+                int[] now = PlaybackService.getEqualizerLevels(10);
+                graph.setLevels(now);
+            });
+            bands.addView(band, new LinearLayout.LayoutParams(0, dp(220), 1f));
+        }
+        body.addView(bands);
 
-        TextView reset = actionButton("↻  Repor tudo");
-        FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(dp(160), dp(46), Gravity.TOP | Gravity.END);
-        root.addView(reset, rp);
-        reset.setOnClickListener(v -> Toast.makeText(this, "Equalizador reposto", Toast.LENGTH_SHORT).show());
+        body.addView(dialRow(dialEffect("Pré-amplificador", 83, true), dialEffect("Graves", 65, false)));
+        TextView hint = text("As alterações são aplicadas ao áudio em reprodução.", 12, textSecondary());
+        hint.setGravity(Gravity.CENTER);
+        body.addView(hint, new LinearLayout.LayoutParams(-1, dp(34)));
+
+        reset.setOnClickListener(v -> {
+            if (PlaybackService.applyEqualizerPreset("Plano", 10)) {
+                rebuildEqualizerBands();
+                Toast.makeText(this, "Equalizador reposto.", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Inicie uma música para ativar o equalizador.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void rebuildEqualizerBands() {
+        showEqualizer();
+    }
+
+    private View dialEffect(String label, int percent, boolean preamp) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        DialView d = new DialView(this);
+        d.setPercent(percent);
+        box.addView(d, new LinearLayout.LayoutParams(dp(150), dp(145)));
+        TextView l = text(label, 15, textPrimary());
+        l.setTypeface(null, 1);
+        l.setGravity(Gravity.CENTER);
+        box.addView(l, new LinearLayout.LayoutParams(-1, dp(28)));
+        TextView value = text(percent + "%", 12, textSecondary());
+        value.setGravity(Gravity.CENTER);
+        box.addView(value, new LinearLayout.LayoutParams(-1, dp(22)));
+        d.setOnDialChangedListener(p -> {
+            value.setText(p + "%");
+            if (preamp) PlaybackService.setPreamp(p); else PlaybackService.setBass(p);
+        });
+        return box;
     }
 
     private void showSound() {
         currentPage = 2;
+        searchMode = false;
         root.removeAllViews();
         LinearLayout shell = basePage("Som");
         LinearLayout body = pageBody(shell);
 
         body.addView(dialRow(
-                dial("Balanço", 50),
-                dial("Som surround 3D", 0)));
-        body.addView(dialRow(
-                dial("Velocidade", 50, "1.00x", 0.5, 2.0),
-                dial("Altura", 50, "1.00x", 0.5, 2.0)));
+                dialSpeed("Velocidade", 50, true),
+                dialSpeed("Altura", 50, false)));
 
         LinearLayout stereo = new LinearLayout(this);
         stereo.setGravity(Gravity.CENTER);
-        stereo.setPadding(dp(6), dp(4), dp(6), dp(14));
+        stereo.setPadding(dp(6), dp(10), dp(6), dp(16));
         TextView st = segmented("Estéreo", true);
         TextView mo = segmented("Mono", false);
-        stereo.addView(st, new LinearLayout.LayoutParams(dp(150), dp(52)));
-        stereo.addView(mo, new LinearLayout.LayoutParams(dp(150), dp(52)));
+        stereo.addView(st, new LinearLayout.LayoutParams(0, dp(52), 1));
+        stereo.addView(mo, new LinearLayout.LayoutParams(0, dp(52), 1));
         body.addView(stereo);
-        mo.setOnClickListener(v -> {
-            mo.setBackground(roundAccent(dp(28)));
-            st.setBackground(roundDrawable(0xFFD1D2D5, dp(28)));
-            Toast.makeText(this, "Modo mono selecionado", Toast.LENGTH_SHORT).show();
-        });
         st.setOnClickListener(v -> {
+            PlaybackService.setMonoMode(false);
             st.setBackground(roundAccent(dp(28)));
             mo.setBackground(roundDrawable(0xFFD1D2D5, dp(28)));
-            Toast.makeText(this, "Modo estéreo selecionado", Toast.LENGTH_SHORT).show();
+        });
+        mo.setOnClickListener(v -> {
+            PlaybackService.setMonoMode(true);
+            mo.setBackground(roundAccent(dp(28)));
+            st.setBackground(roundDrawable(0xFFD1D2D5, dp(28)));
         });
 
-        TextView volume = text("Volume", 19, textPrimary());
+        TextView volume = text("Volume do player", 18, textPrimary());
         volume.setTypeface(null, 1);
         volume.setGravity(Gravity.CENTER);
         body.addView(volume, new LinearLayout.LayoutParams(-1, dp(34)));
-        DialView big = new DialView(this);
-        big.setPercent(47);
-        body.addView(big, new LinearLayout.LayoutParams(dp(300), dp(260)));
-        TextView volValue = text("47%", 14, textSecondary());
-        volValue.setGravity(Gravity.CENTER);
-        body.addView(volValue, new LinearLayout.LayoutParams(-1, dp(28)));
-        big.setOnDialChangedListener(p -> {
-            volValue.setText(p + "%");
-            if (controller != null && controller.isConnected()) controller.setVolume(p / 100f);
+
+        SeekBar volumeBar = new SeekBar(this);
+        volumeBar.setMax(100);
+        int start = controller != null && controller.isConnected() ? Math.round(controller.getVolume() * 100f) : 75;
+        volumeBar.setProgress(start);
+        body.addView(volumeBar, new LinearLayout.LayoutParams(-1, dp(48)));
+        TextView volumeValue = text(start + "%", 13, textSecondary());
+        volumeValue.setGravity(Gravity.CENTER);
+        body.addView(volumeValue, new LinearLayout.LayoutParams(-1, dp(24)));
+        volumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar b, int p, boolean from) {
+                volumeValue.setText(p + "%");
+                if (from && controller != null && controller.isConnected()) controller.setVolume(p / 100f);
+            }
+            @Override public void onStartTrackingTouch(SeekBar b) {}
+            @Override public void onStopTrackingTouch(SeekBar b) {}
         });
+    }
+
+    private View dialSpeed(String label, int percent, boolean speed) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        DialView d = new DialView(this);
+        d.setPercent(percent);
+        box.addView(d, new LinearLayout.LayoutParams(dp(155), dp(150)));
+        TextView l = text(label, 16, textPrimary());
+        l.setTypeface(null, 1);
+        l.setGravity(Gravity.CENTER);
+        box.addView(l, new LinearLayout.LayoutParams(-1, dp(28)));
+        TextView v = text("1.00x", 13, textSecondary());
+        v.setGravity(Gravity.CENTER);
+        box.addView(v, new LinearLayout.LayoutParams(-1, dp(24)));
+        d.setOnDialChangedListener(p -> {
+            float value = 0.5f + p / 100f * 1.5f;
+            v.setText(String.format(Locale.getDefault(), "%.2fx", value));
+            if (controller != null && controller.isConnected()) {
+                float currentSpeed = controller.getPlaybackParameters().speed;
+                float currentPitch = controller.getPlaybackParameters().pitch;
+                if (speed) PlaybackService.setPlaybackSpeedPitch(value, currentPitch);
+                else PlaybackService.setPlaybackSpeedPitch(currentSpeed, value);
+            }
+        });
+        return box;
     }
 
     private void showReverb() {
         currentPage = 3;
+        searchMode = false;
         root.removeAllViews();
         LinearLayout shell = basePage("Reverberação");
         LinearLayout body = pageBody(shell);
 
         LinearLayout chips = new LinearLayout(this);
         chips.setGravity(Gravity.CENTER_VERTICAL);
-        String[] names = {"Sinal seco", "Sala", "Studio", "Hall", "+"};
+        String[] names = {"Sinal seco", "Sala", "Studio", "Hall"};
         for (String n : names) {
-            TextView c = chipText(n, surface(), textPrimary());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(n.equals("+") ? dp(58) : -2, dp(50));
-            lp.setMargins(dp(4), 0, dp(5), dp(12));
+            TextView c = chipText(n, "Sinal seco".equals(n) ? accent() : surface(), "Sinal seco".equals(n) ? Color.WHITE : textPrimary());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+            lp.setMargins(dp(3), 0, dp(3), dp(10));
             chips.addView(c, lp);
+            c.setOnClickListener(v -> {
+                int mix = 45;
+                if ("Sinal seco".equals(n)) mix = 0;
+                PlaybackService.setReverb(n, mix);
+                Toast.makeText(this, n + " selecionado.", Toast.LENGTH_SHORT).show();
+            });
         }
         body.addView(chips);
 
         DialView mix = new DialView(this);
-        mix.setPercent(25);
-        LinearLayout mixBox = new LinearLayout(this);
-        mixBox.setGravity(Gravity.CENTER);
-        mixBox.setOrientation(LinearLayout.VERTICAL);
-        mixBox.addView(mix, new LinearLayout.LayoutParams(dp(270), dp(240)));
-        TextView mt = text("Mistura", 18, textPrimary());
-        mt.setGravity(Gravity.CENTER);
-        mixBox.addView(mt, new LinearLayout.LayoutParams(-1, dp(32)));
-        TextView mv = text("0.00", 13, textSecondary());
-        mv.setGravity(Gravity.CENTER);
-        mixBox.addView(mv, new LinearLayout.LayoutParams(-1, dp(28)));
-        body.addView(mixBox, new LinearLayout.LayoutParams(-1, dp(300)));
+        mix.setPercent(0);
+        body.addView(mix, new LinearLayout.LayoutParams(dp(240), dp(220)));
+        TextView mixLabel = text("Mistura", 18, textPrimary());
+        mixLabel.setGravity(Gravity.CENTER);
+        body.addView(mixLabel, new LinearLayout.LayoutParams(-1, dp(30)));
+        TextView mixValue = text("0%", 13, textSecondary());
+        mixValue.setGravity(Gravity.CENTER);
+        body.addView(mixValue, new LinearLayout.LayoutParams(-1, dp(26)));
+        mix.setOnDialChangedListener(p -> {
+            mixValue.setText(p + "%");
+            PlaybackService.setReverb("Sala", p);
+        });
 
-        LinearLayout locked = roundedPanel(0xFFE0E0E2, dp(2));
-        locked.setOrientation(LinearLayout.VERTICAL);
-        locked.setPadding(dp(14), dp(14), dp(14), dp(8));
-        body.addView(locked, new LinearLayout.LayoutParams(-1, dp(370)));
-        locked.setAlpha(0.78f);
-
-        LinearLayout r1 = new LinearLayout(this);
-        r1.setGravity(Gravity.CENTER);
-        r1.addView(dial("Amortecimento", 50), new LinearLayout.LayoutParams(0, dp(155), 1));
-        r1.addView(dial("Filtro", 68), new LinearLayout.LayoutParams(0, dp(155), 1));
-        r1.addView(dial("Fade", 50), new LinearLayout.LayoutParams(0, dp(155), 1));
-        locked.addView(r1);
-        LinearLayout r2 = new LinearLayout(this);
-        r2.setGravity(Gravity.CENTER);
-        r2.addView(dial("Pré-atraso", 0), new LinearLayout.LayoutParams(0, dp(155), 1));
-        r2.addView(dial("Mistura de pré-delay", 100), new LinearLayout.LayoutParams(0, dp(155), 1));
-        r2.addView(dial("Tamanho", 100), new LinearLayout.LayoutParams(0, dp(155), 1));
-        locked.addView(r2);
-        TextView lock = actionButton("Desbloquear");
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(160), dp(56), Gravity.CENTER);
-        root.addView(lock, lp);
-        lock.setOnClickListener(v -> Toast.makeText(this, "Recursos premium ficarão disponíveis numa versão futura.", Toast.LENGTH_SHORT).show());
+        TextView info = text("Sala, Studio e Hall usam o motor de efeitos do Android quando o dispositivo disponibiliza reverberação.", 12, textSecondary());
+        info.setGravity(Gravity.CENTER);
+        info.setPadding(dp(12), dp(8), dp(12), dp(8));
+        body.addView(info, new LinearLayout.LayoutParams(-1, dp(70)));
     }
 
     private void showSettings() {
