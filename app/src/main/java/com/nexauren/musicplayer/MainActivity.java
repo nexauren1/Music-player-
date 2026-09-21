@@ -117,6 +117,8 @@ public final class MainActivity extends AppCompatActivity {
     private long sleepEndAtMs = 0L;
     private long lastArtworkId = -1L;
     private boolean effectsEnabled = true;
+    private String reverbPreset = "Sinal seco";
+    private int reverbMix = 0;
     private ObjectAnimator miniSpin;
     private Uri pendingTagUri;
     private android.content.ContentValues pendingTagValues;
@@ -1450,6 +1452,79 @@ private void markCurrentRecent() {
     }
 
     private TextView miniIcon(String icon,int size){TextView t=text(icon,size,textSecondary());t.setGravity(Gravity.CENTER);return t;}
+
+    private View dialEffect(String label, int percent, boolean preamp) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        DialView d = new DialView(this);
+        d.setPercent(percent);
+        box.addView(d, new LinearLayout.LayoutParams(dp(150), dp(145)));
+        TextView l = text(label, 15, textPrimary());
+        l.setTypeface(null, 1);
+        l.setGravity(Gravity.CENTER);
+        box.addView(l, new LinearLayout.LayoutParams(-1, dp(28)));
+        TextView value = text(percent + "%", 12, textSecondary());
+        value.setGravity(Gravity.CENTER);
+        box.addView(value, new LinearLayout.LayoutParams(-1, dp(22)));
+        d.setOnDialChangedListener(p -> {
+            value.setText(p + "%");
+            if (preamp) PlaybackService.setPreamp(p); else PlaybackService.setBass(p);
+        });
+        return box;
+    }
+
+    private View sectionTitleView(String title,String subtitle){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(2),dp(9),dp(2),dp(2));
+        TextView a=text(title,13,accent());a.setTypeface(null,1);
+        TextView b=text(subtitle,11,textSecondary());
+        box.addView(a,new LinearLayout.LayoutParams(-1,dp(21)));
+        box.addView(b,new LinearLayout.LayoutParams(-1,dp(19)));
+        return box;
+    }
+
+    private void addReverbPresetRow(LinearLayout parent,String label,String preset,int mix){
+        TextView b=chipText(label+"  •  "+mix+"%",surface(),textPrimary());
+        b.setGravity(Gravity.CENTER_VERTICAL);b.setPadding(dp(14),0,dp(14),0);
+        parent.addView(b,new LinearLayout.LayoutParams(-1,dp(48)));
+        b.setOnClickListener(v->{reverbPreset=preset;reverbMix=mix;PlaybackService.setReverb(preset,mix);Toast.makeText(this,label+" aplicado.",Toast.LENGTH_SHORT).show();});
+    }
+
+    private void showSpeedDialog() {
+        final String[] values = {"0.75x", "1.00x", "1.25x", "1.50x", "1.75x", "2.00x"};
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("Velocidade de reprodução");
+        b.setItems(values, (d, which) -> {
+            if (controller != null && controller.isConnected()) controller.setPlaybackSpeed(Float.parseFloat(values[which].replace("x", "")));
+            Toast.makeText(this, "Velocidade: " + values[which], Toast.LENGTH_SHORT).show();
+        });
+        b.show();
+    }
+
+    private void showUpdateDialog(UpdateManager.ReleaseInfo info) {
+        if(isFinishing()||info==null||!UpdateManager.isNewer(info.version,BuildConfig.VERSION_NAME))return;
+        String notes=info.notes==null?"Novas melhorias e correções.":info.notes.trim();
+        if(notes.length()>900)notes=notes.substring(0,900)+"…";
+
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+
+        TextView spin=text("♫",52,Color.rgb(45,157,235));spin.setGravity(Gravity.CENTER);
+        ObjectAnimator animator=ObjectAnimator.ofFloat(spin,View.ROTATION,0f,360f);animator.setDuration(1200);animator.setRepeatCount(ObjectAnimator.INFINITE);animator.setInterpolator(new LinearInterpolator());animator.start();
+        box.addView(spin,new LinearLayout.LayoutParams(-1,dp(62)));
+
+        TextView v=text("Nexauren "+info.version,20,textPrimary());v.setTypeface(null,1);box.addView(v,new LinearLayout.LayoutParams(-1,dp(34)));
+        TextView n=text("Novidades",13,accent());n.setTypeface(null,1);box.addView(n,new LinearLayout.LayoutParams(-1,dp(25)));
+        TextView body=text(notes,12,textSecondary());box.addView(body,new LinearLayout.LayoutParams(-1,dp(100)));
+
+        final AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Nova versão disponível").setView(box)
+                .setNegativeButton("Baixar depois",(d,w)->deferUpdate(info.version))
+                .setPositiveButton("Baixar atualização",(d,w)->startUpdateDownload(info,box))
+                .create();
+
+        dialog.setOnShowListener(vv -> {});
+        dialog.show();
+    }
 
     private TextView actionButton(String text) {
         TextView t = chipText(text, Color.rgb(45, 157, 235), Color.WHITE);
