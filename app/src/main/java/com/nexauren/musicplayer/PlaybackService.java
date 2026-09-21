@@ -7,10 +7,10 @@ import android.media.audiofx.PresetReverb;
 import androidx.annotation.OptIn;
 import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
-import androidx.media3.common.AudioProcessor;
+import androidx.media3.common.audio.AudioProcessor;
 import androidx.media3.common.AuxEffectInfo;
 import androidx.media3.common.C;
-import androidx.media3.common.ChannelMixingMatrix;
+import androidx.media3.common.audio.ChannelMixingMatrix;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.audio.ChannelMixingAudioProcessor;
@@ -48,11 +48,10 @@ public final class PlaybackService extends MediaSessionService {
 
         DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this) {
             @Override protected AudioSink buildAudioSink(android.content.Context context,
-                    boolean enableFloatOutput, boolean enableAudioTrackPlaybackParams, boolean enableOffload) {
+                    boolean enableFloatOutput, boolean enableAudioTrackPlaybackParams) {
                 return new DefaultAudioSink.Builder(context)
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                        .setOffloadMode(DefaultAudioSink.OFFLOAD_MODE_DISABLED)
                         .setAudioProcessors(new AudioProcessor[]{channelMixer})
                         .build();
             }
