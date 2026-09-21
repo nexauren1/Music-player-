@@ -80,7 +80,8 @@ public final class AppearanceBackgroundDrawable extends Drawable {
             c.drawRect(0,0,w,h,paint);
         } else if(AppearanceStore.BG_AURORA.equals(kind)){
             paint.setShader(new LinearGradient(0,0,w,h,
-                    Color.rgb(8,12,20), darken(accent,0.28f), Color.rgb(11,16,24), Shader.TileMode.CLAMP));
+                    new int[]{Color.rgb(8,12,20), darken(accent,0.28f), Color.rgb(11,16,24)},
+                    null, Shader.TileMode.CLAMP));
             c.drawRect(0,0,w,h,paint);paint.setShader(null);
             paint.setColor(withAlpha(accent,62));
             c.drawCircle(w*0.18f,h*0.25f,w*0.32f,paint);
