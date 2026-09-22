@@ -42,6 +42,9 @@ import android.widget.TextView;
 import android.animation.ObjectAnimator;
 import android.widget.Toast;
 
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.PopupMenu;
@@ -82,7 +85,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private FrameLayout root;
     private LinearLayout content;
-    private LinearLayout libraryContainer;
+    private RecyclerView libraryContainer;
+    private TrackAdapter trackAdapter;
     private TextView pageTitle;
     private TextView miniTitle;
     private TextView miniArtist;
@@ -210,103 +214,87 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void buildHomeContent() {
-        ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(true);
-        LinearLayout inside=new LinearLayout(this);
+        LinearLayout inside = new LinearLayout(this);
         inside.setOrientation(LinearLayout.VERTICAL);
-        inside.setPadding(0,0,0,dp(6));
-        scroll.addView(inside,new ScrollView.LayoutParams(-1,-2));
-        content.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        content.addView(inside, new LinearLayout.LayoutParams(-1,-1));
 
-        LinearLayout nowCard=roundedPanel(surface(),dp(20));
-        nowCard.setPadding(dp(10),dp(8),dp(10),dp(7));
-        inside.addView(nowCard,new LinearLayout.LayoutParams(-1,dp(158)));
+        LinearLayout nowCard=roundedPanel(surface(),dp(18));
+        nowCard.setPadding(dp(10),dp(8),dp(10),dp(6));
+        inside.addView(nowCard,new LinearLayout.LayoutParams(-1,dp(138)));
 
         LinearLayout nowTop=new LinearLayout(this);
         nowTop.setGravity(Gravity.CENTER_VERTICAL);
-        nowCard.addView(nowTop,new LinearLayout.LayoutParams(-1,dp(96)));
+        nowCard.addView(nowTop,new LinearLayout.LayoutParams(-1,dp(94)));
 
         bigArt=new ImageView(this);
         bigArt.setImageResource(R.drawable.music_placeholder);
         bigArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
         bigArt.setBackground(roundDrawable(Color.rgb(55,63,74),dp(16)));
         bigArt.setClipToOutline(true);
-        nowTop.addView(bigArt,new LinearLayout.LayoutParams(dp(86),dp(86)));
+        nowTop.addView(bigArt,new LinearLayout.LayoutParams(dp(82),dp(82)));
 
-        LinearLayout nowMeta=new LinearLayout(this);
-        nowMeta.setOrientation(LinearLayout.VERTICAL);
-        nowMeta.setGravity(Gravity.CENTER_VERTICAL);
-        nowMeta.setPadding(dp(11),0,dp(6),0);
-        bigTitle=text("Nenhuma música",16,textPrimary());
-        bigTitle.setTypeface(null,1);
-        bigTitle.setMaxLines(2);
-        bigTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        nowMeta.addView(bigTitle,new LinearLayout.LayoutParams(-1,dp(46)));
-        TextView nowArtist=text("Selecione uma faixa",12,textSecondary());
-        nowArtist.setSingleLine(true);
-        nowMeta.addView(nowArtist,new LinearLayout.LayoutParams(-1,dp(26)));
-        nowTop.addView(nowMeta,new LinearLayout.LayoutParams(0,dp(82),1));
+        LinearLayout meta=new LinearLayout(this);
+        meta.setOrientation(LinearLayout.VERTICAL);
+        meta.setGravity(Gravity.CENTER_VERTICAL);
+        meta.setPadding(dp(10),0,dp(6),0);
+        bigTitle=text("Nenhuma música",15,textPrimary());bigTitle.setTypeface(null,1);bigTitle.setMaxLines(2);
+        meta.addView(bigTitle,new LinearLayout.LayoutParams(-1,dp(42)));
+        TextView nowSub=text("Nenhuma faixa em reprodução",11,textSecondary());nowSub.setSingleLine(true);
+        meta.addView(nowSub,new LinearLayout.LayoutParams(-1,dp(26)));
+        nowTop.addView(meta,new LinearLayout.LayoutParams(0,dp(76),1));
 
         homePlay=circleButton("▶");
-        nowTop.addView(homePlay,new LinearLayout.LayoutParams(dp(56),dp(58)));
+        nowTop.addView(homePlay,new LinearLayout.LayoutParams(dp(52),dp(54)));
         homePlay.setOnClickListener(v->togglePlayback());
-
-        View openNow=nowCard;
         nowCard.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
         bigArt.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
 
         waveform=new WaveformView(this);
-        nowCard.addView(waveform,new LinearLayout.LayoutParams(-1,dp(26)));
+        nowCard.addView(waveform,new LinearLayout.LayoutParams(-1,dp(18)));
 
-        LinearLayout time=new LinearLayout(this);
-        bigPosition=text("0:00",10,textSecondary());
-        bigDuration=text("0:00",10,textSecondary());
-        bigDuration.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        time.addView(bigPosition,new LinearLayout.LayoutParams(0,dp(22),1));
-        time.addView(bigDuration,new LinearLayout.LayoutParams(0,dp(22),1));
-        nowCard.addView(time,new LinearLayout.LayoutParams(-1,dp(22)));
-
-        HorizontalScrollView libraryTabsScroll=new HorizontalScrollView(this);
-        libraryTabsScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout libraryTabs=new LinearLayout(this);
-        libraryTabs.setPadding(0,dp(5),dp(8),dp(2));
-        String[] libraryTabNames={"Músicas","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
-        for(String tabName:libraryTabNames){
-            TextView tab=chipText(tabName,"Músicas".equals(tabName)?accent():surface(),
-                    "Músicas".equals(tabName)?Color.WHITE:textPrimary());
-            LinearLayout.LayoutParams tabLp=new LinearLayout.LayoutParams(dp(92),dp(40));
-            tabLp.setMargins(dp(3),0,dp(3),0);
-            libraryTabs.addView(tab,tabLp);
+        HorizontalScrollView tabsScroll=new HorizontalScrollView(this);
+        tabsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setPadding(0,dp(5),dp(8),dp(2));
+        String[] names={"Músicas","Vídeos","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
+        for(String name:names){
+            TextView tab=chipText(name,"Músicas".equals(name)?accent():surface(),"Músicas".equals(name)?Color.WHITE:textPrimary());
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(86),dp(39));lp.setMargins(dp(3),0,dp(3),0);
+            tabs.addView(tab,lp);
             tab.setOnClickListener(v->{
-                if("Músicas".equals(tabName))showHome(true);
-                else if("Álbuns".equals(tabName))showAlbums();
-                else if("Artistas".equals(tabName))showArtists();
-                else if("Pastas".equals(tabName))showFolders();
-                else if("Favoritos".equals(tabName))showFavorites();
-                else if("Recentes".equals(tabName))showRecent();
-                else if("Playlist".equals(tabName))showPlaylist();
+                if("Músicas".equals(name))showHome(true);
+                else if("Vídeos".equals(name))startActivity(new Intent(this,VideoLibraryActivity.class));
+                else if("Álbuns".equals(name))showAlbums();
+                else if("Artistas".equals(name))showArtists();
+                else if("Pastas".equals(name))showFolders();
+                else if("Favoritos".equals(name))showFavorites();
+                else if("Recentes".equals(name))showRecent();
+                else showPlaylist();
             });
         }
-        libraryTabsScroll.addView(libraryTabs,new ViewGroup.LayoutParams(-2,dp(48)));
-        inside.addView(libraryTabsScroll,new LinearLayout.LayoutParams(-1,dp(50)));
+        tabsScroll.addView(tabs,new ViewGroup.LayoutParams(-2,dp(45)));
+        inside.addView(tabsScroll,new LinearLayout.LayoutParams(-1,dp(48)));
 
-        LinearLayout libraryHeader=new LinearLayout(this);
-        libraryHeader.setGravity(Gravity.CENTER_VERTICAL);
-        libraryHeader.setPadding(dp(2),dp(9),dp(2),dp(4));
+        LinearLayout header=new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
         TextView libTitle=text("Biblioteca",20,textPrimary());libTitle.setTypeface(null,1);
-        libraryHeader.addView(libTitle,new LinearLayout.LayoutParams(0,dp(38),1));
-        countText=text("A carregar…",12,textSecondary());countText.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        libraryHeader.addView(countText,new LinearLayout.LayoutParams(dp(120),dp(38)));
-        inside.addView(libraryHeader);
+        header.addView(libTitle,new LinearLayout.LayoutParams(0,dp(42),1));
+        countText=text("A carregar…",11,textSecondary());countText.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        header.addView(countText,new LinearLayout.LayoutParams(dp(120),dp(42)));
+        inside.addView(header,new LinearLayout.LayoutParams(-1,dp(45)));
 
-        libraryContainer=new LinearLayout(this);
-        libraryContainer.setOrientation(LinearLayout.VERTICAL);
-        inside.addView(libraryContainer,new LinearLayout.LayoutParams(-1,-2));
-
-        TextView footer=text("Nexauren • música organizada para ti",10,textSecondary());
-        footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0,dp(8),0,dp(12));
-        inside.addView(footer);
+        libraryContainer=new RecyclerView(this);
+        libraryContainer.setLayoutManager(new LinearLayoutManager(this));
+        libraryContainer.setHasFixedSize(true);
+        libraryContainer.setItemViewCacheSize(12);
+        libraryContainer.setNestedScrollingEnabled(false);
+        trackAdapter=new TrackAdapter(new TrackAdapter.Listener(){
+            @Override public void onTrackClick(Track track){playTrack(track);}
+            @Override public void onTrackMenu(View anchor,Track track){showTrackMenu(anchor,track);}
+            @Override public void onTrackBound(Track track,ImageView target){loadArtwork(track.uri,target,track.id);}
+        },textPrimary(),textSecondary(),surface());
+        libraryContainer.setAdapter(trackAdapter);
+        inside.addView(libraryContainer,new LinearLayout.LayoutParams(-1,0,1));
         renderLibrary();
     }
 
@@ -483,56 +471,10 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void renderLibraryList() {
-        if (libraryContainer == null) return;
-        libraryContainer.removeAllViews();
-        if (visibleTracks.isEmpty()) {
-            TextView empty = text("Nenhuma música encontrada. Permita o acesso ao áudio e atualize a biblioteca.", 15, textSecondary());
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(dp(10), dp(30), dp(10), dp(30));
-            libraryContainer.addView(empty, new LinearLayout.LayoutParams(-1, dp(100)));
-            return;
-        }
-        for (int i = 0; i < visibleTracks.size(); i++) addTrackRow(visibleTracks.get(i), i);
-        countText.setText(visibleTracks.size() + (visibleTracks.size() == 1 ? " faixa" : " faixas"));
-    }
-
-    private void addTrackRow(Track track, int index) {
-        LinearLayout row = roundedPanel(surface(), dp(16));
-        row.setPadding(dp(8), dp(6), dp(6), dp(6));
-        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, dp(78));
-        rowLp.setMargins(0, 0, 0, dp(6));
-        libraryContainer.addView(row, rowLp);
-
-        // The artwork loader is asynchronous to keep large libraries responsive.
-        ImageView art = new ImageView(this);
-        art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        art.setImageResource(R.drawable.music_placeholder);
-        art.setColorFilter(0xFF65707C);
-        row.addView(art, new LinearLayout.LayoutParams(dp(62), dp(62)));
-        loadArtwork(track.uri, art, track.id);
-
-        LinearLayout labels = new LinearLayout(this);
-        labels.setOrientation(LinearLayout.VERTICAL);
-        labels.setPadding(dp(10), 0, dp(6), 0);
-        TextView title = text(track.title, 16, textPrimary());
-        title.setMaxLines(2);
-        title.setTypeface(null, 1);
-        TextView sub = text(track.artist + " · " + track.album, 12, textSecondary());
-        sub.setMaxLines(1);
-        labels.addView(title, new LinearLayout.LayoutParams(-1, dp(40)));
-        labels.addView(sub, new LinearLayout.LayoutParams(-1, dp(22)));
-        row.addView(labels, new LinearLayout.LayoutParams(0, dp(62), 1));
-
-        TextView duration = text(formatMs(track.durationMs), 12, textSecondary());
-        duration.setGravity(Gravity.CENTER);
-        row.addView(duration, new LinearLayout.LayoutParams(dp(48), dp(62)));
-
-        TextView more = topIconSmall("⋮");
-        more.setTextColor(textSecondary());
-        row.addView(more, new LinearLayout.LayoutParams(dp(36), dp(62)));
-        more.setOnClickListener(v -> showTrackMenu(more, track));
-        row.setOnClickListener(v -> playTrack(track));
-        loadArtwork(track.uri, art);
+        if (trackAdapter == null || countText == null) return;
+        ArrayList<Track> copy = new ArrayList<>(visibleTracks);
+        trackAdapter.submitList(copy);
+        countText.setText(copy.size() + (copy.size() == 1 ? " faixa" : " faixas"));
     }
 
     private void playTrack(Track selected) {
@@ -958,10 +900,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private void loadTracks() {
         if (libraryContainer == null) return;
-        libraryContainer.removeAllViews();
-        TextView loading = text("A atualizar a biblioteca…", 15, textSecondary());
-        loading.setGravity(Gravity.CENTER);
-        libraryContainer.addView(loading, new LinearLayout.LayoutParams(-1, dp(96)));
+        if (trackAdapter == null) return;
 
         queryExecutor.execute(() -> {
             ArrayList<Track> found = new ArrayList<>();
