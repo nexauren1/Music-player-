@@ -3,7 +3,7 @@ name: Release Android APK
 on:
   push:
     branches:
-      - 'release-v1.1.1'
+      - 'release-v1.2.0'
     tags:
       - 'v*'
 
@@ -59,25 +59,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > release-notes.md <<'EOF'
-          Nexauren Music Player 1.1.1
+          VERSION=$(sed -n 's/.*versionName '\''\([^'\'']*\)\''.*/\1/p' app/build.gradle)
+          test -n "$VERSION"
+          cat > release-notes.md <<EOF
+          Nexauren Music Player $VERSION
 
-          • Mini-player compacto e premium com menu próprio
-          • Player completo com aleatório, repetir, A-B, fila e ferramentas
-          • Biblioteca organizada por músicas, álbuns, artistas, pastas, favoritos e recentes
-          • Estado da reprodução e equalizador persistentes
-          • Verificação automática de atualizações, download dentro do app e instalação pelo Android
-          • Ecrã de novidades após atualização
-          • Nova biblioteca de vídeos com reprodução em tela cheia e miniaturas
+          • Biblioteca preparada para coleções muito grandes, com pesquisa em segundo plano
+          • Fila de reprodução deslizante para evitar crescimento indefinido durante milhares de faixas
+          • Navegação de vídeos integrada na biblioteca
+          • Biblioteca de vídeos em grelha, miniaturas em cache, pesquisa, ordenação e pastas
+          • Reprodução de vídeo com controles avançados e Picture-in-Picture
+          • Equalizador e efeitos de áudio persistentes
+          • Mini-player e biblioteca reorganizados
           EOF
-          if gh release view v1.1.1 >/dev/null 2>&1; then
-            gh release delete v1.1.1 --yes --cleanup-tag
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release delete "v$VERSION" --yes --cleanup-tag
           fi
-          gh release create v1.1.1 \
+          gh release create "v$VERSION" \
             app/build/outputs/apk/release/app-release.apk \
             app/build/outputs/bundle/release/app-release.aab \
             --target "${GITHUB_SHA}" \
-            --title "Nexauren Music Player v1.1.1" \
+            --title "Nexauren Music Player v$VERSION" \
             --notes-file release-notes.md
 
       - name: Remove signing material
