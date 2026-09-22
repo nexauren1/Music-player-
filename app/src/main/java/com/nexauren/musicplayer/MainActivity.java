@@ -267,7 +267,7 @@ public final class MainActivity extends AppCompatActivity {
         tabsScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout tabs=new LinearLayout(this);
         tabs.setPadding(0,dp(5),dp(8),dp(2));
-        String[] names={"Músicas","Vídeos","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
+        String[] names={"Músicas","Vídeos","Inteligente","Álbuns","Artistas","Pastas","Favoritos","Recentes","Playlist"};
         for(String name:names){
             TextView tab=chipText(name,"Músicas".equals(name)?accent():surface(),"Músicas".equals(name)?Color.WHITE:textPrimary());
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(86),dp(39));lp.setMargins(dp(3),0,dp(3),0);
@@ -275,6 +275,7 @@ public final class MainActivity extends AppCompatActivity {
             tab.setOnClickListener(v->{
                 if("Músicas".equals(name))showHome(true);
                 else if("Vídeos".equals(name))startActivity(new Intent(this,VideoLibraryActivity.class));
+                else if("Inteligente".equals(name))showSmartLibrary();
                 else if("Álbuns".equals(name))showAlbums();
                 else if("Artistas".equals(name))showArtists();
                 else if("Pastas".equals(name))showFolders();
@@ -500,7 +501,7 @@ public final class MainActivity extends AppCompatActivity {
         controller.setShuffleModeEnabled(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getBoolean("shuffle",false));
         controller.setRepeatMode(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getInt("repeat_mode",Player.REPEAT_MODE_OFF));
         controller.setPlaybackSpeed(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getFloat("speed",1f));
-        controller.prepare();controller.play();savePlaybackState();
+        controller.prepare();controller.play();PlayStatsStore.increment(this,selected.id);savePlaybackState();
     }
 
     private MediaItem mediaItem(Track t){
@@ -1100,7 +1101,55 @@ public final class MainActivity extends AppCompatActivity {
 
     private LinearLayout pageBody(LinearLayout shell){ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(14),dp(8),dp(14),dp(28));scroll.addView(body,new ScrollView.LayoutParams(-1,-2));shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));return body;}
 
-    private void openDrawer(){final FrameLayout overlay=new FrameLayout(this);overlay.setBackgroundColor(0x66000000);root.addView(overlay,new FrameLayout.LayoutParams(-1,-1));LinearLayout drawer=new LinearLayout(this);drawer.setOrientation(LinearLayout.VERTICAL);drawer.setBackgroundColor(darkMode?Color.rgb(20,24,30):Color.WHITE);int width=(int)Math.min(dp(330),getResources().getDisplayMetrics().widthPixels*0.86f);overlay.addView(drawer,new FrameLayout.LayoutParams(width,-1,Gravity.START));LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);hero.setGravity(Gravity.CENTER_HORIZONTAL);hero.setPadding(dp(16),dp(16),dp(16),dp(10));hero.setBackgroundColor(Color.rgb(33,150,243));drawer.addView(hero,new LinearLayout.LayoutParams(-1,dp(190)));TextView logo=text("N",70,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setTypeface(null,1);hero.addView(logo,new LinearLayout.LayoutParams(-1,dp(98)));TextView name=text("NEXAUREN",22,Color.WHITE);name.setGravity(Gravity.CENTER);name.setTypeface(null,1);hero.addView(name,new LinearLayout.LayoutParams(-1,dp(38)));TextView sub=text("MUSIC PLAYER",11,Color.WHITE);sub.setGravity(Gravity.CENTER);hero.addView(sub,new LinearLayout.LayoutParams(-1,dp(25)));ScrollView scroll=new ScrollView(this);LinearLayout menu=new LinearLayout(this);menu.setOrientation(LinearLayout.VERTICAL);scroll.addView(menu,new ScrollView.LayoutParams(-1,-2));drawer.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));drawerItem(menu,"⌂","Biblioteca",()->{root.removeView(overlay);showHome(true);});drawerItem(menu,"♡","Favoritos",()->{root.removeView(overlay);showFavorites();});drawerItem(menu,"◷","Reproduzido recentemente",()->{root.removeView(overlay);showRecent();});drawerItem(menu,"☷","Fila de reprodução",()->{root.removeView(overlay);showQueue();});drawerItem(menu,"▤","Minha playlist",()->{root.removeView(overlay);showPlaylist();});drawerItem(menu,"☷","Áudio",()->{root.removeView(overlay);showAudioLab();});drawerItem(menu,"▣","Vídeos",()->{root.removeView(overlay);startActivity(new Intent(this,VideoLibraryActivity.class));});drawerItem(menu,"◉","Visualizador de música",()->{root.removeView(overlay);startActivity(new Intent(this,VisualizerActivity.class));});drawerItem(menu,"▣","Modo de condução",()->{root.removeView(overlay);showDrivingMode();});drawerItem(menu,"⏱","Temporizador de sono",()->{root.removeView(overlay);showSleepTimer();});drawerItem(menu,"⧉","Encontrar duplicados",()->{root.removeView(overlay);showDuplicates();});drawerItem(menu,"◐","Tema claro/escuro",()->{root.removeView(overlay);toggleTheme();showHome(true);});drawerItem(menu,"⚙","Configurações",()->{root.removeView(overlay);showSettings();});overlay.setOnClickListener(v->root.removeView(overlay));}
+    private void openDrawer(){final FrameLayout overlay=new FrameLayout(this);overlay.setBackgroundColor(0x66000000);root.addView(overlay,new FrameLayout.LayoutParams(-1,-1));LinearLayout drawer=new LinearLayout(this);drawer.setOrientation(LinearLayout.VERTICAL);drawer.setBackgroundColor(darkMode?Color.rgb(20,24,30):Color.WHITE);int width=(int)Math.min(dp(330),getResources().getDisplayMetrics().widthPixels*0.86f);overlay.addView(drawer,new FrameLayout.LayoutParams(width,-1,Gravity.START));LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);hero.setGravity(Gravity.CENTER_HORIZONTAL);hero.setPadding(dp(16),dp(16),dp(16),dp(10));hero.setBackgroundColor(Color.rgb(33,150,243));drawer.addView(hero,new LinearLayout.LayoutParams(-1,dp(190)));TextView logo=text("N",70,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setTypeface(null,1);hero.addView(logo,new LinearLayout.LayoutParams(-1,dp(98)));TextView name=text("NEXAUREN",22,Color.WHITE);name.setGravity(Gravity.CENTER);name.setTypeface(null,1);hero.addView(name,new LinearLayout.LayoutParams(-1,dp(38)));TextView sub=text("MUSIC PLAYER",11,Color.WHITE);sub.setGravity(Gravity.CENTER);hero.addView(sub,new LinearLayout.LayoutParams(-1,dp(25)));ScrollView scroll=new ScrollView(this);LinearLayout menu=new LinearLayout(this);menu.setOrientation(LinearLayout.VERTICAL);scroll.addView(menu,new ScrollView.LayoutParams(-1,-2));drawer.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));drawerItem(menu,"⌂","Biblioteca",()->{root.removeView(overlay);showHome(true);});drawerItem(menu,"♡","Favoritos",()->{root.removeView(overlay);showFavorites();});drawerItem(menu,"◷","Reproduzido recentemente",()->{root.removeView(overlay);showRecent();});drawerItem(menu,"☷","Fila de reprodução",()->{root.removeView(overlay);showQueue();});drawerItem(menu,"▤","Minha playlist",()->{root.removeView(overlay);showPlaylist();});drawerItem(menu,"☷","Áudio",()->{root.removeView(overlay);showAudioLab();});drawerItem(menu,"▣","Vídeos",()->{root.removeView(overlay);startActivity(new Intent(this,VideoLibraryActivity.class));});drawerItem(menu,"✦","Biblioteca inteligente",()->{root.removeView(overlay);showSmartLibrary();});drawerItem(menu,"◉","Visualizador de música",()->{root.removeView(overlay);startActivity(new Intent(this,VisualizerActivity.class));});drawerItem(menu,"▣","Modo de condução",()->{root.removeView(overlay);showDrivingMode();});drawerItem(menu,"⏱","Temporizador de sono",()->{root.removeView(overlay);showSleepTimer();});drawerItem(menu,"⧉","Encontrar duplicados",()->{root.removeView(overlay);showDuplicates();});drawerItem(menu,"◐","Tema claro/escuro",()->{root.removeView(overlay);toggleTheme();showHome(true);});drawerItem(menu,"⚙","Configurações",()->{root.removeView(overlay);showSettings();});overlay.setOnClickListener(v->root.removeView(overlay));}
+
+    private void showSmartLibrary(){
+        currentPage=0;searchMode=false;root.removeAllViews();
+        LinearLayout shell=basePage("Biblioteca inteligente");
+        LinearLayout body=pageBody(shell);
+
+        LinearLayout summary=roundedPanel(surface(),dp(16));summary.setOrientation(LinearLayout.VERTICAL);summary.setPadding(dp(14),dp(12),dp(14),dp(12));
+        TextView title=text("Nexauren Intelligence",20,textPrimary());title.setTypeface(null,1);
+        TextView sub=text("Coleções automáticas que se adaptam à sua biblioteca.",12,textSecondary());
+        summary.addView(title,new LinearLayout.LayoutParams(-1,dp(32)));summary.addView(sub,new LinearLayout.LayoutParams(-1,dp(24)));
+        LinearLayout stats=new LinearLayout(this);stats.setGravity(Gravity.CENTER_VERTICAL);
+        stats.addView(statBox("Músicas",String.valueOf(tracks.size())),new LinearLayout.LayoutParams(0,dp(62),1));
+        long total=0;for(Track t:tracks)total+=t.durationMs;
+        stats.addView(statBox("Duração",formatDuration(total)),new LinearLayout.LayoutParams(0,dp(62),1));
+        stats.addView(statBox("Favoritos",String.valueOf(FavoritesStore.all(this).size())),new LinearLayout.LayoutParams(0,dp(62),1));
+        summary.addView(stats);
+        body.addView(summary,new LinearLayout.LayoutParams(-1,dp(132)));addSpacer(body,8);
+
+        sectionTitleView("COLEÇÕES AUTOMÁTICAS","Filtros calculados localmente, sem enviar sua música para a internet.");
+        smartRow(body,"▶","Continuar ouvindo","Abrir a última faixa reproduzida",()->showRecent());
+        smartRow(body,"★","Mais reproduzidas","Baseado no histórico deste dispositivo",()->showMostPlayed());
+        smartRow(body,"♡","Favoritos","Todas as faixas marcadas como favoritas",()->showFavorites());
+        smartRow(body,"♫","Sem artista","Faixas que precisam de organização de metadados",()->showSmartMissingArtist());
+        smartRow(body,"◌","Faixas longas","Músicas com 8 minutos ou mais",()->showSmartLongTracks());
+        smartRow(body,"⌁","Descobrir","Uma seleção aleatória da biblioteca",()->showSmartRandom());
+    }
+
+    private TextView statBox(String label,String value){
+        TextView t=text(value+"\n"+label,13,textPrimary());t.setGravity(Gravity.CENTER);t.setTypeface(null,1);return t;
+    }
+
+    private void smartRow(LinearLayout body,String icon,String title,String sub,Runnable action){
+        LinearLayout row=rowBase();TextView ic=text(icon,23,accent());row.addView(ic,new LinearLayout.LayoutParams(dp(46),dp(68)));
+        row.addView(labels(title,sub),new LinearLayout.LayoutParams(0,dp(68),1));
+        TextView go=text("›",25,textSecondary());go.setGravity(Gravity.CENTER);row.addView(go,new LinearLayout.LayoutParams(dp(38),dp(68)));
+        row.setOnClickListener(v->action.run());body.addView(row,new LinearLayout.LayoutParams(-1,dp(72)));addSpacer(body,5);
+    }
+
+    private String formatDuration(long ms){
+        long minutes=Math.max(0,ms/60000);long hours=minutes/60;minutes%=60;
+        return hours>0?hours+"h "+minutes+"m":minutes+"m";
+    }
+
+    private void showMostPlayed(){showTrackCollection("Mais reproduzidas",tracksForIds(PlayStatsStore.top(this,100)));}
+    private void showSmartMissingArtist(){ArrayList<Track> list=new ArrayList<>();for(Track t:tracks)if(t.artist==null||t.artist.trim().isEmpty()||t.artist.equalsIgnoreCase("Artista desconhecido"))list.add(t);showTrackCollection("Sem artista",list);}
+    private void showSmartLongTracks(){ArrayList<Track> list=new ArrayList<>();for(Track t:tracks)if(t.durationMs>=8*60*1000L)list.add(t);showTrackCollection("Faixas longas",list);}
+    private void showSmartRandom(){ArrayList<Track> list=new ArrayList<>(tracks);java.util.Collections.shuffle(list);if(list.size()>100)list=new ArrayList<>(list.subList(0,100));showTrackCollection("Descobrir",list);}
+    private ArrayList<Track> tracksForIds(List<Long> ids){java.util.HashMap<Long,Track> map=new java.util.HashMap<>();for(Track t:tracks)map.put(t.id,t);ArrayList<Track> out=new ArrayList<>();for(Long id:ids){Track t=map.get(id);if(t!=null)out.add(t);}return out;}
 
     private void showAlbums() {
         currentPage=0; searchMode=false; root.removeAllViews();
