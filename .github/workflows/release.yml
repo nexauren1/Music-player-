@@ -3,7 +3,7 @@ name: Release Android APK
 on:
   push:
     branches:
-      - 'release-v1.1.0'
+      - 'release-v1.1.1'
     tags:
       - 'v*'
 
@@ -59,15 +59,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view v1.1.0 >/dev/null 2>&1; then
-            gh release delete v1.1.0 --yes --cleanup-tag
+          if gh release view v1.1.1 >/dev/null 2>&1; then
+            gh release delete v1.1.1 --yes --cleanup-tag
           fi
-          gh release create v1.1.0 \
+          gh release create v1.1.1 \
             app/build/outputs/apk/release/app-release.apk \
             app/build/outputs/bundle/release/app-release.aab \
             --target "${GITHUB_SHA}" \
-            --title "Nexauren Music Player v1.1.0" \
-            --notes "Nexauren Music Player 1.1.0
+            --title "Nexauren Music Player v1.1.1" \
+            --notes "Nexauren Music Player 1.1.1
 
 • Mini-player compacto e premium com menu próprio
 • Player completo com aleatório, repetir, A-B, fila e ferramentas
