@@ -1,6 +1,7 @@
 package com.nexauren.musicplayer;
 
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.media.ThumbnailUtils;
 import android.provider.MediaStore;
 import android.text.TextUtils;
