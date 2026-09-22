@@ -629,59 +629,66 @@ public final class MainActivity extends AppCompatActivity {
 
     private void showFolders() {
         root.removeAllViews();
-        LinearLayout shell = basePage("Pastas");
-        LinearLayout body = pageBody(shell);
-        java.util.LinkedHashMap<String, ArrayList<Track>> groups = new java.util.LinkedHashMap<>();
+        LinearLayout shell=basePage("Pastas");
+        LinearLayout body=pageBody(shell);
+        TextView loading=text("A organizar pastas…",15,textSecondary());
+        loading.setGravity(Gravity.CENTER);
+        body.addView(loading,new LinearLayout.LayoutParams(-1,dp(100)));
 
-        if (ContextCompat.checkSelfPermission(this,
-                Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE)
-                == PackageManager.PERMISSION_GRANTED) {
-            String[] projection = {MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA};
-            try (Cursor cursor = getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    projection, MediaStore.Audio.Media.IS_MUSIC + " != 0", null, MediaStore.Audio.Media.DATA + " COLLATE NOCASE ASC")) {
-                if (cursor != null) {
-                    int idCol = cursor.getColumnIndex(MediaStore.Audio.Media._ID);
-                    int dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
-                    while (cursor.moveToNext()) {
-                        long id = idCol >= 0 ? cursor.getLong(idCol) : -1L;
-                        String path = dataCol >= 0 && !cursor.isNull(dataCol) ? cursor.getString(dataCol) : "";
-                        String folder = "Pasta desconhecida";
-                        if (!path.isEmpty()) {
-                            java.io.File file = new java.io.File(path);
-                            java.io.File parent = file.getParentFile();
-                            if (parent != null) folder = parent.getName();
+        queryExecutor.execute(() -> {
+            java.util.LinkedHashMap<String,ArrayList<Track>> groups=new java.util.LinkedHashMap<>();
+            java.util.HashMap<Long,Track> byId=new java.util.HashMap<>(Math.max(16,tracks.size()*2));
+            for(Track t:tracks)byId.put(t.id,t);
+            String folderColumn=Build.VERSION.SDK_INT>=29?MediaStore.Audio.Media.RELATIVE_PATH:MediaStore.Audio.Media.DATA;
+            String[] projection=Build.VERSION.SDK_INT>=29
+                    ? new String[]{MediaStore.Audio.Media._ID,MediaStore.Audio.Media.RELATIVE_PATH}
+                    : new String[]{MediaStore.Audio.Media._ID,MediaStore.Audio.Media.DATA};
+            try(Cursor cursor=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,
+                    MediaStore.Audio.Media.MIME_TYPE+" LIKE 'audio/%' AND "+MediaStore.Audio.Media.DURATION+" > 0",
+                    null,folderColumn+" COLLATE NOCASE ASC")){
+                if(cursor!=null){
+                    int idCol=cursor.getColumnIndex(MediaStore.Audio.Media._ID);
+                    int folderCol=cursor.getColumnIndex(folderColumn);
+                    while(cursor.moveToNext()){
+                        long id=cursor.getLong(idCol);
+                        Track match=byId.get(id);
+                        if(match==null)continue;
+                        String raw=folderCol>=0&&!cursor.isNull(folderCol)?cursor.getString(folderCol):"";
+                        String folder=raw;
+                        if(Build.VERSION.SDK_INT>=29&&folder.contains("/")){
+                            String[] parts=folder.split("/");
+                            folder=parts.length>0?parts[0]:folder;
+                        } else if(!raw.isEmpty()){
+                            java.io.File parent=new java.io.File(raw).getParentFile();
+                            folder=parent==null?"Pasta desconhecida":parent.getName();
                         }
-                        Track match = null;
-                        for (Track t : tracks) if (t.id == id) { match = t; break; }
-                        if (match != null) {
-                            ArrayList<Track> list = groups.get(folder);
-                            if (list == null) { list = new ArrayList<>(); groups.put(folder, list); }
-                            list.add(match);
-                        }
+                        if(folder==null||folder.trim().isEmpty())folder="Pasta desconhecida";
+                        groups.computeIfAbsent(folder,k->new ArrayList<>()).add(match);
                     }
                 }
-            } catch (Exception ignored) {}
-        }
-
-        for (java.util.Map.Entry<String, ArrayList<Track>> entry : groups.entrySet()) {
-            LinearLayout card = roundedPanel(surface(), dp(16));
-            card.setPadding(dp(14),dp(10),dp(12),dp(10));
-            card.setOrientation(LinearLayout.VERTICAL);
-            TextView name = text("▰  " + entry.getKey(), 16, textPrimary());
-            name.setTypeface(null,1);
-            TextView count = text(entry.getValue().size() + (entry.getValue().size()==1 ? " faixa" : " faixas"), 11, textSecondary());
-            card.addView(name,new LinearLayout.LayoutParams(-1,dp(28)));
-            card.addView(count,new LinearLayout.LayoutParams(-1,dp(22)));
-            ArrayList<Track> folderTracks = entry.getValue();
-            card.setOnClickListener(v -> showTrackCollection(entry.getKey(),folderTracks));
-            body.addView(card,new LinearLayout.LayoutParams(-1,dp(66)));
-            addSpacer(body,6);
-        }
-        if(groups.isEmpty()){
-            TextView empty=text("Não foi possível identificar pastas neste dispositivo.",15,textSecondary());
-            empty.setGravity(Gravity.CENTER);
-            body.addView(empty,new LinearLayout.LayoutParams(-1,dp(120)));
-        }
+            }catch(Exception ignored){}
+            final java.util.LinkedHashMap<String,ArrayList<Track>> result=groups;
+            runOnUiThread(()->{
+                body.removeAllViews();
+                if(result.isEmpty()){
+                    TextView empty=text("Nenhuma pasta encontrada.",15,textSecondary());
+                    empty.setGravity(Gravity.CENTER);
+                    body.addView(empty,new LinearLayout.LayoutParams(-1,dp(120)));
+                    return;
+                }
+                for(java.util.Map.Entry<String,ArrayList<Track>> entry:result.entrySet()){
+                    LinearLayout card=roundedPanel(surface(),dp(16));
+                    card.setPadding(dp(14),dp(10),dp(12),dp(10));card.setOrientation(LinearLayout.VERTICAL);
+                    TextView name=text("▰  "+entry.getKey(),16,textPrimary());name.setTypeface(null,1);
+                    TextView count=text(entry.getValue().size()+(entry.getValue().size()==1?" faixa":" faixas"),11,textSecondary());
+                    card.addView(name,new LinearLayout.LayoutParams(-1,dp(28)));
+                    card.addView(count,new LinearLayout.LayoutParams(-1,dp(22)));
+                    ArrayList<Track> folderTracks=entry.getValue();
+                    card.setOnClickListener(v->showTrackCollection(entry.getKey(),folderTracks));
+                    body.addView(card,new LinearLayout.LayoutParams(-1,dp(66)));addSpacer(body,6);
+                }
+            });
+        });
     }
 
     private void showFavorites() { showTrackCollection("Favoritos", tracksFromIds(FavoritesStore.get(this))); }
