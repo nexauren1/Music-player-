@@ -948,22 +948,41 @@ public final class MainActivity extends AppCompatActivity {
             java.util.Map<String,?> overrides=getSharedPreferences("nexauren_tags",MODE_PRIVATE).getAll();
             String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION};
             String selection=MediaStore.Audio.Media.MIME_TYPE+" LIKE 'audio/%' AND "+MediaStore.Audio.Media.DURATION+" > 0";
-            try(Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,selection,null,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC")){
-                if(c!=null){
-                    int idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
-                    int titleCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
-                    int artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
-                    int albumCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
-                    int durationCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
-                    while(c.moveToNext()){
-                        long id=c.getLong(idCol);
-                        String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
-                        String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
-                        String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
-                        found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id)));
+            final int pageSize=2000;
+            int offset=0;
+            try {
+                while(true){
+                    android.os.Bundle args=new android.os.Bundle();
+                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION,selection);
+                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC");
+                    args.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT,pageSize);
+                    args.putInt(android.content.ContentResolver.QUERY_ARG_OFFSET,offset);
+                    int pageCount=0;
+                    try(android.database.Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,args,null)){
+                        if(c==null)break;
+                        int idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+                        int titleCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+                        int artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                        int albumCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+                        int durationCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+                        while(c.moveToNext()){
+                            long id=c.getLong(idCol);
+                            String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
+                            String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
+                            String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
+                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id));
+                            pageCount++;
+                        }
                     }
+                    if(pageCount==0)break;
+                    offset+=pageCount;
+                    if(found.size()%10000<pageCount){
+                        final int loaded=found.size();
+                        runOnUiThread(()->countText.setText("A indexar "+loaded+" faixas…"));
+                    }
+                    if(pageCount<pageSize)break;
                 }
-            }catch(SecurityException ignored){}
+            }catch(SecurityException ignored){}catch(Exception ignored){}
             runOnUiThread(() -> {
                 tracks.clear();tracks.addAll(found);renderLibrary();
                 countText.setText(found.size()+" "+(found.size()==1?"faixa":"faixas"));
