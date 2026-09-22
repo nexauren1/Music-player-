@@ -20,7 +20,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
@@ -60,6 +60,9 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         count=text("A carregar…",10,0xD9FFFFFF);
         heading.addView(title,new LinearLayout.LayoutParams(-1,dp(30)));heading.addView(count,new LinearLayout.LayoutParams(-1,dp(18)));
         bar.addView(heading,new LinearLayout.LayoutParams(0,dp(58),1));
+        TextView folder=text("▰",23,Color.WHITE);folder.setGravity(Gravity.CENTER);
+        bar.addView(folder,new LinearLayout.LayoutParams(dp(44),dp(58)));
+        folder.setOnClickListener(v->showFolderSummary());
         TextView sort=text("⇅",25,Color.WHITE);sort.setGravity(Gravity.CENTER);
         bar.addView(sort,new LinearLayout.LayoutParams(dp(48),dp(58)));
         sort.setOnClickListener(v->cycleSort());
@@ -79,14 +82,39 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         });
 
         recycler=new RecyclerView(this);
-        recycler.setLayoutManager(new LinearLayoutManager(this));
+        int columns = getResources().getConfiguration().screenWidthDp >= 720 ? 3 : 2;
+        GridLayoutManager grid = new GridLayoutManager(this, columns);
+        recycler.setLayoutManager(grid);
         recycler.setHasFixedSize(true);
-        recycler.setItemViewCacheSize(10);
+        recycler.setItemViewCacheSize(12);
+        recycler.setItemAnimator(null);
         adapter=new VideoAdapter(video->startActivity(new Intent(this,VideoPlayerActivity.class)
                 .putExtra("uri",video.uri.toString()).putExtra("title",video.title)));
         recycler.setAdapter(adapter);
+        recycler.setPadding(dp(7), dp(5), dp(7), dp(12));
+        recycler.setClipToPadding(false);
         root.addView(recycler,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
+    }
+
+    private void showFolderSummary() {
+        java.util.LinkedHashMap<String,Integer> folders = new java.util.LinkedHashMap<>();
+        for (VideoTrack v : allVideos) folders.put(v.folder, folders.getOrDefault(v.folder, 0) + 1);
+        String[] names = folders.keySet().toArray(new String[0]);
+        if (names.length == 0) {
+            Toast.makeText(this, "Nenhuma pasta de vídeos encontrada.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = new String[names.length];
+        for (int i = 0; i < names.length; i++) labels[i] = names[i] + "  •  " + folders.get(names[i]) + " vídeos";
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Pastas de vídeos")
+                .setItems(labels, (d, which) -> {
+                    search.setText(names[which]);
+                    Toast.makeText(this, "Pasta: " + names[which], Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Fechar", null)
+                .show();
     }
 
     private void cycleSort(){
