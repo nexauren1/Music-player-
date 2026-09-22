@@ -3,7 +3,7 @@ name: Release Android APK
 on:
   push:
     branches:
-      - 'release-v1.2.0'
+      - 'release-v1.3.0'
     tags:
       - 'v*'
 
