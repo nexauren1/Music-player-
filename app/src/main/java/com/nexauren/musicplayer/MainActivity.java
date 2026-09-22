@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.ContentUris;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.ContentObserver;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -89,6 +90,10 @@ public final class MainActivity extends AppCompatActivity {
     private static final int PLAYLIST_WINDOW = 600;
     private int queueWindowStart = 0;
     private final Handler handler = new Handler();
+    private ContentObserver mediaObserver;
+    private final Runnable mediaRefreshRunnable = () -> {
+        if (!isFinishing() && libraryContainer != null) loadTracks();
+    };
 
     private FrameLayout root;
     private LinearLayout content;
@@ -133,12 +138,10 @@ public final class MainActivity extends AppCompatActivity {
     private final Runnable searchFilterRunnable = () -> {
         final String query = pendingSearchQuery;
         queryExecutor.execute(() -> {
-            final String normalized = query.trim().toLowerCase(Locale.getDefault());
+            final String normalized = Track.normalizeForSearch(query);
             ArrayList<Track> result = new ArrayList<>();
             for (Track t : tracks) {
-                if (normalized.isEmpty() || t.title.toLowerCase(Locale.getDefault()).contains(normalized)
-                        || t.artist.toLowerCase(Locale.getDefault()).contains(normalized)
-                        || t.album.toLowerCase(Locale.getDefault()).contains(normalized)) result.add(t);
+                if (normalized.isEmpty() || t.searchKey.contains(normalized)) result.add(t);
             }
             runOnUiThread(() -> {
                 if (!query.equals(pendingSearchQuery)) return;
@@ -200,6 +203,7 @@ public final class MainActivity extends AppCompatActivity {
         connectController();
         requestNotificationPermission();
         ensureAudioPermission();
+        registerMediaStoreObserver();
         UpdateNotifications.ensureChannel(this);
         UpdateScheduler.ensure(this);
         checkForUpdateOnEntry();
@@ -747,6 +751,7 @@ public final class MainActivity extends AppCompatActivity {
             else if(w==1)tracks.sort(Comparator.comparing(t->t.artist.toLowerCase(Locale.getDefault())));
             else if(w==2)tracks.sort(Comparator.comparing(t->t.album.toLowerCase(Locale.getDefault())));
             else if(w==3)tracks.sort((a,b)->Long.compare(b.durationMs,a.durationMs));
+            else if(w==4)tracks.sort((a,b)->Long.compare(b.dateAdded,a.dateAdded));
             renderLibrary();
         }).show();
     }
@@ -934,6 +939,20 @@ public final class MainActivity extends AppCompatActivity {
         else ActivityCompat.requestPermissions(this, new String[]{permission}, REQUEST_AUDIO);
     }
 
+    private void registerMediaStoreObserver() {
+        if (mediaObserver != null) return;
+        mediaObserver = new ContentObserver(handler) {
+            @Override public void onChange(boolean selfChange, Uri uri) {
+                handler.removeCallbacks(mediaRefreshRunnable);
+                handler.postDelayed(mediaRefreshRunnable, 700L);
+            }
+        };
+        try {
+            getContentResolver().registerContentObserver(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver);
+        } catch (Throwable ignored) {}
+    }
+
     private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -946,7 +965,7 @@ public final class MainActivity extends AppCompatActivity {
         queryExecutor.execute(() -> {
             ArrayList<Track> found=new ArrayList<>();
             java.util.Map<String,?> overrides=getSharedPreferences("nexauren_tags",MODE_PRIVATE).getAll();
-            String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION};
+            String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_ADDED};
             String selection=MediaStore.Audio.Media.MIME_TYPE+" LIKE 'audio/%' AND "+MediaStore.Audio.Media.DURATION+" > 0";
             final int pageSize=2000;
             int offset=0;
@@ -965,12 +984,15 @@ public final class MainActivity extends AppCompatActivity {
                         int artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
                         int albumCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
                         int durationCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+                        int dateAddedCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED);
                         while(c.moveToNext()){
                             long id=c.getLong(idCol);
                             String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
                             String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
                             String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
-                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id)));
+                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),
+                                    ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id),
+                                    c.getLong(dateAddedCol)));
                             pageCount++;
                         }
                     }
@@ -1185,6 +1207,7 @@ public final class MainActivity extends AppCompatActivity {
         smartRow(body,"◌","Faixas longas","Músicas com 8 minutos ou mais",()->showSmartLongTracks());
         smartRow(body,"⌁","Descobrir","Uma seleção aleatória da biblioteca",()->showSmartRandom());
         smartRow(body,"0","Nunca reproduzidas","Faixas que ainda não foram tocadas neste dispositivo",()->showSmartNeverPlayed());
+        smartRow(body,"↥","Adicionadas recentemente","As 100 faixas mais recentes da biblioteca",()->showSmartRecentlyAdded());
         smartRow(body,"≋","Possíveis duplicadas","Mesmo título e artista",()->showSmartDuplicates());
     }
 
@@ -1213,11 +1236,18 @@ public final class MainActivity extends AppCompatActivity {
         showTrackCollection("Nunca reproduzidas",list);
     }
 
+    private void showSmartRecentlyAdded(){
+        ArrayList<Track> list=new ArrayList<>(tracks);
+        list.sort((a,b)->Long.compare(b.dateAdded,a.dateAdded));
+        if(list.size()>100) list=new ArrayList<>(list.subList(0,100));
+        showTrackCollection("Adicionadas recentemente",list);
+    }
+
     private void showSmartDuplicates(){
         java.util.HashMap<String,Track> first=new java.util.HashMap<>();
         java.util.HashSet<Long> duplicateIds=new java.util.HashSet<>();
         for(Track t:tracks){
-            String key=(t.title+"|"+t.artist).trim().toLowerCase(Locale.getDefault());
+            String key=Track.normalizeForSearch(t.title+" "+t.artist);
             if(key.length()<3)continue;
             Track previous=first.putIfAbsent(key,t);
             if(previous!=null){duplicateIds.add(previous.id);duplicateIds.add(t.id);}
@@ -1928,8 +1958,12 @@ public final class MainActivity extends AppCompatActivity {
         if (controller != null) controller.removeListener(playerListener);
         if (controllerFuture != null) MediaController.releaseFuture(controllerFuture);
         savePlaybackState();
-        queryExecutor.shutdownNow();
         artworkExecutor.shutdownNow();
+        if (mediaObserver != null) {
+            try { getContentResolver().unregisterContentObserver(mediaObserver); } catch (Throwable ignored) {}
+            mediaObserver = null;
+        }
+        handler.removeCallbacks(mediaRefreshRunnable);
         if (miniSpin != null) miniSpin.cancel();
         super.onDestroy();
     }
