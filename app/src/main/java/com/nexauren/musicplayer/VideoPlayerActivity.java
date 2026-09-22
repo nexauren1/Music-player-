@@ -26,6 +26,7 @@ public final class VideoPlayerActivity extends AppCompatActivity {
     private PlayerView playerView;
     private TextView title;
     private boolean immersive=false;
+    private String videoStateKey="";
 
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
@@ -40,8 +41,14 @@ public final class VideoPlayerActivity extends AppCompatActivity {
                 Toast.makeText(VideoPlayerActivity.this,"Este vídeo não pôde ser reproduzido neste dispositivo.",Toast.LENGTH_LONG).show();
             }
         });
+        videoStateKey="video:"+Integer.toHexString(raw.hashCode());
         player.setMediaItem(MediaItem.fromUri(android.net.Uri.parse(raw)));
-        player.prepare();player.play();
+        player.prepare();
+        long savedPosition=getSharedPreferences("nexauren_video_state",MODE_PRIVATE).getLong(videoStateKey+":position",0L);
+        float savedSpeed=getSharedPreferences("nexauren_video_state",MODE_PRIVATE).getFloat(videoStateKey+":speed",1f);
+        if(savedSpeed>0.1f&&savedSpeed<4f)player.setPlaybackSpeed(savedSpeed);
+        player.seekTo(Math.max(0L,savedPosition));
+        player.play();
     }
 
     private void buildUi(){
@@ -105,7 +112,15 @@ public final class VideoPlayerActivity extends AppCompatActivity {
 
     @Override protected void onUserLeaveHint(){super.onUserLeaveHint();}
 
+    @Override protected void onPause(){saveVideoState();super.onPause();}
     @Override protected void onStop(){super.onStop();if(player!=null&&!isInPictureInPictureMode())player.pause();}
+    private void saveVideoState(){
+        if(player==null||videoStateKey.isEmpty())return;
+        getSharedPreferences("nexauren_video_state",MODE_PRIVATE).edit()
+                .putLong(videoStateKey+":position",Math.max(0L,player.getCurrentPosition()))
+                .putFloat(videoStateKey+":speed",player.getPlaybackParameters().speed)
+                .apply();
+    }
     @Override protected void onDestroy(){if(playerView!=null)playerView.setPlayer(null);if(player!=null){player.release();player=null;}super.onDestroy();}
 
     private TextView button(String s,float z){TextView t=text(s,z,Color.WHITE);t.setGravity(Gravity.CENTER);t.setBackground(round(0x66000000,24));return t;}
