@@ -92,7 +92,7 @@ public final class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler();
     private ContentObserver mediaObserver;
     private final Runnable mediaRefreshRunnable = () -> {
-        if (!isFinishing() && libraryContainer != null) loadTracks();
+        if (!isFinishing()) loadTracks();
     };
 
     private FrameLayout root;
