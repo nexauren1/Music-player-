@@ -193,28 +193,42 @@ public final class VideoLibraryActivity extends AppCompatActivity {
                     MediaStore.Video.Media.MIME_TYPE,MediaStore.Video.Media.SIZE,MediaStore.Video.Media.DURATION,
                     MediaStore.Video.Media.DATE_ADDED,MediaStore.Video.Media.WIDTH,MediaStore.Video.Media.HEIGHT
             };
-            try(android.database.Cursor c=getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,projection,
-                    MediaStore.Video.Media.DURATION+" > 0",null,MediaStore.Video.Media.DATE_ADDED+" DESC")){
-                if(c!=null){
-                    int id=c.getColumnIndexOrThrow(MediaStore.Video.Media._ID);
-                    int title=c.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE);
-                    int folder=c.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME);
-                    int mime=c.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE);
-                    int size=c.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
-                    int dur=c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION);
-                    int date=c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED);
-                    int w=c.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH);
-                    int h=c.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT);
-                    while(c.moveToNext()){
-                        long videoId=c.getLong(id);
-                        result.add(new VideoTrack(videoId,
-                                safe(c.getString(title),"Sem título"),
-                                safe(c.getString(folder),"Vídeos"),
-                                safe(c.getString(mime),"video/*"),
-                                c.getLong(size),c.getLong(dur),c.getLong(date),
-                                c.getInt(w),c.getInt(h),
-                                ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,videoId)));
+            final int pageSize=1000;
+            int offset=0;
+            try{
+                while(true){
+                    android.os.Bundle args=new android.os.Bundle();
+                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION,MediaStore.Video.Media.DURATION+" > 0");
+                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER,MediaStore.Video.Media.DATE_ADDED+" DESC");
+                    args.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT,pageSize);
+                    args.putInt(android.content.ContentResolver.QUERY_ARG_OFFSET,offset);
+                    int pageCount=0;
+                    try(android.database.Cursor c=getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,projection,args,null)){
+                        if(c==null)break;
+                        int id=c.getColumnIndexOrThrow(MediaStore.Video.Media._ID);
+                        int title=c.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE);
+                        int folder=c.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME);
+                        int mime=c.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE);
+                        int size=c.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
+                        int dur=c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION);
+                        int date=c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED);
+                        int w=c.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH);
+                        int h=c.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT);
+                        while(c.moveToNext()){
+                            long videoId=c.getLong(id);
+                            result.add(new VideoTrack(videoId,safe(c.getString(title),"Sem título"),safe(c.getString(folder),"Vídeos"),
+                                    safe(c.getString(mime),"video/*"),c.getLong(size),c.getLong(dur),c.getLong(date),c.getInt(w),c.getInt(h),
+                                    ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,videoId)));
+                            pageCount++;
+                        }
                     }
+                    if(pageCount==0)break;
+                    offset+=pageCount;
+                    if(result.size()%5000<pageCount){
+                        final int loaded=result.size();
+                        runOnUiThread(()->count.setText("A indexar "+loaded+" vídeos…"));
+                    }
+                    if(pageCount<pageSize)break;
                 }
             }catch(Exception ignored){}
             runOnUiThread(()->{
