@@ -1946,6 +1946,17 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (getPreferences(MODE_PRIVATE).getBoolean("install_after_settings", false)) {
+            getPreferences(MODE_PRIVATE).edit().remove("install_after_settings").apply();
+            if (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls()) {
+                handler.postDelayed(() -> UpdateManager.install(this), 250L);
+            }
+        }
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
         savePlaybackState();
