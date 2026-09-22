@@ -377,12 +377,21 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private void setAsRingtone(){
         Track t=currentTrack();
         if(t==null){Toast.makeText(this,"Nenhuma faixa.",Toast.LENGTH_SHORT).show();return;}
+        if(Build.VERSION.SDK_INT<=28 && androidx.core.content.ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED){
+            androidx.core.app.ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},7808);
+            return;
+        }
         try{
-            ContentValuesCompatHelper helper=new ContentValuesCompatHelper();
-            helper.copyToRingtone(this,t);
-            Toast.makeText(this,"Toque definido pelo Android.",Toast.LENGTH_SHORT).show();
+            new Thread(()->{
+                try{
+                    new ContentValuesCompatHelper().copyToRingtone(this,t);
+                    runOnUiThread(()->Toast.makeText(this,"Toque definido pelo Android.",Toast.LENGTH_SHORT).show());
+                }catch(Exception e){
+                    runOnUiThread(()->Toast.makeText(this,"O sistema não permitiu definir o toque.",Toast.LENGTH_LONG).show());
+                }
+            },"nexauren-ringtone").start();
         }catch(Exception e){
-            Toast.makeText(this,"O sistema não permitiu definir o toque.",Toast.LENGTH_LONG).show();
+            Toast.makeText(this,"Não foi possível preparar o toque.",Toast.LENGTH_LONG).show();
         }
     }
 
@@ -406,7 +415,25 @@ public final class NowPlayingActivity extends AppCompatActivity {
                 context.getContentResolver().update(dest,done,null,null);
                 RingtoneManager.setActualDefaultRingtoneUri(context,RingtoneManager.TYPE_RINGTONE,dest);
             }else{
-                throw new UnsupportedOperationException("legacy ringtone not implemented");
+                java.io.File dir=android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_RINGTONES);
+                if(!dir.exists() && !dir.mkdirs())throw new java.io.IOException("Não foi possível criar a pasta Ringtones.");
+                java.io.File outFile=new java.io.File(dir,values.getAsString(MediaStore.Audio.Media.DISPLAY_NAME));
+                try(InputStream in=context.getContentResolver().openInputStream(t.uri);
+                    OutputStream out=new java.io.BufferedOutputStream(new java.io.FileOutputStream(outFile))){
+                    byte[]buf=new byte[32768];int n;
+                    while((n=in.read(buf))!=-1)out.write(buf,0,n);
+                }
+                final Uri[] uriHolder=new Uri[1];
+                android.media.MediaScannerConnection.scanFile(context,new String[]{outFile.getAbsolutePath()},
+                        new String[]{"audio/mpeg"},(path,uri)->{
+                            synchronized(uriHolder){uriHolder[0]=uri;uriHolder.notifyAll();}
+                        });
+                synchronized(uriHolder){
+                    if(uriHolder[0]==null)uriHolder.wait(5000L);
+                }
+                Uri ringtoneUri=uriHolder[0];
+                if(ringtoneUri==null)ringtoneUri=Uri.fromFile(outFile);
+                RingtoneManager.setActualDefaultRingtoneUri(context,RingtoneManager.TYPE_RINGTONE,ringtoneUri);
             }
         }
     }
