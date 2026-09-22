@@ -1184,6 +1184,8 @@ public final class MainActivity extends AppCompatActivity {
         smartRow(body,"♫","Sem artista","Faixas que precisam de organização de metadados",()->showSmartMissingArtist());
         smartRow(body,"◌","Faixas longas","Músicas com 8 minutos ou mais",()->showSmartLongTracks());
         smartRow(body,"⌁","Descobrir","Uma seleção aleatória da biblioteca",()->showSmartRandom());
+        smartRow(body,"0","Nunca reproduzidas","Faixas que ainda não foram tocadas neste dispositivo",()->showSmartNeverPlayed());
+        smartRow(body,"≋","Possíveis duplicadas","Mesmo título e artista",()->showSmartDuplicates());
     }
 
     private TextView statBox(String label,String value){
@@ -1205,6 +1207,26 @@ public final class MainActivity extends AppCompatActivity {
     private void showMostPlayed(){showTrackCollection("Mais reproduzidas",tracksForIds(PlayStatsStore.top(this,100)));}
     private void showSmartMissingArtist(){ArrayList<Track> list=new ArrayList<>();for(Track t:tracks)if(t.artist==null||t.artist.trim().isEmpty()||t.artist.equalsIgnoreCase("Artista desconhecido"))list.add(t);showTrackCollection("Sem artista",list);}
     private void showSmartLongTracks(){ArrayList<Track> list=new ArrayList<>();for(Track t:tracks)if(t.durationMs>=8*60*1000L)list.add(t);showTrackCollection("Faixas longas",list);}
+    private void showSmartNeverPlayed(){
+        ArrayList<Track> list=new ArrayList<>();
+        for(Track t:tracks)if(PlayStatsStore.count(this,t.id)==0)list.add(t);
+        showTrackCollection("Nunca reproduzidas",list);
+    }
+
+    private void showSmartDuplicates(){
+        java.util.HashMap<String,Track> first=new java.util.HashMap<>();
+        java.util.HashSet<Long> duplicateIds=new java.util.HashSet<>();
+        for(Track t:tracks){
+            String key=(t.title+"|"+t.artist).trim().toLowerCase(Locale.getDefault());
+            if(key.length()<3)continue;
+            Track previous=first.putIfAbsent(key,t);
+            if(previous!=null){duplicateIds.add(previous.id);duplicateIds.add(t.id);}
+        }
+        ArrayList<Track> list=new ArrayList<>();
+        for(Track t:tracks)if(duplicateIds.contains(t.id))list.add(t);
+        showTrackCollection("Possíveis duplicadas",list);
+    }
+
     private void showSmartRandom(){ArrayList<Track> list=new ArrayList<>(tracks);java.util.Collections.shuffle(list);if(list.size()>100)list=new ArrayList<>(list.subList(0,100));showTrackCollection("Descobrir",list);}
     private ArrayList<Track> tracksForIds(List<Long> ids){java.util.HashMap<Long,Track> map=new java.util.HashMap<>();for(Track t:tracks)map.put(t.id,t);ArrayList<Track> out=new ArrayList<>();for(Long id:ids){Track t=map.get(id);if(t!=null)out.add(t);}return out;}
 
