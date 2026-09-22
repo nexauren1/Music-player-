@@ -289,7 +289,7 @@ public final class VideoLibraryActivity extends AppCompatActivity {
 
     private void shareVideo(VideoTrack video) {
         Intent send = new Intent(Intent.ACTION_SEND);
-        send.setType(video.mime == null || video.mime.isEmpty() ? "video/*" : video.mime);
+        send.setType(video.mimeType == null || video.mimeType.isEmpty() ? "video/*" : video.mimeType);
         send.putExtra(Intent.EXTRA_STREAM, video.uri);
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
@@ -303,7 +303,7 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         String resolution = video.width > 0 && video.height > 0
                 ? video.width + " × " + video.height : "Desconhecida";
         String message = "Pasta: " + safe(video.folder, "Vídeos")
-                + "\nFormato: " + safe(video.mime, "video/*")
+                + "\nFormato: " + safe(video.mimeType, "video/*")
                 + "\nResolução: " + resolution
                 + "\nDuração: " + formatMs(video.durationMs)
                 + "\nTamanho: " + formatSize(video.sizeBytes);
