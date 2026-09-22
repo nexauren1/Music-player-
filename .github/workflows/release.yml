@@ -59,8 +59,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(sed -n 's/.*versionName '\''\([^'\'']*\)\''.*/\1/p' app/build.gradle)
+          VERSION=$(grep -E "versionName '[^']+'" app/build.gradle | head -1 | sed -E "s/.*versionName '([^']+)'.*/\\1/")
           test -n "$VERSION"
+          # Clean up the malformed tag created by the previous version parser.
+          if gh release view "v${VERSION}'" >/dev/null 2>&1; then
+            gh release delete "v${VERSION}'" --yes --cleanup-tag
+          fi
           cat > release-notes.md <<EOF
           Nexauren Music Player $VERSION
 
