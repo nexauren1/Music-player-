@@ -12,7 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.collection.LruCache;
+import android.util.LruCache;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
@@ -25,9 +25,9 @@ public final class VideoAdapter extends ListAdapter<VideoTrack, VideoAdapter.Hol
     public interface Listener { void onVideoClick(VideoTrack video); }
 
     private static final ExecutorService THUMB_EXECUTOR = Executors.newFixedThreadPool(3);
-    private static final LruCache<Long, Bitmap> THUMB_CACHE = new LruCache<Long, Bitmap>(12 * 1024 * 1024) {
+    private static final LruCache<Long, Bitmap> THUMB_CACHE = new LruCache<Long, Bitmap>(12 * 1024) {
         @Override protected int sizeOf(@NonNull Long key, @NonNull Bitmap value) {
-            return Math.max(1, value.getByteCount());
+            return Math.max(1, value.getByteCount() / 1024);
         }
     };
     private final Listener listener;
