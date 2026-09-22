@@ -15,11 +15,14 @@ import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.os.Build;
 
 public final class VideoAdapter extends ListAdapter<VideoTrack, VideoAdapter.Holder> {
     public interface Listener { void onVideoClick(VideoTrack video); }
 
+    private static final ExecutorService THUMB_EXECUTOR = Executors.newFixedThreadPool(2);
     private final Listener listener;
 
     public VideoAdapter(Listener listener) {
@@ -81,7 +84,7 @@ public final class VideoAdapter extends ListAdapter<VideoTrack, VideoAdapter.Hol
     }
 
     private void loadThumbnail(VideoTrack video,ImageView target){
-        new Thread(()->{
+        THUMB_EXECUTOR.execute(()->{
             Bitmap bitmap=null;
             try{
                 if(Build.VERSION.SDK_INT>=29) bitmap=target.getContext().getContentResolver().loadThumbnail(video.uri,new android.util.Size(320,200),null);
@@ -89,7 +92,7 @@ public final class VideoAdapter extends ListAdapter<VideoTrack, VideoAdapter.Hol
             }catch(Exception ignored){}
             Bitmap result=bitmap;
             target.post(()->{ if(result!=null) target.setImageBitmap(result); });
-        },"nexauren-video-thumb").start();
+        });
     }
 
     private static int dp(ViewGroup p,int v){return(int)(v*p.getResources().getDisplayMetrics().density+.5f);}
