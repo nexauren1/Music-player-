@@ -129,6 +129,23 @@ public final class MainActivity extends AppCompatActivity {
     private long lastArtworkId = -1L;
     private boolean effectsEnabled = true;
     private boolean playbackStateRestored = false;
+    private String pendingSearchQuery = "";
+    private final Runnable searchFilterRunnable = () -> {
+        final String query = pendingSearchQuery;
+        queryExecutor.execute(() -> {
+            final String normalized = query.trim().toLowerCase(Locale.getDefault());
+            ArrayList<Track> result = new ArrayList<>();
+            for (Track t : tracks) {
+                if (normalized.isEmpty() || t.title.toLowerCase(Locale.getDefault()).contains(normalized)
+                        || t.artist.toLowerCase(Locale.getDefault()).contains(normalized)
+                        || t.album.toLowerCase(Locale.getDefault()).contains(normalized)) result.add(t);
+            }
+            runOnUiThread(() -> {
+                if (!query.equals(pendingSearchQuery)) return;
+                visibleTracks.clear(); visibleTracks.addAll(result); renderLibraryList();
+            });
+        });
+    };
     private String reverbPreset = "Sinal seco";
     private int reverbMix = 0;
     private ObjectAnimator miniSpin;
@@ -337,7 +354,7 @@ public final class MainActivity extends AppCompatActivity {
 
             searchField.addTextChangedListener(new TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int st, int count, int after) {}
-                @Override public void onTextChanged(CharSequence s, int st, int before, int count) { filterLibrary(s.toString()); }
+                @Override public void onTextChanged(CharSequence s, int st, int before, int count) { scheduleFilter(s.toString()); }
                 @Override public void afterTextChanged(Editable e) {}
             });
             searchField.requestFocus();
@@ -465,15 +482,12 @@ public final class MainActivity extends AppCompatActivity {
         if (controller.isPlaying()) controller.pause(); else controller.play();
     }
 
-    private void filterLibrary(String q) {
-        String query = q.trim().toLowerCase(Locale.getDefault());
-        visibleTracks.clear();
-        for (Track t : tracks) {
-            if (query.isEmpty() || t.title.toLowerCase(Locale.getDefault()).contains(query) ||
-                    t.artist.toLowerCase(Locale.getDefault()).contains(query) ||
-                    t.album.toLowerCase(Locale.getDefault()).contains(query)) visibleTracks.add(t);
-        }
-        renderLibraryList();
+    private void filterLibrary(String q) { scheduleFilter(q); }
+
+    private void scheduleFilter(String q) {
+        pendingSearchQuery = q == null ? "" : q;
+        handler.removeCallbacks(searchFilterRunnable);
+        handler.postDelayed(searchFilterRunnable, 120);
     }
 
     private void renderLibrary() {
@@ -511,8 +525,19 @@ public final class MainActivity extends AppCompatActivity {
 
     private void ensureQueueAhead(){
         if(controller==null||!controller.isConnected()||tracks.isEmpty())return;
+        if(controller.getShuffleModeEnabled()||controller.getRepeatMode()!=Player.REPEAT_MODE_OFF)return;
         int index=controller.getCurrentMediaItemIndex();
-        if(index<0||controller.getMediaItemCount()-index>80)return;
+        if(index<0)return;
+
+        // Discard already-played items so a 50,000-song library never becomes a 50,000-item player queue.
+        if(index>300 && controller.getMediaItemCount()>720){
+            int remove=Math.min(300,index-1);
+            controller.removeMediaItems(0,remove);
+            queueWindowStart+=remove;
+            index-=remove;
+        }
+        if(controller.getMediaItemCount()-index>100)return;
+
         int nextStart=queueWindowStart+controller.getMediaItemCount();
         if(nextStart>=tracks.size())return;
         int end=Math.min(tracks.size(),nextStart+PLAYLIST_WINDOW);
@@ -909,7 +934,7 @@ public final class MainActivity extends AppCompatActivity {
             ArrayList<Track> found=new ArrayList<>();
             java.util.Map<String,?> overrides=getSharedPreferences("nexauren_tags",MODE_PRIVATE).getAll();
             String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION};
-            String selection=MediaStore.Audio.Media.IS_MUSIC+" != 0 AND "+MediaStore.Audio.Media.DURATION+" > 0";
+            String selection=MediaStore.Audio.Media.MIME_TYPE+" LIKE 'audio/%' AND "+MediaStore.Audio.Media.DURATION+" > 0";
             try(Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,selection,null,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC")){
                 if(c!=null){
                     int idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
