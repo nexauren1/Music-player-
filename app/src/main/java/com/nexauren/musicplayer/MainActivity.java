@@ -16,6 +16,7 @@ import android.media.RingtoneManager;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.LruCache;
 import android.os.Handler;
 import android.provider.MediaStore;
 import android.text.Editable;
@@ -81,6 +82,12 @@ public final class MainActivity extends AppCompatActivity {
     private final List<Track> tracks = new ArrayList<>();
     private final List<Track> visibleTracks = new ArrayList<>();
     private final ExecutorService queryExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService artworkExecutor = Executors.newFixedThreadPool(3);
+    private final LruCache<Long, Bitmap> artworkCache = new LruCache<Long, Bitmap>(6144) {
+        @Override protected int sizeOf(Long key, Bitmap value) { return value.getByteCount() / 1024; }
+    };
+    private static final int PLAYLIST_WINDOW = 600;
+    private int queueWindowStart = 0;
     private final Handler handler = new Handler();
 
     private FrameLayout root;
@@ -146,7 +153,11 @@ public final class MainActivity extends AppCompatActivity {
 
     private final Player.Listener playerListener = new Player.Listener() {
         @Override public void onIsPlayingChanged(boolean isPlaying) { updatePlaybackUi(); }
-        @Override public void onMediaItemTransition(MediaItem item, int reason) { markCurrentRecent(); updatePlaybackUi(); }
+        @Override public void onMediaItemTransition(MediaItem item, int reason) {
+            markCurrentRecent();
+            ensureQueueAhead();
+            updatePlaybackUi();
+        }
         @Override public void onPlaybackStateChanged(int state) { updatePlaybackUi(); }
     };
 
@@ -477,24 +488,36 @@ public final class MainActivity extends AppCompatActivity {
         countText.setText(copy.size() + (copy.size() == 1 ? " faixa" : " faixas"));
     }
 
-    private void playTrack(Track selected) {
-        if (controller == null || !controller.isConnected() || tracks.isEmpty()) return;
-        ArrayList<MediaItem> items = new ArrayList<>(tracks.size());
-        int selectedIndex = 0;
-        for (int i = 0; i < tracks.size(); i++) {
-            Track t = tracks.get(i);
-            if (t.id == selected.id) selectedIndex = i;
-            MediaMetadata metadata = new MediaMetadata.Builder()
-                    .setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album).build();
-            items.add(new MediaItem.Builder().setMediaId(String.valueOf(t.id)).setUri(t.uri).setMediaMetadata(metadata).build());
-        }
-        controller.setMediaItems(items, selectedIndex, 0);
-        controller.setShuffleModeEnabled(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getBoolean("shuffle", false));
-        controller.setRepeatMode(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getInt("repeat_mode", Player.REPEAT_MODE_OFF));
-        controller.setPlaybackSpeed(getSharedPreferences("nexauren_playback_state", MODE_PRIVATE).getFloat("speed", 1f));
-        controller.prepare();
-        controller.play();
-        savePlaybackState();
+    private void playTrack(Track selected){
+        if(controller==null||!controller.isConnected()||tracks.isEmpty())return;
+        int selectedIndex=0;
+        for(int i=0;i<tracks.size();i++)if(tracks.get(i).id==selected.id){selectedIndex=i;break;}
+        queueWindowStart=Math.max(0,Math.min(selectedIndex,Math.max(0,tracks.size()-PLAYLIST_WINDOW)));
+        int end=Math.min(tracks.size(),queueWindowStart+PLAYLIST_WINDOW);
+        ArrayList<MediaItem> items=new ArrayList<>(end-queueWindowStart);
+        for(int i=queueWindowStart;i<end;i++)items.add(mediaItem(tracks.get(i)));
+        controller.setMediaItems(items,selectedIndex-queueWindowStart,0);
+        controller.setShuffleModeEnabled(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getBoolean("shuffle",false));
+        controller.setRepeatMode(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getInt("repeat_mode",Player.REPEAT_MODE_OFF));
+        controller.setPlaybackSpeed(getSharedPreferences("nexauren_playback_state",MODE_PRIVATE).getFloat("speed",1f));
+        controller.prepare();controller.play();savePlaybackState();
+    }
+
+    private MediaItem mediaItem(Track t){
+        MediaMetadata metadata=new MediaMetadata.Builder().setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album).build();
+        return new MediaItem.Builder().setMediaId(String.valueOf(t.id)).setUri(t.uri).setMediaMetadata(metadata).build();
+    }
+
+    private void ensureQueueAhead(){
+        if(controller==null||!controller.isConnected()||tracks.isEmpty())return;
+        int index=controller.getCurrentMediaItemIndex();
+        if(index<0||controller.getMediaItemCount()-index>80)return;
+        int nextStart=queueWindowStart+controller.getMediaItemCount();
+        if(nextStart>=tracks.size())return;
+        int end=Math.min(tracks.size(),nextStart+PLAYLIST_WINDOW);
+        ArrayList<MediaItem> next=new ArrayList<>(end-nextStart);
+        for(int i=nextStart;i<end;i++)next.add(mediaItem(tracks.get(i)));
+        if(!next.isEmpty())controller.addMediaItems(next);
     }
 
     private void savePlaybackState() {
@@ -514,38 +537,25 @@ public final class MainActivity extends AppCompatActivity {
                 controller.getRepeatMode(), controller.getShuffleModeEnabled(), speed, pitch, volume);
     }
 
-    private void maybeRestorePlaybackState() {
-        if (playbackStateRestored || controller == null || !controller.isConnected() || tracks.isEmpty()) return;
-        List<Long> savedIds = PlaybackStateStore.queue(this);
-        long currentId = PlaybackStateStore.currentId(this);
-        if (savedIds.isEmpty() || currentId < 0) {
-            playbackStateRestored = true;
-            return;
-        }
-
-        ArrayList<MediaItem> items = new ArrayList<>();
-        int currentIndex = 0;
-        for (Long id : savedIds) {
-            Track match = null;
-            for (Track track : tracks) if (track.id == id) { match = track; break; }
-            if (match == null) continue;
-            MediaMetadata metadata = new MediaMetadata.Builder()
-                    .setTitle(match.title).setArtist(match.artist).setAlbumTitle(match.album).build();
-            items.add(new MediaItem.Builder().setMediaId(String.valueOf(match.id))
-                    .setUri(match.uri).setMediaMetadata(metadata).build());
-            if (match.id == currentId) currentIndex = items.size() - 1;
-        }
-
-        if (items.isEmpty()) { playbackStateRestored = true; return; }
-
-        controller.setMediaItems(items, currentIndex, PlaybackStateStore.positionMs(this));
+    private void maybeRestorePlaybackState(){
+        if(playbackStateRestored||controller==null||!controller.isConnected()||tracks.isEmpty())return;
+        List<Long> savedIds=PlaybackStateStore.queue(this);
+        long currentId=PlaybackStateStore.currentId(this);
+        if(savedIds.isEmpty()||currentId<0){playbackStateRestored=true;return;}
+        java.util.HashMap<Long,Track> byId=new java.util.HashMap<>(tracks.size()*2);
+        for(Track t:tracks)byId.put(t.id,t);
+        int savedIndex=savedIds.indexOf(currentId);
+        if(savedIndex<0){playbackStateRestored=true;return;}
+        int from=Math.max(0,savedIndex-120),to=Math.min(savedIds.size(),from+PLAYLIST_WINDOW);
+        ArrayList<MediaItem> items=new ArrayList<>(to-from);int currentIndex=0;
+        for(int i=from;i<to;i++){Track t=byId.get(savedIds.get(i));if(t==null)continue;if(savedIds.get(i)==currentId)currentIndex=items.size();items.add(mediaItem(t));}
+        if(items.isEmpty()){playbackStateRestored=true;return;}
+        queueWindowStart=Math.max(0,savedIndex-120);
+        controller.setMediaItems(items,currentIndex,PlaybackStateStore.positionMs(this));
         controller.setRepeatMode(PlaybackStateStore.repeatMode(this));
         controller.setShuffleModeEnabled(PlaybackStateStore.shuffle(this));
-        controller.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(
-                PlaybackStateStore.speed(this), PlaybackStateStore.pitch(this)));
-        controller.setVolume(PlaybackStateStore.volume(this));
-        controller.prepare();
-        playbackStateRestored = true;
+        controller.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(PlaybackStateStore.speed(this),PlaybackStateStore.pitch(this)));
+        controller.setVolume(PlaybackStateStore.volume(this));controller.prepare();playbackStateRestored=true;
     }
 
     private void markCurrentRecent() {
@@ -843,34 +853,24 @@ public final class MainActivity extends AppCompatActivity {
         loadArtwork(uri,target,guessedId);
     }
 
-    private void loadArtwork(final Uri uri, final ImageView target, final long trackId) {
-        queryExecutor.execute(() -> {
-            Bitmap bitmap = null;
-            if (trackId >= 0 && ArtworkStore.exists(this, trackId)) {
-                bitmap = BitmapFactory.decodeFile(ArtworkStore.file(this, trackId).getAbsolutePath());
+    private void loadArtwork(final Uri uri, final ImageView target, final long trackId){
+        target.setTag(trackId);
+        Bitmap cached=trackId>=0?artworkCache.get(trackId):null;
+        if(cached!=null){target.clearColorFilter();target.setImageBitmap(cached);return;}
+        target.setImageResource(R.drawable.music_placeholder);
+        artworkExecutor.execute(() -> {
+            Bitmap bitmap=null;
+            if(trackId>=0&&ArtworkStore.exists(this,trackId))bitmap=BitmapFactory.decodeFile(ArtworkStore.file(this,trackId).getAbsolutePath());
+            if(bitmap==null){
+                MediaMetadataRetriever retriever=new MediaMetadataRetriever();
+                try{retriever.setDataSource(this,uri);byte[]data=retriever.getEmbeddedPicture();if(data!=null){BitmapFactory.Options o=new BitmapFactory.Options();o.inSampleSize=4;bitmap=BitmapFactory.decodeByteArray(data,0,data.length,o);}}
+                catch(Exception ignored){}finally{try{retriever.release();}catch(Exception ignored){}}
             }
-            if (bitmap == null) {
-                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-                try {
-                    retriever.setDataSource(this, uri);
-                    byte[] data = retriever.getEmbeddedPicture();
-                    if (data != null) {
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inSampleSize = 4;
-                        bitmap = BitmapFactory.decodeByteArray(data, 0, data.length, options);
-                    }
-                } catch (Exception ignored) {
-                } finally {
-                    try { retriever.release(); } catch (Exception ignored) {}
-                }
+            if(bitmap!=null){
+                if(trackId>=0)artworkCache.put(trackId,bitmap);
+                Bitmap result=bitmap;
+                target.post(()->{Object tag=target.getTag();if(tag instanceof Long&&((Long)tag)==trackId){target.clearColorFilter();target.setImageBitmap(result);}});
             }
-            Bitmap result = bitmap;
-            runOnUiThread(() -> {
-                if (result != null && target.getWindowToken() != null) {
-                    target.clearColorFilter();
-                    target.setImageBitmap(result);
-                }
-            });
         });
     }
 
@@ -903,53 +903,39 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void loadTracks() {
-        if (libraryContainer == null) return;
-        if (trackAdapter == null) return;
-
+        if(libraryContainer==null||trackAdapter==null)return;
         queryExecutor.execute(() -> {
-            ArrayList<Track> found = new ArrayList<>();
-            String[] projection = {
-                    MediaStore.Audio.Media._ID,
-                    MediaStore.Audio.Media.TITLE,
-                    MediaStore.Audio.Media.ARTIST,
-                    MediaStore.Audio.Media.ALBUM,
-                    MediaStore.Audio.Media.DURATION
-            };
-            String selection = MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " +
-                    MediaStore.Audio.Media.DURATION + " > 0";
-            try (Cursor c = getContentResolver().query(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    projection, selection, null,
-                    MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC")) {
-                if (c != null) {
-                    int idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
-                    int titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
-                    int artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
-                    int albumCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
-                    int durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
-                    while (c.moveToNext()) {
-                        long id = c.getLong(idCol);
-                        String title = clean(c.getString(titleCol), "Sem título");
-                        String artist = clean(c.getString(artistCol), "Artista desconhecido");
-                        String album = clean(c.getString(albumCol), "Álbum desconhecido");
-                        title = TagStore.get(MainActivity.this, id, "title", title);
-                        artist = TagStore.get(MainActivity.this, id, "artist", artist);
-                        album = TagStore.get(MainActivity.this, id, "album", album);
-                        long duration = c.getLong(durationCol);
-                        found.add(new Track(id, title, artist, album, duration,
-                                ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)));
+            ArrayList<Track> found=new ArrayList<>();
+            java.util.Map<String,?> overrides=getSharedPreferences("nexauren_tags",MODE_PRIVATE).getAll();
+            String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION};
+            String selection=MediaStore.Audio.Media.IS_MUSIC+" != 0 AND "+MediaStore.Audio.Media.DURATION+" > 0";
+            try(Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,selection,null,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC")){
+                if(c!=null){
+                    int idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+                    int titleCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+                    int artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                    int albumCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+                    int durationCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+                    while(c.moveToNext()){
+                        long id=c.getLong(idCol);
+                        String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
+                        String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
+                        String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
+                        found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id)));
                     }
                 }
-            } catch (SecurityException ignored) {}
-
+            }catch(SecurityException ignored){}
             runOnUiThread(() -> {
-                tracks.clear();
-                tracks.addAll(found);
-                renderLibrary();
-                countText.setText(found.size() + (found.size() == 1 ? " faixa" : " faixas"));
+                tracks.clear();tracks.addAll(found);renderLibrary();
+                countText.setText(found.size()+" "+(found.size()==1?"faixa":"faixas"));
                 maybeRestorePlaybackState();
             });
         });
+    }
+
+    private String override(java.util.Map<String,?> map,long id,String field,String fallback){
+        Object v=map.get(id+":"+field);
+        return v==null||String.valueOf(v).trim().isEmpty()?fallback:String.valueOf(v);
     }
 
     private void toggleTheme() {
@@ -1814,6 +1800,8 @@ public final class MainActivity extends AppCompatActivity {
         if (controller != null) controller.removeListener(playerListener);
         if (controllerFuture != null) MediaController.releaseFuture(controllerFuture);
         savePlaybackState();
+        queryExecutor.shutdownNow();
+        artworkExecutor.shutdownNow();
         if (miniSpin != null) miniSpin.cancel();
         super.onDestroy();
     }
