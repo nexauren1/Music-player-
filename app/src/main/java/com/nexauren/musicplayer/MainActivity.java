@@ -970,7 +970,7 @@ public final class MainActivity extends AppCompatActivity {
                             String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
                             String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
                             String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
-                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id));
+                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id)));
                             pageCount++;
                         }
                     }
