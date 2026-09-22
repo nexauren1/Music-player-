@@ -1116,7 +1116,7 @@ public final class MainActivity extends AppCompatActivity {
         stats.addView(statBox("Músicas",String.valueOf(tracks.size())),new LinearLayout.LayoutParams(0,dp(62),1));
         long total=0;for(Track t:tracks)total+=t.durationMs;
         stats.addView(statBox("Duração",formatDuration(total)),new LinearLayout.LayoutParams(0,dp(62),1));
-        stats.addView(statBox("Favoritos",String.valueOf(FavoritesStore.all(this).size())),new LinearLayout.LayoutParams(0,dp(62),1));
+        stats.addView(statBox("Favoritos",String.valueOf(FavoritesStore.get(this).size())),new LinearLayout.LayoutParams(0,dp(62),1));
         summary.addView(stats);
         body.addView(summary,new LinearLayout.LayoutParams(-1,dp(132)));addSpacer(body,8);
 
