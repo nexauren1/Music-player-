@@ -35,6 +35,10 @@ public final class VideoLibraryActivity extends AppCompatActivity {
     private TextView count;
     private EditText search;
     private int sortMode=0;
+    private String folderFilter="";
+    private GridLayoutManager gridManager;
+    private boolean compactGrid=false;
+    private LinearLayout folderChips;
 
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
@@ -63,6 +67,9 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         TextView folder=text("▰",23,Color.WHITE);folder.setGravity(Gravity.CENTER);
         bar.addView(folder,new LinearLayout.LayoutParams(dp(44),dp(58)));
         folder.setOnClickListener(v->showFolderSummary());
+        TextView layout=text("▦",23,Color.WHITE);layout.setGravity(Gravity.CENTER);
+        bar.addView(layout,new LinearLayout.LayoutParams(dp(44),dp(58)));
+        layout.setOnClickListener(v->toggleLayout(layout));
         TextView sort=text("⇅",25,Color.WHITE);sort.setGravity(Gravity.CENTER);
         bar.addView(sort,new LinearLayout.LayoutParams(dp(48),dp(58)));
         sort.setOnClickListener(v->cycleSort());
@@ -75,6 +82,14 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         search.setBackground(round(0xFF141B25,18));search.setPadding(dp(14),0,dp(14),0);
         searchWrap.addView(search,new LinearLayout.LayoutParams(-1,dp(46)));
         root.addView(searchWrap);
+
+        HorizontalScrollView foldersScroll=new HorizontalScrollView(this);
+        foldersScroll.setHorizontalScrollBarEnabled(false);
+        folderChips=new LinearLayout(this);
+        folderChips.setPadding(dp(8),dp(2),dp(8),dp(5));
+        foldersScroll.addView(folderChips,new ViewGroup.LayoutParams(-2,dp(42)));
+        root.addView(foldersScroll,new LinearLayout.LayoutParams(-1,dp(45)));
+
         search.addTextChangedListener(new TextWatcher(){
             public void beforeTextChanged(CharSequence s,int st,int c,int a){}
             public void onTextChanged(CharSequence s,int st,int b,int c){renderFiltered();}
@@ -83,8 +98,8 @@ public final class VideoLibraryActivity extends AppCompatActivity {
 
         recycler=new RecyclerView(this);
         int columns = getResources().getConfiguration().screenWidthDp >= 720 ? 3 : 2;
-        GridLayoutManager grid = new GridLayoutManager(this, columns);
-        recycler.setLayoutManager(grid);
+        gridManager = new GridLayoutManager(this, columns);
+        recycler.setLayoutManager(gridManager);
         recycler.setHasFixedSize(true);
         recycler.setItemViewCacheSize(12);
         recycler.setItemAnimator(null);
@@ -95,6 +110,45 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         recycler.setClipToPadding(false);
         root.addView(recycler,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
+    }
+
+    private void rebuildFolderChips() {
+        if(folderChips==null)return;
+        folderChips.removeAllViews();
+        java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<>();
+        for(VideoTrack v:allVideos)counts.put(v.folder,counts.getOrDefault(v.folder,0)+1);
+
+        TextView all=chip("Todos",folderFilter.isEmpty());
+        folderChips.addView(all,new LinearLayout.LayoutParams(dp(78),dp(36)));
+        all.setOnClickListener(v->{folderFilter="";renderFiltered();});
+
+        int shown=0;
+        for(String name:counts.keySet()){
+            if(shown++>=18)break;
+            TextView chip=chip(name,folderFilter.equals(name));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(120),dp(36));
+            lp.setMargins(dp(4),0,dp(4),0);
+            folderChips.addView(chip,lp);
+            chip.setOnClickListener(v->{folderFilter=name;renderFiltered();});
+        }
+    }
+
+    private TextView chip(String label,boolean selected){
+        TextView t=text(label,11,selected?Color.WHITE:0xFFD2D8DF);
+        t.setGravity(Gravity.CENTER);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setBackground(round(selected?Color.rgb(33,150,243):0xFF141B25,18));
+        t.setPadding(dp(8),0,dp(8),0);
+        return t;
+    }
+
+    private void toggleLayout(TextView button){
+        compactGrid=!compactGrid;
+        int width=getResources().getConfiguration().screenWidthDp;
+        int columns=compactGrid?(width>=720?4:3):(width>=720?3:2);
+        gridManager.setSpanCount(columns);
+        button.setText(compactGrid?"▤":"▦");
     }
 
     private void showFolderSummary() {
@@ -174,13 +228,15 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         String q=search==null?"":search.getText().toString().trim().toLowerCase(Locale.getDefault());
         ArrayList<VideoTrack> list=new ArrayList<>();
         for(VideoTrack v:allVideos){
-            if(q.isEmpty()||v.title.toLowerCase(Locale.getDefault()).contains(q)||v.folder.toLowerCase(Locale.getDefault()).contains(q))list.add(v);
+            if((q.isEmpty()||v.title.toLowerCase(Locale.getDefault()).contains(q)||v.folder.toLowerCase(Locale.getDefault()).contains(q))
+                    && (folderFilter.isEmpty()||folderFilter.equals(v.folder))) list.add(v);
         }
         if(sortMode==1)list.sort(Comparator.comparing(v->v.title.toLowerCase(Locale.getDefault())));
         else if(sortMode==2)list.sort((a,b)->Long.compare(b.durationMs,a.durationMs));
         else list.sort((a,b)->Long.compare(b.dateAdded,a.dateAdded));
         adapter.submitList(list);
         count.setText(list.size()+" "+(list.size()==1?"vídeo":"vídeos"));
+        rebuildFolderChips();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grants){
