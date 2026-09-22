@@ -705,13 +705,19 @@ public final class MainActivity extends AppCompatActivity {
         root.removeAllViews();
         LinearLayout shell=basePage(title);
         LinearLayout body=pageBody(shell);
-        ScrollView scroll=new ScrollView(this);
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(box,new ScrollView.LayoutParams(-1,-2));
-        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        if(list.isEmpty()){
-            TextView empty=text("Ainda não há faixas nesta coleção.",16,textSecondary());empty.setGravity(Gravity.CENTER);box.addView(empty,new LinearLayout.LayoutParams(-1,dp(120)));
-        } else for(int i=0;i<list.size();i++)addCollectionRow(box,list.get(i),i);
+        RecyclerView recycler=new RecyclerView(this);
+        recycler.setLayoutManager(new LinearLayoutManager(this));
+        recycler.setHasFixedSize(true);
+        recycler.setItemViewCacheSize(12);
+        TrackAdapter adapter=new TrackAdapter(new TrackAdapter.Listener(){
+            @Override public void onTrackClick(Track track){playTrack(track);}
+            @Override public void onTrackMenu(View anchor,Track track){showTrackMenu(anchor,track);}
+            @Override public void onTrackBound(Track track,ImageView target){loadArtwork(track.uri,target,track.id);}
+        },textPrimary(),textSecondary(),surface());
+        recycler.setAdapter(adapter);
+        recycler.setPadding(0,dp(3),0,dp(12));recycler.setClipToPadding(false);
+        body.addView(recycler,new LinearLayout.LayoutParams(-1,0,1));
+        adapter.submitList(new ArrayList<>(list));
     }
 
     private void addCollectionRow(LinearLayout box,Track t,int index){
@@ -1182,6 +1188,50 @@ public final class MainActivity extends AppCompatActivity {
     private void showSmartLongTracks(){ArrayList<Track> list=new ArrayList<>();for(Track t:tracks)if(t.durationMs>=8*60*1000L)list.add(t);showTrackCollection("Faixas longas",list);}
     private void showSmartRandom(){ArrayList<Track> list=new ArrayList<>(tracks);java.util.Collections.shuffle(list);if(list.size()>100)list=new ArrayList<>(list.subList(0,100));showTrackCollection("Descobrir",list);}
     private ArrayList<Track> tracksForIds(List<Long> ids){java.util.HashMap<Long,Track> map=new java.util.HashMap<>();for(Track t:tracks)map.put(t.id,t);ArrayList<Track> out=new ArrayList<>();for(Long id:ids){Track t=map.get(id);if(t!=null)out.add(t);}return out;}
+
+    private void showSmartLibrary() {
+        currentPage=0; searchMode=false; root.removeAllViews();
+        LinearLayout shell=basePage("Biblioteca inteligente");
+        LinearLayout body=pageBody(shell);
+        String[] names={"Mais tocadas","Nunca tocadas","Faixas longas","Faixas curtas","Duplicados"};
+        String[] subs={
+                "As músicas que mais reproduzimos",
+                "Faixas que ainda não foram reproduzidas",
+                "Mais de 10 minutos",
+                "Menos de 3 minutos",
+                "Possíveis cópias com mesmo título, artista e duração"
+        };
+        for(int i=0;i<names.length;i++){
+            final int index=i;
+            LinearLayout card=roundedPanel(surface(),dp(16));
+            card.setPadding(dp(14),dp(10),dp(12),dp(10));
+            TextView n=text("✦  "+names[i],16,textPrimary());n.setTypeface(null,1);
+            TextView s=text(subs[i],11,textSecondary());
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.addView(n,new LinearLayout.LayoutParams(-1,dp(28)));
+            card.addView(s,new LinearLayout.LayoutParams(-1,dp(25)));
+            card.setOnClickListener(v->{
+                if(index==0)showTrackCollection("Mais tocadas",tracksFromIds(PlayStatsStore.top(this,500)));
+                else if(index==1){
+                    ArrayList<Track> out=new ArrayList<>();
+                    for(Track t:tracks)if(PlayStatsStore.count(this,t.id)==0)out.add(t);
+                    showTrackCollection("Nunca tocadas",out);
+                } else if(index==2){
+                    ArrayList<Track> out=new ArrayList<>();
+                    for(Track t:tracks)if(t.durationMs>=10*60*1000L)out.add(t);
+                    showTrackCollection("Faixas longas",out);
+                } else if(index==3){
+                    ArrayList<Track> out=new ArrayList<>();
+                    for(Track t:tracks)if(t.durationMs>0&&t.durationMs<3*60*1000L)out.add(t);
+                    showTrackCollection("Faixas curtas",out);
+                } else showDuplicates();
+            });
+            body.addView(card,new LinearLayout.LayoutParams(-1,dp(64)));addSpacer(body,7);
+        }
+        TextView note=text("O Nexauren usa o histórico local de reprodução para criar estas coleções sem enviar a biblioteca para a internet.",11,textSecondary());
+        note.setPadding(dp(4),dp(12),dp(4),0);
+        body.addView(note,new LinearLayout.LayoutParams(-1,dp(70)));
+    }
 
     private void showAlbums() {
         currentPage=0; searchMode=false; root.removeAllViews();
