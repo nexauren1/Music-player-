@@ -59,6 +59,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cat > release-notes.md <<'EOF'
+Nexauren Music Player 1.1.1
+
+• Mini-player compacto e premium com menu próprio
+• Player completo com aleatório, repetir, A-B, fila e ferramentas
+• Biblioteca organizada por músicas, álbuns, artistas, pastas, favoritos e recentes
+• Estado da reprodução e equalizador persistentes
+• Verificação automática de atualizações, download dentro do app e instalação pelo Android
+• Ecrã de novidades após atualização
+• Nova biblioteca de vídeos com reprodução em tela cheia e miniaturas
+EOF
           if gh release view v1.1.1 >/dev/null 2>&1; then
             gh release delete v1.1.1 --yes --cleanup-tag
           fi
@@ -67,15 +78,7 @@ jobs:
             app/build/outputs/bundle/release/app-release.aab \
             --target "${GITHUB_SHA}" \
             --title "Nexauren Music Player v1.1.1" \
-            --notes "Nexauren Music Player 1.1.1
-
-• Mini-player compacto e premium com menu próprio
-• Player completo com aleatório, repetir, A-B, fila e ferramentas
-• Biblioteca organizada por músicas, álbuns, artistas, pastas, favoritos e recentes
-• Estado da reprodução e equalizador persistentes
-• Verificação automática de atualizações, download dentro do app e instalação pelo Android
-• Ecrã de novidades após atualização
-• Nova biblioteca de vídeos com reprodução em tela cheia e miniaturas"
+            --notes-file release-notes.md
 
       - name: Remove signing material
         if: always()
