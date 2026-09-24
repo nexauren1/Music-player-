@@ -741,10 +741,78 @@ public final class MainActivity extends AppCompatActivity {
         root.removeAllViews();
         LinearLayout shell=basePage("Fila de reprodução");
         LinearLayout body=pageBody(shell);
-        ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);scroll.addView(box,new ScrollView.LayoutParams(-1,-2));
-        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        if(controller==null||controller.getMediaItemCount()==0){TextView e=text("A fila está vazia.",16,textSecondary());e.setGravity(Gravity.CENTER);box.addView(e,new LinearLayout.LayoutParams(-1,dp(120)));return;}
-        for(int i=0;i<controller.getMediaItemCount();i++){MediaItem m=controller.getMediaItemAt(i);String t=m.mediaMetadata.title==null?"Faixa":m.mediaMetadata.title.toString();String a=m.mediaMetadata.artist==null?"":m.mediaMetadata.artist.toString();box.addView(labels((i+1)+". "+t,a),new LinearLayout.LayoutParams(-1,dp(58)));} 
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        TextView info=text("Toque numa faixa para reproduzir.",12,textSecondary());
+        actions.addView(info,new LinearLayout.LayoutParams(0,dp(48),1));
+        TextView clear=actionButton("LIMPAR FILA");
+        actions.addView(clear,new LinearLayout.LayoutParams(dp(116),dp(44)));
+        clear.setOnClickListener(v->{
+            if(controller!=null&&controller.isConnected()) {
+                controller.clearMediaItems();
+                savePlaybackState();
+                showQueue();
+            }
+        });
+        body.addView(actions,new LinearLayout.LayoutParams(-1,dp(54)));
+
+        RecyclerView recycler=new RecyclerView(this);
+        recycler.setLayoutManager(new LinearLayoutManager(this));
+        recycler.setHasFixedSize(true);
+        recycler.setItemAnimator(null);
+        body.addView(recycler,new LinearLayout.LayoutParams(-1,0,1));
+
+        if(controller==null||controller.getMediaItemCount()==0){
+            TextView e=text("A fila está vazia.",16,textSecondary());e.setGravity(Gravity.CENTER);
+            body.addView(e,new LinearLayout.LayoutParams(-1,0,1));
+            return;
+        }
+
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        for(int i=0;i<controller.getMediaItemCount();i++){
+            final int index=i;
+            MediaItem m=controller.getMediaItemAt(i);
+            String t=m.mediaMetadata.title==null?"Faixa":m.mediaMetadata.title.toString();
+            String a=m.mediaMetadata.artist==null?"":m.mediaMetadata.artist.toString();
+
+            LinearLayout row=rowBase();
+            TextView number=text(String.valueOf(i+1),12,textSecondary());
+            number.setGravity(Gravity.CENTER);
+            row.addView(number,new LinearLayout.LayoutParams(dp(36),dp(64)));
+            LinearLayout labels=labels(t,a);
+            row.addView(labels,new LinearLayout.LayoutParams(0,dp(64),1));
+            TextView remove=text("×",24,textSecondary());
+            remove.setGravity(Gravity.CENTER);
+            row.addView(remove,new LinearLayout.LayoutParams(dp(46),dp(64)));
+
+            row.setOnClickListener(v->{
+                if(controller!=null&&controller.isConnected()) {
+                    controller.seekToDefaultPosition(index);
+                    controller.play();
+                }
+            });
+            remove.setOnClickListener(v->{
+                if(controller!=null&&controller.isConnected()) {
+                    controller.removeMediaItem(index);
+                    savePlaybackState();
+                    showQueue();
+                }
+            });
+            list.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
+        }
+        recycler.setAdapter(new RecyclerView.Adapter<QueueHolder>() {
+            @NonNull @Override public QueueHolder onCreateViewHolder(@NonNull ViewGroup parent,int viewType) {
+                return new QueueHolder(list);
+            }
+            @Override public void onBindViewHolder(@NonNull QueueHolder holder,int position) {}
+            @Override public int getItemCount() { return list.getChildCount(); }
+        });
+    }
+
+    private static final class QueueHolder extends RecyclerView.ViewHolder {
+        QueueHolder(View item) { super(item); }
     }
 
     private void showSortDialog() {
@@ -975,49 +1043,72 @@ public final class MainActivity extends AppCompatActivity {
         queryExecutor.execute(() -> {
             ArrayList<Track> found=new ArrayList<>();
             java.util.Map<String,?> overrides=getSharedPreferences("nexauren_tags",MODE_PRIVATE).getAll();
-            String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_ADDED};
-            String selection=MediaStore.Audio.Media.MIME_TYPE+" LIKE 'audio/%' AND "+MediaStore.Audio.Media.DURATION+" > 0";
+            String[] projection={MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_ADDED,
+                    MediaStore.Audio.Media.MIME_TYPE,MediaStore.Audio.Media.IS_MUSIC};
+            String selection=MediaStore.Audio.Media.DURATION+" > 0 AND (" +
+                    MediaStore.Audio.Media.MIME_TYPE + " LIKE 'audio/%' OR " +
+                    MediaStore.Audio.Media.IS_MUSIC + " != 0)";
             final int pageSize=2000;
             int offset=0;
+            boolean complete=true;
             try {
                 while(true){
                     android.os.Bundle args=new android.os.Bundle();
                     args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION,selection);
-                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER,MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC");
+                    args.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
+                            MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC");
                     args.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT,pageSize);
                     args.putInt(android.content.ContentResolver.QUERY_ARG_OFFSET,offset);
+
                     int pageCount=0;
-                    try(android.database.Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,args,null)){
-                        if(c==null)break;
-                        int idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
-                        int titleCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
-                        int artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
-                        int albumCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
-                        int durationCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
-                        int dateAddedCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED);
-                        while(c.moveToNext()){
-                            long id=c.getLong(idCol);
-                            String title=override(overrides,id,"title",clean(c.getString(titleCol),"Sem título"));
-                            String artist=override(overrides,id,"artist",clean(c.getString(artistCol),"Artista desconhecido"));
-                            String album=override(overrides,id,"album",clean(c.getString(albumCol),"Álbum desconhecido"));
-                            found.add(new Track(id,title,artist,album,c.getLong(durationCol),
+                    boolean providerReturnedUnboundedCursor=false;
+                    try(android.database.Cursor cursor=getContentResolver().query(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,args,null)){
+                        if(cursor==null) { complete=false; break; }
+                        int total=cursor.getCount();
+                        providerReturnedUnboundedCursor=total>pageSize;
+                        int idCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+                        int titleCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+                        int artistCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                        int albumCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+                        int durationCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+                        int dateAddedCol=cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED);
+
+                        while(cursor.moveToNext()){
+                            long id=cursor.getLong(idCol);
+                            String title=override(overrides,id,"title",clean(cursor.getString(titleCol),"Sem título"));
+                            String artist=override(overrides,id,"artist",clean(cursor.getString(artistCol),"Artista desconhecido"));
+                            String album=override(overrides,id,"album",clean(cursor.getString(albumCol),"Álbum desconhecido"));
+                            found.add(new Track(id,title,artist,album,cursor.getLong(durationCol),
                                     ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,id),
-                                    c.getLong(dateAddedCol)));
+                                    cursor.getLong(dateAddedCol)));
                             pageCount++;
                         }
                     }
                     if(pageCount==0)break;
                     offset+=pageCount;
-                    if(found.size()%10000<pageCount){
-                        final int loaded=found.size();
-                        runOnUiThread(()->countText.setText("A indexar "+loaded+" faixas…"));
+                    final int loaded=found.size();
+                    if(loaded==pageCount || loaded%5000<pageCount){
+                        runOnUiThread(()->{ if(countText!=null) countText.setText("A indexar "+loaded+" faixas…"); });
                     }
-                    if(pageCount<pageSize)break;
+                    if(pageCount<pageSize || providerReturnedUnboundedCursor)break;
                 }
-            }catch(SecurityException ignored){}catch(Exception ignored){}
+            }catch(SecurityException error){
+                complete=false;
+            }catch(Exception error){
+                complete=false;
+            }
+
+            final boolean finished=complete;
             runOnUiThread(() -> {
                 tracks.clear();tracks.addAll(found);renderLibrary();
-                countText.setText(found.size()+" "+(found.size()==1?"faixa":"faixas"));
+                if(finished){
+                    countText.setText(found.size()+" "+(found.size()==1?"faixa":"faixas"));
+                }else{
+                    countText.setText(found.size()+" faixas • leitura parcial");
+                    Toast.makeText(this,"A biblioteca foi lida parcialmente. Atualize para tentar novamente.",Toast.LENGTH_LONG).show();
+                }
                 maybeRestorePlaybackState();
             });
         });
@@ -1997,10 +2088,10 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(ticker);
-        queryExecutor.shutdownNow();
+        savePlaybackState();
         if (controller != null) controller.removeListener(playerListener);
         if (controllerFuture != null) MediaController.releaseFuture(controllerFuture);
-        savePlaybackState();
+        queryExecutor.shutdownNow();
         artworkExecutor.shutdownNow();
         if (mediaObserver != null) {
             try { getContentResolver().unregisterContentObserver(mediaObserver); } catch (Throwable ignored) {}
