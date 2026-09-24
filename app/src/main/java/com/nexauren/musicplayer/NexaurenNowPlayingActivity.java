@@ -240,8 +240,8 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
     private void rebuildQueue() {
         if (content == null) return;
 
-        while (content.getChildCount() > 7) {
-            content.removeViewAt(7);
+        while (content.getChildCount() > 8) {
+            content.removeViewAt(8);
         }
 
         if (controller == null || !controller.isConnected() || controller.getMediaItemCount() == 0) {
