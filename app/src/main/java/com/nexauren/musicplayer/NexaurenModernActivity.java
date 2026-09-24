@@ -433,8 +433,17 @@ public final class NexaurenModernActivity extends AppCompatActivity {
 
     private void updateMini(){
         if(controller==null||!controller.isConnected())return;
-        CharSequence t=controller.getMediaMetadata().title;CharSequence a=controller.getMediaMetadata().artist;
-        miniTitle.setText(t==null||t.length()==0?"Nenhuma música":t);miniArtist.setText(a==null||a.length()==0?"Escolha uma faixa":a);miniPlay.setText(controller.isPlaying()?"Ⅱ":"▶");
+        CharSequence t=controller.getMediaMetadata().title;
+        CharSequence a=controller.getMediaMetadata().artist;
+        miniTitle.setText(t==null||t.length()==0?"Nenhuma música":t);
+        miniArtist.setText(a==null||a.length()==0?"Escolha uma faixa":a);
+        miniPlay.setText(controller.isPlaying()?"Ⅱ":"▶");
+        try {
+            MediaItem current = controller.getCurrentMediaItem();
+            if (current != null && current.localConfiguration != null) {
+                loadMiniArtwork(current.localConfiguration.uri);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void connectController(){
