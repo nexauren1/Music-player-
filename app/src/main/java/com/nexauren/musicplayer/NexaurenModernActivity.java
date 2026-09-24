@@ -5,7 +5,7 @@ import android.content.ContentUris;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.graphics.Color;
+import android.graphics.Color;\nimport android.graphics.Bitmap;\nimport android.graphics.BitmapFactory;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -134,8 +134,14 @@ public final class NexaurenModernActivity extends AppCompatActivity {
 
     private void showSongList(String heading) {
         buildPage(heading);
-        addSectionHeader(heading, songs.size() + " músicas", null);
-        addSongList(Math.max(1, songs.size()));
+        ArrayList<Song> source = new ArrayList<>(songs);
+        if ("Mais tocadas".equalsIgnoreCase(heading)) {
+            source.sort((a, b) -> Integer.compare(
+                    PlayStatsStore.count(this, b.id),
+                    PlayStatsStore.count(this, a.id)));
+        }
+        addSectionHeader(heading, source.size() + " músicas", null);
+        addSongListFrom(source);
     }
 
     private void showFavorites() {
@@ -450,9 +456,43 @@ public final class NexaurenModernActivity extends AppCompatActivity {
     }
 
     private void play(Song song){
-        if(controller==null||!controller.isConnected()){Toast.makeText(this,"Player ainda está a iniciar.",Toast.LENGTH_SHORT).show();return;}
-        MediaItem item=new MediaItem.Builder().setUri(song.uri).setMediaMetadata(new MediaMetadata.Builder().setTitle(song.title).setArtist(song.artist).setAlbumTitle(song.album).build()).build();
-        controller.setMediaItem(item);controller.prepare();controller.play();updateMini();
+        if(controller==null||!controller.isConnected()){
+            Toast.makeText(this,"Player ainda está a iniciar.",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        MediaItem item=new MediaItem.Builder()
+                .setUri(song.uri)
+                .setMediaMetadata(new MediaMetadata.Builder()
+                        .setTitle(song.title)
+                        .setArtist(song.artist)
+                        .setAlbumTitle(song.album)
+                        .build())
+                .build();
+        controller.setMediaItem(item);
+        controller.prepare();
+        controller.play();
+        PlayStatsStore.increment(this, song.id);
+        updateMini();
+        loadMiniArtwork(song.uri);
+    }
+
+    private void loadMiniArtwork(Uri uri) {
+        if (miniArt == null || uri == null) return;
+        new Thread(() -> {
+            Bitmap bmp = null;
+            android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
+            try {
+                retriever.setDataSource(this, uri);
+                byte[] data = retriever.getEmbeddedPicture();
+                if (data != null) bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
+            } catch (Throwable ignored) {
+            } finally {
+                try { retriever.release(); } catch (Throwable ignored) {}
+            }
+            Bitmap result = bmp;
+            runOnUiThread(() -> miniArt.setImageBitmap(
+                    result != null ? result : BitmapFactory.decodeResource(getResources(), R.drawable.music_placeholder)));
+        }).start();
     }
 
     private void openNowPlaying(){startActivity(new Intent(this,NexaurenNowPlayingActivity.class));}
