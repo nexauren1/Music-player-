@@ -116,6 +116,7 @@ public final class EditTagsActivity extends AppCompatActivity {
         TextView note=text("As etiquetas de texto podem ser gravadas no MediaStore quando o provedor do Android permitir. A capa personalizada é guardada pelo Nexauren.",12,0xFF9DA6B0);
         note.setPadding(dp(6),dp(10),dp(6),0);
         body.addView(note,new LinearLayout.LayoutParams(-1,dp(78)));
+        SystemBarInsets.apply(root);
         setContentView(root);
     }
 
