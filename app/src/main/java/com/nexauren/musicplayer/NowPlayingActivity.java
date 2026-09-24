@@ -223,6 +223,16 @@ public final class NowPlayingActivity extends AppCompatActivity {
         equalizer.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class).putExtra("page","audio")));
         speed.setOnClickListener(v->showSpeed());
 
+        LinearLayout seekRow=new LinearLayout(this);
+        seekRow.setGravity(Gravity.CENTER);
+        TextView back10=actionChip("↶ 10 s");
+        TextView forward30=actionChip("↷ 30 s");
+        seekRow.addView(back10,new LinearLayout.LayoutParams(0,42,1));
+        seekRow.addView(forward30,new LinearLayout.LayoutParams(0,42,1));
+        body.addView(seekRow,new LinearLayout.LayoutParams(-1,dp(50)));
+        back10.setOnClickListener(v->{if(controller!=null&&controller.isConnected())controller.seekBack();});
+        forward30.setOnClickListener(v->{if(controller!=null&&controller.isConnected())controller.seekForward();});
+
         LinearLayout quick2=new LinearLayout(this);
         quick2.setGravity(Gravity.CENTER);
         TextView timer=actionChip("⏱ Sono");TextView queue=actionChip("☷ Fila");TextView lyrics=actionChip("♪ Letras");
