@@ -97,7 +97,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
     }
 
     private void showHome() {
-        buildPage("Auren Music Player");
+        buildPage("Nexauren Music Player");
         addHero();
         addQuickActions();
         addSectionHeader("Recentemente reproduzidas", "Ver tudo", v -> showLibrary());
@@ -129,7 +129,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         addSetting("Aparência", "Tema e fundo", "◐", v -> startActivity(new Intent(this, AppearanceSetupActivity.class).putExtra("edit", true)));
         addSetting("Qualidade de áudio", "Alta", "♫", v -> openClassic("equalizer"));
         addSetting("Atualização do app", "Atualização automática ativa", "☁", v -> Toast.makeText(this, "O sistema de atualização existente continua ativo.", Toast.LENGTH_SHORT).show());
-        addSetting("Sobre", "Auren Music Player", "ⓘ", v -> Toast.makeText(this, "Nexauren Music Player 2.0", Toast.LENGTH_SHORT).show());
+        addSetting("Sobre", "Nexauren Music Player", "ⓘ", v -> Toast.makeText(this, "Nexauren Music Player 2.0", Toast.LENGTH_SHORT).show());
     }
 
     private void showSongList(String heading) {
@@ -177,12 +177,47 @@ public final class NexaurenModernActivity extends AppCompatActivity {
 
         TextView search = topIcon("⌕");
         bar.addView(search, new LinearLayout.LayoutParams(dp(46), -1));
-        search.setOnClickListener(v -> Toast.makeText(this, "Pesquisa da biblioteca em preparação nesta camada 2.0.", Toast.LENGTH_SHORT).show());
+        search.setOnClickListener(v -> showSearchDialog());
 
         TextView more = topIcon("⋮");
         bar.addView(more, new LinearLayout.LayoutParams(dp(42), -1));
         more.setOnClickListener(v -> openClassic(null));
         return bar;
+    }
+
+    private void showSearchDialog() {
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Música, artista ou álbum");
+        input.setPadding(dp(18), 0, dp(18), 0);
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Pesquisar biblioteca")
+                .setView(input)
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Pesquisar", (dialog, which) -> {
+                    String query = input.getText() == null ? "" : input.getText().toString().trim().toLowerCase(java.util.Locale.ROOT);
+                    if (query.isEmpty()) {
+                        showLibrary();
+                        return;
+                    }
+                    ArrayList<Song> matches = new ArrayList<>();
+                    for (Song song : songs) {
+                        String haystack = (song.title + " " + song.artist + " " + song.album).toLowerCase(java.util.Locale.ROOT);
+                        if (haystack.contains(query)) matches.add(song);
+                    }
+                    showSearchResults(query, matches);
+                })
+                .show();
+    }
+
+    private void showSearchResults(String query, List<Song> matches) {
+        buildPage("Resultados");
+        addSectionHeader("Pesquisa", matches.size() + " encontrados", null);
+        TextView hint = text("Resultados para \"" + query + "\"", 12, textSecondary());
+        hint.setPadding(dp(8), dp(2), dp(8), dp(10));
+        content.addView(hint, new LinearLayout.LayoutParams(-1, dp(34)));
+        addSongListFrom(matches);
     }
 
     private void addHero() {
@@ -359,6 +394,37 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         updateMini();
     }
 
+    private void addBottomNavigation(LinearLayout shell) {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setGravity(Gravity.CENTER);
+        nav.setPadding(dp(6), dp(3), dp(6), dp(3));
+        nav.setBackground(round(Color.WHITE, 0));
+        nav.setElevation(dp(10));
+
+        addBottomItem(nav, "⌂", "Início", () -> showHome());
+        addBottomItem(nav, "♫", "Biblioteca", () -> showLibrary());
+        addBottomItem(nav, "☷", "Playlists", () -> showPlaylists());
+        addBottomItem(nav, "♥", "Favoritos", () -> showFavorites());
+
+        shell.addView(nav, new LinearLayout.LayoutParams(-1, dp(58)));
+    }
+
+    private void addBottomItem(LinearLayout parent, String icon, String label, Runnable action) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        TextView i = text(icon, 21, accent);
+        i.setGravity(Gravity.CENTER);
+        TextView l = text(label, 9, textSecondary());
+        l.setGravity(Gravity.CENTER);
+        item.addView(i, new LinearLayout.LayoutParams(-1, dp(26)));
+        item.addView(l, new LinearLayout.LayoutParams(-1, dp(20)));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(54), 1f);
+        lp.setMargins(dp(2), 0, dp(2), 0);
+        parent.addView(item, lp);
+        item.setOnClickListener(v -> { closeDrawer(); action.run(); });
+    }
+
     private void updateMini(){
         if(controller==null||!controller.isConnected())return;
         CharSequence t=controller.getMediaMetadata().title;CharSequence a=controller.getMediaMetadata().artist;
@@ -379,7 +445,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
             try(Cursor c=getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,selection,null,MediaStore.Audio.Media.DATE_ADDED+" DESC")){
                 if(c!=null){int id=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);int ti=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);int ar=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);int al=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);int du=c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);while(c.moveToNext()){long songId=c.getLong(id);String title=c.getString(ti);String artist=c.getString(ar);String album=c.getString(al);long duration=c.getLong(du);Uri uri=ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,songId);result.add(new Song(songId,title==null||title.isEmpty()?"Faixa sem título":title,artist==null||artist.isEmpty()?"Artista desconhecido":artist,album==null?"":album,duration,uri));}}
             }catch(Exception ignored){}
-            runOnUiThread(()->{songs.clear();songs.addAll(result);if(songCount!=null)songCount.setText(result.size()+" músicas");if(content!=null&&title!=null&&"Auren Music Player".contentEquals(title.getText()))showHome();});
+            runOnUiThread(()->{songs.clear();songs.addAll(result);if(songCount!=null)songCount.setText(result.size()+" músicas");if(content!=null&&title!=null&&"Nexauren Music Player".contentEquals(title.getText()))showHome();});
         });
     }
 
@@ -389,7 +455,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         controller.setMediaItem(item);controller.prepare();controller.play();updateMini();
     }
 
-    private void openNowPlaying(){startActivity(new Intent(this,NowPlayingActivity.class));}
+    private void openNowPlaying(){startActivity(new Intent(this,NexaurenNowPlayingActivity.class));}
     private void openClassic(String pageName){Intent i=new Intent(this,MainActivity.class);if(pageName!=null)i.putExtra("page",pageName);startActivity(i);}
 
     private void openDrawer(){
@@ -397,7 +463,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         drawer=new FrameLayout(this);drawer.setBackgroundColor(0x66000000);root.addView(drawer,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(18),dp(24),dp(12),dp(12));panel.setBackground(round(Color.WHITE,0));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(dp(310),-1);pp.gravity=Gravity.START;drawer.addView(panel,pp);
-        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);TextView logo=text("A",25,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setBackground(round(accent,30));brand.addView(logo,new LinearLayout.LayoutParams(dp(58),dp(58)));LinearLayout bm=new LinearLayout(this);bm.setOrientation(LinearLayout.VERTICAL);bm.setPadding(dp(12),0,0,0);TextView bn=text("Auren",20,textPrimary());bn.setTypeface(null,1);TextView bs=text("Music Player",11,textSecondary());bm.addView(bn,new LinearLayout.LayoutParams(-1,dp(28)));bm.addView(bs,new LinearLayout.LayoutParams(-1,dp(22)));brand.addView(bm,new LinearLayout.LayoutParams(0,dp(58),1));panel.addView(brand,new LinearLayout.LayoutParams(-1,dp(82)));
+        LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);TextView logo=text("A",25,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setBackground(round(accent,30));brand.addView(logo,new LinearLayout.LayoutParams(dp(58),dp(58)));LinearLayout bm=new LinearLayout(this);bm.setOrientation(LinearLayout.VERTICAL);bm.setPadding(dp(12),0,0,0);TextView bn=text("Nexauren",20,textPrimary());bn.setTypeface(null,1);TextView bs=text("Music Player",11,textSecondary());bm.addView(bn,new LinearLayout.LayoutParams(-1,dp(28)));bm.addView(bs,new LinearLayout.LayoutParams(-1,dp(22)));brand.addView(bm,new LinearLayout.LayoutParams(0,dp(58),1));panel.addView(brand,new LinearLayout.LayoutParams(-1,dp(82)));
         addDrawerItem(panel,"⌂","Início",this::showHome);addDrawerItem(panel,"♫","Biblioteca",this::showLibrary);addDrawerItem(panel,"♥","Favoritos",this::showFavorites);addDrawerItem(panel,"☷","Playlists",this::showPlaylists);addDrawerItem(panel,"🔥","Mais tocadas",()->showSongList("Mais tocadas"));addDrawerItem(panel,"◷","Recentes",()->showSongList("Recentes"));
         View sep=new View(this);sep.setBackgroundColor(0xFFE3E8EF);panel.addView(sep,new LinearLayout.LayoutParams(-1,dp(1)));
         addDrawerItem(panel,"⚙","Configurações",this::showSettings);addDrawerItem(panel,"ⓘ","Sobre",()->Toast.makeText(this,"Nexauren Music Player 2.0",Toast.LENGTH_SHORT).show());
