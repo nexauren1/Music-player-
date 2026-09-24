@@ -77,8 +77,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
-    private static final int REQUEST_AUDIO = 1001;
-    private static final int REQUEST_NOTIFICATIONS = 1002;
+    private static final int REQUEST_STARTUP_PERMISSIONS = 1001;
 
     private final List<Track> tracks = new ArrayList<>();
     private final List<Track> visibleTracks = new ArrayList<>();
@@ -133,6 +132,7 @@ public final class MainActivity extends AppCompatActivity {
     private long sleepEndAtMs = 0L;
     private long lastArtworkId = -1L;
     private boolean effectsEnabled = true;
+    private boolean skipSilenceEnabled = false;
     private boolean playbackStateRestored = false;
     private String pendingSearchQuery = "";
     private final Runnable searchFilterRunnable = () -> {
@@ -184,7 +184,7 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         if (!AppearanceStore.isSetupDone(this)) {
             startActivity(new Intent(this, AppearanceSetupActivity.class));
             finish();
@@ -197,12 +197,14 @@ public final class MainActivity extends AppCompatActivity {
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
         darkMode = getSharedPreferences("nexauren", MODE_PRIVATE).getBoolean("dark", false);
-        effectsEnabled = getSharedPreferences("nexauren", MODE_PRIVATE).getBoolean("effects", true);
+        android.content.SharedPreferences prefs = getSharedPreferences("nexauren", MODE_PRIVATE);
+        effectsEnabled = prefs.getBoolean("effects", true);
+        skipSilenceEnabled = prefs.getBoolean("skip_silence", false);
         PlaybackService.setEffectsEnabled(effectsEnabled);
+        PlaybackService.setSkipSilence(skipSilenceEnabled);
         buildShell();
         connectController();
-        requestNotificationPermission();
-        ensureAudioPermission();
+        requestStartupPermissions();
         registerMediaStoreObserver();
         UpdateNotifications.ensureChannel(this);
         UpdateScheduler.ensure(this);
@@ -215,6 +217,7 @@ public final class MainActivity extends AppCompatActivity {
     private void buildShell() {
         root = new FrameLayout(this);
         root.setBackground(AppearanceBackgroundDrawable.forContext(this));
+        SystemBarInsets.apply(root);
         setContentView(root);
         showHome(false);
     }
@@ -933,10 +936,24 @@ public final class MainActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
-    private void ensureAudioPermission() {
-        String permission = Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
-        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) loadTracks();
-        else ActivityCompat.requestPermissions(this, new String[]{permission}, REQUEST_AUDIO);
+    private void requestStartupPermissions() {
+        ArrayList<String> missing = new ArrayList<>();
+        String audio = Build.VERSION.SDK_INT >= 33
+                ? Manifest.permission.READ_MEDIA_AUDIO
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (ContextCompat.checkSelfPermission(this, audio) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(audio);
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+        if (missing.isEmpty()) {
+            loadTracks();
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    missing.toArray(new String[0]), REQUEST_STARTUP_PERMISSIONS);
+        }
     }
 
     private void registerMediaStoreObserver() {
@@ -951,13 +968,6 @@ public final class MainActivity extends AppCompatActivity {
             getContentResolver().registerContentObserver(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, mediaObserver);
         } catch (Throwable ignored) {}
-    }
-
-    private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
-        }
     }
 
     private void loadTracks() {
@@ -1555,7 +1565,12 @@ public final class MainActivity extends AppCompatActivity {
             getSharedPreferences("nexauren", MODE_PRIVATE).edit().putBoolean("effects", effectsEnabled).apply();
             PlaybackService.setEffectsEnabled(effectsEnabled);
         });
-        checkboxRow(list, "Silenciar pausas longas", "Ignora automaticamente trechos de silêncio.", false, v -> PlaybackService.setSkipSilence(true));
+        checkboxRow(list, "Silenciar pausas longas", "Ignora automaticamente trechos de silêncio.", skipSilenceEnabled, v -> {
+            skipSilenceEnabled = !skipSilenceEnabled;
+            getSharedPreferences("nexauren", MODE_PRIVATE).edit()
+                    .putBoolean("skip_silence", skipSilenceEnabled).apply();
+            PlaybackService.setSkipSilence(skipSilenceEnabled);
+        });
         checkboxRow(list, "Equalizador interno", "Usa o equalizador Nexauren em vez do sistema.", true, v -> showEqualizer());
         checkboxRow(list, "Controlos na notificação", "Play, pausa, anterior e próxima faixa.", true, v -> {});
         sliderRow(list, "Apagar músicas com menos de", "0 segundos", 0, 120);
@@ -1579,7 +1594,9 @@ public final class MainActivity extends AppCompatActivity {
         section(list, "Sobre");
         clickableRow(list, "Assinatura Premium", "Recursos adicionais", "♛", () -> showAbout("Nexauren Premium", "Recursos avançados serão ativados sem bloquear a reprodução básica."));
         clickableRow(list, "Curta a nossa página", "Nexauren", "♣", () -> Toast.makeText(this, "Obrigado por apoiar a Nexauren.", Toast.LENGTH_SHORT).show());
-        clickableRow(list, "Sobre o Nexauren Music Player", "Versão 1.1.0", "ⓘ", () -> showAbout("Nexauren Music Player", "Versão 1.1.1 • player local, efeitos, favoritos, fila e pesquisa."));
+        clickableRow(list, "Sobre o Nexauren Music Player", "Versão " + BuildConfig.VERSION_NAME, "ⓘ",
+                () -> showAbout("Nexauren Music Player",
+                        "Versão " + BuildConfig.VERSION_NAME + " • player local, efeitos, favoritos, fila e pesquisa."));
     }
 
     private void showEditTags() {
@@ -1932,10 +1949,25 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_AUDIO) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) loadTracks();
-            else Toast.makeText(this, "Acesso ao áudio não autorizado.", Toast.LENGTH_LONG).show();
+        if (requestCode != REQUEST_STARTUP_PERMISSIONS) return;
+
+        boolean audioGranted = ContextCompat.checkSelfPermission(
+                this,
+                Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED;
+
+        if (audioGranted) {
+            loadTracks();
+        } else {
+            Toast.makeText(this, "Acesso ao áudio não autorizado.", Toast.LENGTH_LONG).show();
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleUpdateIntent(intent);
     }
 
     @Override
