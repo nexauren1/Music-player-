@@ -19,6 +19,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".NexaurenModernActivity" android:exported="false" />
+        <activity android:name=".NexaurenNowPlayingActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="false" />
         <service android:name=".PlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">
             <intent-filter>
