@@ -114,6 +114,7 @@ public final class AudioCutterActivity extends AppCompatActivity {
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);progress.setProgress(0);body.addView(progress,new LinearLayout.LayoutParams(-1,dp(24)));
 
         root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
+        SystemBarInsets.apply(root);
         setContentView(root);
         final TextView sum=summary;
         android.view.View.OnLayoutChangeListener updater=(v,l,t,r,b,ol,ot,or,ob)->sum.setText(format(startMs)+" – "+format(endMs));

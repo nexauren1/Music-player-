@@ -15,16 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.6.0'
 
@@ -64,15 +64,16 @@ jobs:
           cat > release-notes.md <<EOF
           Nexauren Music Player $VERSION
 
-          • Pesquisa rápida sem acentos e indexação automática quando a biblioteca muda
-          • Ordenação inteligente por data de adição e deteção de duplicadas normalizada
-          • Biblioteca preparada para coleções muito grandes, com pesquisa em segundo plano
-          • Fila de reprodução deslizante para evitar crescimento indefinido durante milhares de faixas
-          • Navegação de vídeos integrada na biblioteca
-          • Biblioteca de vídeos em grelha, miniaturas em cache, pesquisa, ordenação e pastas
-          • Reprodução de vídeo com controles avançados e Picture-in-Picture
-          • Equalizador e efeitos de áudio persistentes
-          • Mini-player e biblioteca reorganizados
+          • Reprodução mais resiliente com recuperação automática de falhas de faixa
+          • Retoma da reprodução após reinício do serviço/dispositivo
+          • Temporizador de sono persistente no serviço de reprodução
+          • Controles rápidos de -10 s e +30 s no leitor completo
+          • Fila de reprodução com remoção individual e limpeza total
+          • Leitura da biblioteca mais compatível com diferentes implementações de MediaStore
+          • Permissões de áudio e notificações com fluxo único no arranque
+          • Interface protegida contra sobreposição das barras do sistema no Android moderno
+          • Equalizador, graves, surround, pré-amplificador, balanço e A-B persistentes
+          • Biblioteca de vídeos em grelha, pesquisa, ordenação, pastas e Picture-in-Picture
           EOF
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release delete "v$VERSION" --yes --cleanup-tag

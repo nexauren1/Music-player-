@@ -25,6 +25,8 @@ public final class UpdateDownloadWorker extends Worker {
     public static final String INPUT_VERSION = "version";
     public static final String INPUT_DIGEST = "digest";
     private static final int NOTIFICATION_ID = 2102;
+    private volatile HttpURLConnection activeConnection;
+    private File activeOutput;
 
     public UpdateDownloadWorker(@NonNull Context appContext, @NonNull WorkerParameters params) {
         super(appContext, params);
@@ -45,6 +47,7 @@ public final class UpdateDownloadWorker extends Worker {
 
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            activeConnection = connection;
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
             connection.setInstanceFollowRedirects(true);
@@ -55,6 +58,7 @@ public final class UpdateDownloadWorker extends Worker {
                 if (code < 200 || code >= 300) throw new IllegalStateException("HTTP " + code);
                 long total = connection.getContentLengthLong();
                 File output = UpdateManager.updateFile(getApplicationContext());
+                activeOutput = output;
                 if (output.exists()) output.delete();
 
                 try (InputStream input = new BufferedInputStream(connection.getInputStream());
@@ -89,14 +93,32 @@ public final class UpdateDownloadWorker extends Worker {
                         .edit().putString("downloaded_version", version).apply();
 
                 postReadyNotification(version);
+                activeOutput = null;
                 return Result.success(new Data.Builder().putString("path", output.getAbsolutePath()).putString("version", version).build());
             } finally {
                 connection.disconnect();
+                activeConnection = null;
             }
         } catch (Exception error) {
+            if (activeOutput != null && activeOutput.exists()) {
+                // Do not leave a partial APK that could be mistaken for a valid download.
+                activeOutput.delete();
+            }
             postErrorNotification(version, error.getMessage());
+            activeOutput = null;
             return Result.failure();
         }
+    }
+
+    @Override
+    public void onStopped() {
+        HttpURLConnection connection = activeConnection;
+        if (connection != null) {
+            try { connection.disconnect(); } catch (Exception ignored) {}
+        }
+        File output = activeOutput;
+        if (output != null && output.exists()) output.delete();
+        super.onStopped();
     }
 
     private ForegroundInfo createForegroundInfo(String title, int progress, boolean indeterminate) {

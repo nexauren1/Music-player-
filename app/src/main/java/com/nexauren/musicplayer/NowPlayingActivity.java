@@ -223,6 +223,16 @@ public final class NowPlayingActivity extends AppCompatActivity {
         equalizer.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class).putExtra("page","audio")));
         speed.setOnClickListener(v->showSpeed());
 
+        LinearLayout quickSeekRow=new LinearLayout(this);
+        quickSeekRow.setGravity(Gravity.CENTER);
+        TextView back10=actionChip("↶ 10 s");
+        TextView forward30=actionChip("↷ 30 s");
+        quickSeekRow.addView(back10,new LinearLayout.LayoutParams(0,42,1));
+        quickSeekRow.addView(forward30,new LinearLayout.LayoutParams(0,42,1));
+        body.addView(quickSeekRow,new LinearLayout.LayoutParams(-1,dp(50)));
+        back10.setOnClickListener(v->{if(controller!=null&&controller.isConnected())controller.seekBack();});
+        forward30.setOnClickListener(v->{if(controller!=null&&controller.isConnected())controller.seekForward();});
+
         LinearLayout quick2=new LinearLayout(this);
         quick2.setGravity(Gravity.CENTER);
         TextView timer=actionChip("⏱ Sono");TextView queue=actionChip("☷ Fila");TextView lyrics=actionChip("♪ Letras");
@@ -252,6 +262,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
         ringtone.setOnClickListener(v->setAsRingtone());
 
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        SystemBarInsets.apply(root);
         setContentView(root);
     }
 
@@ -492,8 +503,9 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private void showSleepTimer(){
         String[]values={"Desligado","15 minutos","30 minutos","45 minutos","60 minutos"};
         new android.app.AlertDialog.Builder(this).setTitle("Temporizador de sono").setItems(values,(d,w)->{
-            if(w==0){sleepUntil=0;Toast.makeText(this,"Temporizador desligado.",Toast.LENGTH_SHORT).show();}
-            else{sleepUntil=System.currentTimeMillis()+w*15L*60_000L;Toast.makeText(this,values[w]+" definido.",Toast.LENGTH_SHORT).show();}
+            long minutes=w==0?0L:Long.parseLong(values[w].split(" ")[0]);
+            PlaybackService.setSleepTimer(this,minutes);
+            Toast.makeText(this,w==0?"Temporizador desligado.":values[w]+" definido.",Toast.LENGTH_SHORT).show();
         }).show();
     }
 

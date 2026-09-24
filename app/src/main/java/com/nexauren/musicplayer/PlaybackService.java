@@ -2,6 +2,9 @@ package com.nexauren.musicplayer;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.ContentUris;
+import android.content.Context;
+import android.net.Uri;
 import android.media.audiofx.PresetReverb;
 
 import androidx.annotation.OptIn;
@@ -12,6 +15,7 @@ import androidx.media3.common.AuxEffectInfo;
 import androidx.media3.common.C;
 import androidx.media3.common.audio.ChannelMixingMatrix;
 import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.audio.ChannelMixingAudioProcessor;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
@@ -20,6 +24,9 @@ import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class PlaybackService extends MediaSessionService {
@@ -34,6 +41,33 @@ public final class PlaybackService extends MediaSessionService {
     private boolean skipSilence;
     private long abStartMs = -1L;
     private long abEndMs = -1L;
+    private long sleepEndAtMs = 0L;
+    private String recoveryMediaId = "";
+    private int recoveryAttempts = 0;
+    private final android.os.Handler recoveryHandler = new android.os.Handler();
+    private final Runnable recoveryRunnable = () -> {
+        if (player == null || !player.isCommandAvailable(Player.COMMAND_PREPARE)) return;
+        try {
+            int index = Math.max(0, player.getCurrentMediaItemIndex());
+            long position = Math.max(0L, player.getCurrentPosition());
+            player.prepare();
+            if (player.getMediaItemCount() > 0) player.seekTo(index, position);
+            player.play();
+        } catch (Throwable ignored) {
+            skipAfterPlaybackError();
+        }
+    };
+    private final android.os.Handler sleepHandler = new android.os.Handler();
+    private final Runnable sleepTimer = new Runnable() {
+        @Override public void run() {
+            if (sleepEndAtMs > 0L && System.currentTimeMillis() >= sleepEndAtMs) {
+                sleepEndAtMs = 0L;
+                getSharedPreferences("nexauren_sleep", MODE_PRIVATE).edit().remove("end_at").apply();
+                if (player != null) player.pause();
+            }
+            sleepHandler.postDelayed(this, 1000L);
+        }
+    };
     private final android.os.Handler abHandler = new android.os.Handler();
     private final Runnable abLoop = new Runnable() {
         @Override public void run() {
@@ -44,8 +78,86 @@ public final class PlaybackService extends MediaSessionService {
         }
     };
 
+    private final MediaSession.Callback sessionCallback = new MediaSession.Callback() {
+        @Override
+        public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
+                MediaSession mediaSession, MediaSession.ControllerInfo controllerInfo, boolean isForPlayback) {
+            long currentId = PlaybackStateStore.currentId(PlaybackService.this);
+            if (currentId < 0L) {
+                return Futures.immediateFuture(
+                        new MediaSession.MediaItemsWithStartPosition(
+                                java.util.Collections.emptyList(), C.INDEX_UNSET, C.TIME_UNSET));
+            }
+
+            Uri currentUri = ContentUris.withAppendedId(
+                    android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, currentId);
+            long position = Math.max(0L, PlaybackStateStore.positionMs(PlaybackService.this));
+
+            java.util.ArrayList<androidx.media3.common.MediaItem> items = new java.util.ArrayList<>();
+            int startIndex = 0;
+
+            if (!isForPlayback) {
+                items.add(new androidx.media3.common.MediaItem.Builder()
+                        .setMediaId(String.valueOf(currentId)).setUri(currentUri).build());
+            } else {
+                java.util.ArrayList<Long> savedIds =
+                        new java.util.ArrayList<>(PlaybackStateStore.queue(PlaybackService.this));
+                if (savedIds.isEmpty()) savedIds.add(currentId);
+                startIndex = -1;
+                for (Long id : savedIds) {
+                    if (id == null || id < 0L) continue;
+                    Uri uri = ContentUris.withAppendedId(
+                            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+                    if (id == currentId) startIndex = items.size();
+                    items.add(new androidx.media3.common.MediaItem.Builder()
+                            .setMediaId(String.valueOf(id)).setUri(uri).build());
+                }
+                if (startIndex < 0) {
+                    items.add(0, new androidx.media3.common.MediaItem.Builder()
+                            .setMediaId(String.valueOf(currentId)).setUri(currentUri).build());
+                    startIndex = 0;
+                }
+            }
+
+            if (isForPlayback) {
+                player.setRepeatMode(PlaybackStateStore.repeatMode(PlaybackService.this));
+                player.setShuffleModeEnabled(PlaybackStateStore.shuffle(PlaybackService.this));
+                player.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(
+                        PlaybackStateStore.speed(PlaybackService.this),
+                        PlaybackStateStore.pitch(PlaybackService.this)));
+                player.setVolume(PlaybackStateStore.volume(PlaybackService.this));
+            }
+            return Futures.immediateFuture(new MediaSession.MediaItemsWithStartPosition(
+                    items, startIndex, position));
+        }
+    };
+
     private final Player.Listener audioListener = new Player.Listener() {
-        @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item, int reason) { resetAB(); }
+        @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item, int reason) {
+            resetAB();
+            recoveryMediaId = item == null ? "" : item.mediaId;
+            recoveryAttempts = 0;
+            persistPlaybackState();
+            recoveryAttempts = 0;
+        }
+
+        @Override public void onPlayerError(PlaybackException error) {
+            androidx.media3.common.MediaItem item = player == null ? null : player.getCurrentMediaItem();
+            String id = item == null ? "" : item.mediaId;
+            if (!id.equals(recoveryMediaId)) {
+                recoveryMediaId = id;
+                recoveryAttempts = 0;
+            }
+            if (recoveryAttempts < 1) {
+                recoveryAttempts++;
+                recoveryHandler.removeCallbacks(recoveryRunnable);
+        persistPlaybackState();
+                recoveryHandler.postDelayed(recoveryRunnable, 350L);
+            } else {
+                skipAfterPlaybackError();
+            }
+        }
+
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
             if (audioSessionId > 0) {
                 effects.attachToSession(audioSessionId);
@@ -80,8 +192,18 @@ public final class PlaybackService extends MediaSessionService {
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
+        player.setSeekBackIncrementMs(10_000L);
+        player.setSeekForwardIncrementMs(30_000L);
+        boolean savedEffects = getSharedPreferences("nexauren", MODE_PRIVATE)
+                .getBoolean("effects", true);
+        skipSilence = getSharedPreferences("nexauren", MODE_PRIVATE)
+                .getBoolean("skip_silence", false);
+        effects.setEnabled(savedEffects);
+        player.setSkipSilenceEnabled(skipSilence);
         player.addListener(audioListener);
         abHandler.post(abLoop);
+        sleepEndAtMs = getSharedPreferences("nexauren_sleep", MODE_PRIVATE).getLong("end_at", 0L);
+        sleepHandler.post(sleepTimer);
 
         try {
             reverb = new PresetReverb(0, 0);
@@ -94,7 +216,10 @@ public final class PlaybackService extends MediaSessionService {
         Intent openIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        mediaSession = new MediaSession.Builder(this, player).setSessionActivity(pendingIntent).build();
+        mediaSession = new MediaSession.Builder(this, player)
+                .setSessionActivity(pendingIntent)
+                .setCallback(sessionCallback)
+                .build();
     }
 
     @Nullable @Override public MediaSession onGetSession(MediaSession.ControllerInfo controllerInfo) {
@@ -155,23 +280,50 @@ public final class PlaybackService extends MediaSessionService {
     }
 
     private void applyChannelMix() {
-        if (player == null || channelMixer == null) return;
-        boolean playing = player.isPlaying();
-        int index = Math.max(0, player.getCurrentMediaItemIndex());
-        long position = Math.max(0, player.getCurrentPosition());
+        if (channelMixer == null) return;
         try {
             if (mono) {
-                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
+                channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
             } else {
                 float left = balance < 0 ? 1f : 1f - balance;
                 float right = balance > 0 ? 1f : 1f + balance;
-                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
+                channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
             }
-            if (player.getMediaItemCount() > 0) {
-                player.stop();
+        } catch (Throwable ignored) {}
+    }
+
+    private void persistPlaybackState() {
+        if (player == null || player.getMediaItemCount() == 0) return;
+        java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < player.getMediaItemCount(); i++) {
+            try {
+                ids.add(Long.parseLong(player.getMediaItemAt(i).mediaId));
+            } catch (Exception ignored) {}
+        }
+        long currentId = -1L;
+        if (player.getCurrentMediaItem() != null) {
+            try { currentId = Long.parseLong(player.getCurrentMediaItem().mediaId); }
+            catch (Exception ignored) {}
+        }
+        PlaybackStateStore.save(
+                this, ids, currentId, Math.max(0L, player.getCurrentPosition()),
+                player.getRepeatMode(), player.getShuffleModeEnabled(),
+                player.getPlaybackParameters().speed, player.getPlaybackParameters().pitch,
+                player.getVolume());
+    }
+
+    private void skipAfterPlaybackError() {
+        if (player == null || player.getMediaItemCount() == 0) return;
+        try {
+            int index = player.getCurrentMediaItemIndex();
+            if (index >= 0 && index + 1 < player.getMediaItemCount()) {
+                player.seekToNextMediaItem();
                 player.prepare();
-                player.seekTo(index, position);
-                if (playing) player.play();
+                player.play();
+            } else {
+                player.pause();
             }
         } catch (Throwable ignored) {}
     }
@@ -225,6 +377,18 @@ public final class PlaybackService extends MediaSessionService {
         abEndMs = -1L;
     }
 
+    public static void setSleepTimer(Context context, long minutes) {
+        if (instance == null) return;
+        long end = minutes <= 0L ? 0L : System.currentTimeMillis() + minutes * 60_000L;
+        instance.sleepEndAtMs = end;
+        context.getApplicationContext().getSharedPreferences("nexauren_sleep", MODE_PRIVATE)
+                .edit().putLong("end_at", end).apply();
+    }
+
+    public static long getSleepTimerEndAt() {
+        return instance == null ? 0L : instance.sleepEndAtMs;
+    }
+
     public static void stop() {
         if (instance != null && instance.player != null) instance.player.stop();
     }
@@ -237,6 +401,8 @@ public final class PlaybackService extends MediaSessionService {
 
     @Override public void onDestroy() {
         abHandler.removeCallbacks(abLoop);
+        sleepHandler.removeCallbacks(sleepTimer);
+        recoveryHandler.removeCallbacks(recoveryRunnable);
         resetAB();
         if (player != null) player.removeListener(audioListener);
         try { if (reverb != null) reverb.release(); } catch (Throwable ignored) {}

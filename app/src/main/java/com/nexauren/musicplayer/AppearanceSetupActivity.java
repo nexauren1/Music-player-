@@ -44,6 +44,7 @@ public final class AppearanceSetupActivity extends AppCompatActivity {
 
         root=new FrameLayout(this);
         root.setBackground(new AppearanceBackgroundDrawable(selectedAccent,selectedBackground));
+        SystemBarInsets.apply(root);
         setContentView(root);
 
         ScrollView scroll=new ScrollView(this);

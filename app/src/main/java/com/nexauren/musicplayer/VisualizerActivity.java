@@ -52,6 +52,7 @@ public final class VisualizerActivity extends AppCompatActivity {
         TextView info=text("Visualização em tempo real da faixa atual",13,0xFF9DA6B0);
         info.setGravity(Gravity.CENTER);
         root.addView(info,new LinearLayout.LayoutParams(-1,dp(52)));
+        SystemBarInsets.apply(root);
         setContentView(root);
 
         connect();
