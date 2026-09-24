@@ -174,8 +174,9 @@ public final class NexaurenSettingsActivity extends AppCompatActivity {
                 .setSingleChoiceItems(names,checked,(dialog,which)->{
                     NexaurenLanguageStore.set(this,codes[which]);
                     dialog.dismiss();
-                    Toast.makeText(this,"Idioma aplicado.",Toast.LENGTH_SHORT).show();
-                    recreate();
+                    startActivity(new Intent(this,NexaurenModernActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_NEW_TASK));
+                    finish();
                 }).show();
     }
 
