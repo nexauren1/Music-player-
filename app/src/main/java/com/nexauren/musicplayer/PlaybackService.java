@@ -128,10 +128,6 @@ public final class PlaybackService extends MediaSessionService {
             recoveryAttempts = 0;
         }
 
-        @Override public void onPlaybackStateChanged(int state) {
-            if (state == Player.STATE_READY) recoveryAttempts = 0;
-        }
-
         @Override public void onPlayerError(PlaybackException error) {
             androidx.media3.common.MediaItem item = player == null ? null : player.getCurrentMediaItem();
             String id = item == null ? "" : item.mediaId;
