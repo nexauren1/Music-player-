@@ -269,7 +269,7 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
 
     private void connectController() {
         SessionToken token = new SessionToken(this, new android.content.ComponentName(this, PlaybackService.class));
-        controllerFuture = MediaController.Builder(this, token).buildAsync();
+        controllerFuture = new MediaController.Builder(this, token).buildAsync();
         controllerFuture.addListener(() -> {
             try {
                 controller = controllerFuture.get();
