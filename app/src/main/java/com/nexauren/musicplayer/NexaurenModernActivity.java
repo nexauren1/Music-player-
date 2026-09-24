@@ -102,22 +102,22 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         buildPage("Nexauren Music Player");
         addHero();
         addQuickActions();
-        addSectionHeader("Recentemente reproduzidas", "Ver tudo", v -> showLibrary());
+        addSectionHeader(NexaurenLanguageStore.t(this,"recent"), "Ver tudo", v -> showLibrary());
         addSongList(6);
     }
 
     private void showLibrary() {
-        buildPage("Biblioteca");
-        addSectionHeader("Biblioteca", songs.isEmpty() ? "A carregar…" : songs.size() + " músicas", null);
-        addLibraryCard("🔥", "Mais tocadas", "As músicas que você mais ouve", v -> showSongList("Mais tocadas"));
-        addLibraryCard("◷", "Recentes", "Reproduzidas recentemente", v -> showSongList("Recentes"));
+        buildPage(NexaurenLanguageStore.t(this,"library"));
+        addSectionHeader(NexaurenLanguageStore.t(this,"library"), songs.isEmpty() ? "…" : songs.size() + " músicas", null);
+        addLibraryCard("🔥", NexaurenLanguageStore.t(this,"most_played"), "As músicas que você mais ouve", v -> showSongList(NexaurenLanguageStore.t(this,"most_played")));
+        addLibraryCard("◷", NexaurenLanguageStore.t(this,"recent"), "Reproduzidas recentemente", v -> showSongList(NexaurenLanguageStore.t(this,"recent")));
         addLibraryCard("☷", "Playlists", "Suas playlists criadas", v -> showPlaylists());
         addLibraryCard("✦", "Sugestões", "Baseadas no seu gosto", v -> showSongList("Sugestões"));
-        addLibraryCard("♥", "Favoritos", "Suas músicas favoritas", v -> showFavorites());
+        addLibraryCard("♥", NexaurenLanguageStore.t(this,"favorites"), "Suas músicas favoritas", v -> showFavorites());
     }
 
     private void showPlaylists() {
-        buildPage("Playlists");
+        buildPage(NexaurenLanguageStore.t(this,"playlists"));
         addCreateCard();
         String[] names = {"Minhas Favoritas", "Chill Vibes", "Afro House", "Workout", "Relax"};
         String[] counts = {"25 músicas", "18 músicas", "32 músicas", "22 músicas", "16 músicas"};
@@ -151,10 +151,10 @@ public final class NexaurenModernActivity extends AppCompatActivity {
     }
 
     private void showFavorites() {
-        buildPage("Favoritos");
+        buildPage(NexaurenLanguageStore.t(this,"favorites"));
         List<Song> favorites = new ArrayList<>();
         for (Song song : songs) if (FavoritesStore.isFavorite(this, song.id)) favorites.add(song);
-        addSectionHeader("Favoritos", favorites.size() + " músicas", null);
+        addSectionHeader(NexaurenLanguageStore.t(this,"favorites"), favorites.size() + " músicas", null);
         addSongListFrom(favorites);
     }
 
@@ -263,10 +263,10 @@ public final class NexaurenModernActivity extends AppCompatActivity {
     private void addQuickActions() {
         LinearLayout row = new LinearLayout(this);
         row.setPadding(0, dp(10), 0, dp(6));
-        addQuick(row, "🔥", "Mais\ntocadas", v -> showSongList("Mais tocadas"));
-        addQuick(row, "◷", "Recentes", v -> showSongList("Recentes"));
-        addQuick(row, "☷", "Playlists", v -> showPlaylists());
-        addQuick(row, "♥", "Favoritos", v -> showFavorites());
+        addQuick(row, "🔥", NexaurenLanguageStore.t(this,"most_played"), v -> showSongList(NexaurenLanguageStore.t(this,"most_played")));
+        addQuick(row, "◷", NexaurenLanguageStore.t(this,"recent"), v -> showSongList(NexaurenLanguageStore.t(this,"recent")));
+        addQuick(row, "☷", NexaurenLanguageStore.t(this,"playlists"), v -> showPlaylists());
+        addQuick(row, "♥", NexaurenLanguageStore.t(this,"favorites"), v -> showFavorites());
         addQuick(row, "✦", NexaurenLanguageStore.t(this,"smart"), v -> showSmartMix());
         content.addView(row, new LinearLayout.LayoutParams(-1, dp(96)));
     }
@@ -558,9 +558,9 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(18),dp(24),dp(12),dp(12));panel.setBackground(round(Color.WHITE,0));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(dp(310),-1);pp.gravity=Gravity.START;drawer.addView(panel,pp);
         LinearLayout brand=new LinearLayout(this);brand.setGravity(Gravity.CENTER_VERTICAL);TextView logo=text("A",25,Color.WHITE);logo.setGravity(Gravity.CENTER);logo.setBackground(round(accent,30));brand.addView(logo,new LinearLayout.LayoutParams(dp(58),dp(58)));LinearLayout bm=new LinearLayout(this);bm.setOrientation(LinearLayout.VERTICAL);bm.setPadding(dp(12),0,0,0);TextView bn=text("Nexauren",20,textPrimary());bn.setTypeface(null,1);TextView bs=text("Music Player",11,textSecondary());bm.addView(bn,new LinearLayout.LayoutParams(-1,dp(28)));bm.addView(bs,new LinearLayout.LayoutParams(-1,dp(22)));brand.addView(bm,new LinearLayout.LayoutParams(0,dp(58),1));panel.addView(brand,new LinearLayout.LayoutParams(-1,dp(82)));
-        addDrawerItem(panel,"⌂","Início",this::showHome);addDrawerItem(panel,"♫","Biblioteca",this::showLibrary);addDrawerItem(panel,"♥","Favoritos",this::showFavorites);addDrawerItem(panel,"☷","Playlists",this::showPlaylists);addDrawerItem(panel,"🔥","Mais tocadas",()->showSongList("Mais tocadas"));addDrawerItem(panel,"◷","Recentes",()->showSongList("Recentes"));
+        addDrawerItem(panel,"⌂",NexaurenLanguageStore.t(this,"home"),this::showHome);addDrawerItem(panel,"♫",NexaurenLanguageStore.t(this,"library"),this::showLibrary);addDrawerItem(panel,"♥",NexaurenLanguageStore.t(this,"favorites"),this::showFavorites);addDrawerItem(panel,"☷",NexaurenLanguageStore.t(this,"playlists"),this::showPlaylists);addDrawerItem(panel,"🔥",NexaurenLanguageStore.t(this,"most_played"),()->showSongList(NexaurenLanguageStore.t(this,"most_played")));addDrawerItem(panel,"◷",NexaurenLanguageStore.t(this,"recent"),()->showSongList(NexaurenLanguageStore.t(this,"recent")));
         View sep=new View(this);sep.setBackgroundColor(0xFFE3E8EF);panel.addView(sep,new LinearLayout.LayoutParams(-1,dp(1)));
-        addDrawerItem(panel,"⚙","Configurações",this::showSettings);addDrawerItem(panel,"ⓘ","Sobre",()->Toast.makeText(this,"Nexauren Music Player 2.0",Toast.LENGTH_SHORT).show());
+        addDrawerItem(panel,"⚙",NexaurenLanguageStore.t(this,"settings"),this::showSettings);addDrawerItem(panel,"ⓘ","Sobre",()->Toast.makeText(this,"Nexauren Music Player 2.0",Toast.LENGTH_SHORT).show());
         LinearLayout.LayoutParams spacer=new LinearLayout.LayoutParams(-1,0,1);panel.addView(new View(this),spacer);
         TextView classic=text("Abrir interface clássica",12,accent);classic.setGravity(Gravity.CENTER);panel.addView(classic,new LinearLayout.LayoutParams(-1,dp(48)));classic.setOnClickListener(v->openClassic(null));
         drawer.setOnClickListener(v->closeDrawer());panel.bringToFront();
