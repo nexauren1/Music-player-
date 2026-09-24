@@ -188,6 +188,7 @@ public final class VideoLibraryActivity extends AppCompatActivity {
         recycler.setPadding(dp(7), dp(5), dp(7), dp(12));
         recycler.setClipToPadding(false);
         root.addView(recycler, new LinearLayout.LayoutParams(-1, 0, 1));
+        SystemBarInsets.apply(root);
         setContentView(root);
     }
 
