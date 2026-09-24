@@ -141,6 +141,12 @@ public final class PlaybackService extends MediaSessionService {
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
+        boolean savedEffects = getSharedPreferences("nexauren", MODE_PRIVATE)
+                .getBoolean("effects", true);
+        skipSilence = getSharedPreferences("nexauren", MODE_PRIVATE)
+                .getBoolean("skip_silence", false);
+        effects.setEnabled(savedEffects);
+        player.setSkipSilenceEnabled(skipSilence);
         player.addListener(audioListener);
         abHandler.post(abLoop);
         sleepEndAtMs = getSharedPreferences("nexauren_sleep", MODE_PRIVATE).getLong("end_at", 0L);
