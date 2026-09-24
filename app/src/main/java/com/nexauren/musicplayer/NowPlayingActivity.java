@@ -493,8 +493,9 @@ public final class NowPlayingActivity extends AppCompatActivity {
     private void showSleepTimer(){
         String[]values={"Desligado","15 minutos","30 minutos","45 minutos","60 minutos"};
         new android.app.AlertDialog.Builder(this).setTitle("Temporizador de sono").setItems(values,(d,w)->{
-            if(w==0){sleepUntil=0;Toast.makeText(this,"Temporizador desligado.",Toast.LENGTH_SHORT).show();}
-            else{sleepUntil=System.currentTimeMillis()+w*15L*60_000L;Toast.makeText(this,values[w]+" definido.",Toast.LENGTH_SHORT).show();}
+            long minutes=w==0?0L:Long.parseLong(values[w].split(" ")[0]);
+            PlaybackService.setSleepTimer(this,minutes);
+            Toast.makeText(this,w==0?"Temporizador desligado.":values[w]+" definido.",Toast.LENGTH_SHORT).show();
         }).show();
     }
 
