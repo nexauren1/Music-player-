@@ -125,6 +125,10 @@ public final class NexaurenModernActivity extends AppCompatActivity {
     }
 
     private void showSettings() {
+        startActivity(new Intent(this, NexaurenSettingsActivity.class));
+    }
+
+    private void showLegacySettings() {
         buildPage("Configurações");
         addSetting("Conta", "Nexauren Music Player", "●", null);
         addSetting("Notificações", "Controles de reprodução", "♟", null);
@@ -189,7 +193,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
 
         TextView more = topIcon("⋮");
         bar.addView(more, new LinearLayout.LayoutParams(dp(42), -1));
-        more.setOnClickListener(v -> openClassic(null));
+        more.setOnClickListener(v -> { android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this).setTitle("Nexauren Music Player"); b.setItems(new String[]{NexaurenLanguageStore.t(this,"random"),NexaurenLanguageStore.t(this,"smart"),NexaurenLanguageStore.t(this,"settings")}, (d,w)-> { if(w==0) playRandomAll(); else if(w==1) showSmartMix(); else startActivity(new Intent(this,NexaurenSettingsActivity.class)); }); b.show(); });
         return bar;
     }
 
@@ -251,6 +255,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(dp(142), dp(40));
         op.topMargin = dp(10);
         hero.addView(open, op);
+        open.setOnLongClickListener(v -> { playRandomAll(); return true; });
         open.setOnClickListener(v -> openNowPlaying());
         content.addView(hero, new LinearLayout.LayoutParams(-1, dp(176)));
     }
@@ -262,6 +267,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         addQuick(row, "◷", "Recentes", v -> showSongList("Recentes"));
         addQuick(row, "☷", "Playlists", v -> showPlaylists());
         addQuick(row, "♥", "Favoritos", v -> showFavorites());
+        addQuick(row, "✦", NexaurenLanguageStore.t(this,"smart"), v -> showSmartMix());
         content.addView(row, new LinearLayout.LayoutParams(-1, dp(96)));
     }
 
@@ -280,6 +286,43 @@ public final class NexaurenModernActivity extends AppCompatActivity {
         lp.setMargins(dp(3), 0, dp(3), 0);
         parent.addView(card, lp);
         card.setOnClickListener(click);
+    }
+
+    private void showSmartMix() {
+        buildPage(NexaurenLanguageStore.t(this,"smart"));
+        ArrayList<Song> ranked = new ArrayList<>(songs);
+        ranked.sort((a,b) -> {
+            int scoreA = PlayStatsStore.count(this,a.id) * 4 + (FavoritesStore.isFavorite(this,a.id) ? 10 : 0);
+            int scoreB = PlayStatsStore.count(this,b.id) * 4 + (FavoritesStore.isFavorite(this,b.id) ? 10 : 0);
+            if (scoreA != scoreB) return Integer.compare(scoreB, scoreA);
+            return Long.compare((a.id ^ System.currentTimeMillis()) & 0xffffL,
+                                (b.id ^ System.currentTimeMillis()) & 0xffffL);
+        });
+        addSectionHeader(NexaurenLanguageStore.t(this,"smart"), ranked.size()+" músicas", null);
+        addSongListFrom(ranked);
+    }
+
+    private void playRandomAll() {
+        if (controller == null || !controller.isConnected() || songs.isEmpty()) {
+            Toast.makeText(this,"Nenhuma música disponível.",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ArrayList<Song> shuffled = new ArrayList<>(songs);
+        java.util.Collections.shuffle(shuffled);
+        ArrayList<MediaItem> items = new ArrayList<>();
+        for (Song song : shuffled) {
+            items.add(new MediaItem.Builder()
+                    .setUri(song.uri)
+                    .setMediaMetadata(new MediaMetadata.Builder()
+                            .setTitle(song.title).setArtist(song.artist).setAlbumTitle(song.album).build())
+                    .build());
+        }
+        controller.setMediaItems(items);
+        controller.setShuffleModeEnabled(false);
+        controller.prepare();
+        controller.play();
+        PlayStatsStore.increment(this, shuffled.get(0).id);
+        updateMini();
     }
 
     private void addSectionHeader(String left, String right, View.OnClickListener click) {
