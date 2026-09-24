@@ -172,7 +172,7 @@ public final class AppearanceSetupActivity extends AppCompatActivity {
     }
 
     private void openMain(){
-        startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_NEW_TASK));
+        startActivity(new Intent(this,NexaurenModernActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_NEW_TASK));
         finish();
     }
 
