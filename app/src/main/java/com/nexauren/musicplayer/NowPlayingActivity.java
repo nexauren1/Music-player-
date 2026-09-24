@@ -252,6 +252,7 @@ public final class NowPlayingActivity extends AppCompatActivity {
         ringtone.setOnClickListener(v->setAsRingtone());
 
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        SystemBarInsets.apply(root);
         setContentView(root);
     }
 
