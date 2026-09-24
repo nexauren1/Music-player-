@@ -52,6 +52,7 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
     private TextView repeat;
     private TextView shuffle;
     private SeekBar progress;
+    private TextView abButton;
 
     private MediaController controller;
     private ListenableFuture<MediaController> controllerFuture;
@@ -182,6 +183,22 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
         controls.addView(repeat, controlLp(54));
         content.addView(controls, new LinearLayout.LayoutParams(-1, dp(92)));
 
+        LinearLayout tools = new LinearLayout(this);
+        tools.setGravity(Gravity.CENTER);
+        abButton = control("A-B", 13);
+        abButton.setBackground(round(0xFF172D4D, 24));
+        TextView speed = control("1×", 13);
+        speed.setBackground(round(0xFF172D4D, 24));
+        TextView audio = control("EQ", 13);
+        audio.setBackground(round(0xFF172D4D, 24));
+        tools.addView(abButton, compactToolLp(82));
+        tools.addView(speed, compactToolLp(82));
+        tools.addView(audio, compactToolLp(82));
+        content.addView(tools, new LinearLayout.LayoutParams(-1, dp(52)));
+        abButton.setOnClickListener(v -> toggleAB());
+        speed.setOnClickListener(v -> chooseSpeed());
+        audio.setOnClickListener(v -> startActivity(new Intent(this, NexaurenSettingsActivity.class)));
+
         TextView queueTitle = text("Fila de reprodução", 15, Color.WHITE);
         queueTitle.setTypeface(null, 1);
         queueTitle.setPadding(dp(4), dp(8), dp(4), dp(8));
@@ -304,6 +321,7 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
         repeat.setText(repeatOne ? "↻1" : "↻");
         shuffle.setAlpha(shuffleEnabled ? 1f : 0.55f);
         repeat.setAlpha(repeatOne ? 1f : 0.55f);
+        updateABButton();
     }
 
     private void loadCurrentArtwork() {
@@ -336,6 +354,33 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
             Bitmap result = bmp;
             runOnUiThread(() -> artwork.setImageBitmap(result != null ? result : BitmapFactory.decodeResource(getResources(), R.drawable.music_placeholder)));
         });
+    }
+
+    private void toggleAB() {
+        int state = PlaybackService.toggleABRepeat();
+        if (state == 1) Toast.makeText(this,"Ponto A definido.",Toast.LENGTH_SHORT).show();
+        else if (state == 2) Toast.makeText(this,"Ponto B definido. Segmento A-B em repetição.",Toast.LENGTH_SHORT).show();
+        else Toast.makeText(this,"A-B desligado.",Toast.LENGTH_SHORT).show();
+        updateABButton();
+    }
+
+    private void updateABButton() {
+        if (abButton == null) return;
+        int state = PlaybackService.getABState();
+        abButton.setText(state == 1 ? "A •" : state == 2 ? "A-B •" : "A-B");
+        abButton.setAlpha(state == 0 ? 0.65f : 1f);
+    }
+
+    private void chooseSpeed() {
+        final String[] labels = {"0,75×","1,00×","1,25×","1,50×","1,75×","2,00×"};
+        final float[] values = {0.75f,1f,1.25f,1.5f,1.75f,2f};
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Velocidade")
+                .setSingleChoiceItems(labels, 1, (d,w) -> {
+                    PlaybackService.setPlaybackSpeedPitch(values[w],1f);
+                    NexaurenAudioPrefs.speed(this,values[w]);
+                    d.dismiss();
+                }).show();
     }
 
     private void togglePlay() {
@@ -395,6 +440,12 @@ public final class NexaurenNowPlayingActivity extends AppCompatActivity {
         d.setColor(color);
         d.setCornerRadius(dp(radius));
         return d;
+    }
+
+    private LinearLayout.LayoutParams compactToolLp(int width) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(width), dp(40));
+        lp.setMargins(dp(4),0,dp(4),0);
+        return lp;
     }
 
     private LinearLayout.LayoutParams controlLp(int width) {
