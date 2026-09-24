@@ -80,6 +80,16 @@ public final class PlaybackService extends MediaSessionService {
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
+
+        // Restore Nexauren 2.0 playback/audio preferences after a service restart.
+        effects.setEnabled(NexaurenAudioPrefs.effects(this));
+        skipSilence = NexaurenAudioPrefs.skipSilence(this);
+        player.setSkipSilenceEnabled(skipSilence);
+        mono = NexaurenAudioPrefs.mono(this);
+        balance = NexaurenAudioPrefs.balance(this);
+        applyChannelMix();
+        player.setPlaybackParameters(new androidx.media3.common.PlaybackParameters(
+                NexaurenAudioPrefs.speed(this), 1f));
         player.addListener(audioListener);
         abHandler.post(abLoop);
 
@@ -89,6 +99,10 @@ public final class PlaybackService extends MediaSessionService {
             reverb.setEnabled(false);
         } catch (Throwable ignored) {
             reverb = null;
+        }
+
+        if (reverb != null) {
+            setReverb(NexaurenAudioPrefs.reverb(this), NexaurenAudioPrefs.reverbMix(this));
         }
 
         Intent openIntent = new Intent(this, MainActivity.class);
