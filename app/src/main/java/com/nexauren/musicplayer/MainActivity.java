@@ -1051,8 +1051,9 @@ public final class MainActivity extends AppCompatActivity {
 
                     int pageCount=0;
                     boolean providerReturnedUnboundedCursor=false;
-                    try(android.database.Cursor cursor=getContentResolver().query(
-                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,args,null)){
+                    try(android.database.Cursor cursor=queryAudioPage(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,projection,selection,
+                            MediaStore.Audio.Media.TITLE+" COLLATE NOCASE ASC",args,offset,pageSize)){
                         if(cursor==null) { complete=false; break; }
                         int total=cursor.getCount();
                         providerReturnedUnboundedCursor=total>pageSize;
@@ -1100,6 +1101,17 @@ public final class MainActivity extends AppCompatActivity {
                 maybeRestorePlaybackState();
             });
         });
+    }
+
+    private android.database.Cursor queryAudioPage(
+            Uri uri, String[] projection, String selection, String sortOrder,
+            android.os.Bundle args, int offset, int pageSize) {
+        android.database.Cursor cursor = getContentResolver().query(uri, projection, args, null);
+        if (cursor != null || offset != 0) return cursor;
+
+        // Some OEM/third-party MediaStore providers ignore QUERY_ARG_LIMIT/OFFSET
+        // or return null for the Bundle overload. Fall back to the legacy query.
+        return getContentResolver().query(uri, projection, selection, null, sortOrder);
     }
 
     private String override(java.util.Map<String,?> map,long id,String field,String fallback){
