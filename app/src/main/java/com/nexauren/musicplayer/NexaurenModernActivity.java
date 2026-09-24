@@ -295,8 +295,7 @@ public final class NexaurenModernActivity extends AppCompatActivity {
             int scoreA = PlayStatsStore.count(this,a.id) * 4 + (FavoritesStore.isFavorite(this,a.id) ? 10 : 0);
             int scoreB = PlayStatsStore.count(this,b.id) * 4 + (FavoritesStore.isFavorite(this,b.id) ? 10 : 0);
             if (scoreA != scoreB) return Integer.compare(scoreB, scoreA);
-            return Long.compare((a.id ^ System.currentTimeMillis()) & 0xffffL,
-                                (b.id ^ System.currentTimeMillis()) & 0xffffL);
+            return Long.compare(a.id, b.id);
         });
         addSectionHeader(NexaurenLanguageStore.t(this,"smart"), ranked.size()+" músicas", null);
         addSongListFrom(ranked);
