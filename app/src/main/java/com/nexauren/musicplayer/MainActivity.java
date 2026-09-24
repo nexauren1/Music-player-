@@ -744,7 +744,7 @@ public final class MainActivity extends AppCompatActivity {
 
         LinearLayout actions=new LinearLayout(this);
         actions.setGravity(Gravity.CENTER_VERTICAL);
-        TextView info=text("Toque numa faixa para reproduzir.",12,textSecondary());
+        TextView info=text("Toque numa faixa para reproduzir. Toque × para remover.",12,textSecondary());
         actions.addView(info,new LinearLayout.LayoutParams(0,dp(48),1));
         TextView clear=actionButton("LIMPAR FILA");
         actions.addView(clear,new LinearLayout.LayoutParams(dp(116),dp(44)));
@@ -757,20 +757,20 @@ public final class MainActivity extends AppCompatActivity {
         });
         body.addView(actions,new LinearLayout.LayoutParams(-1,dp(54)));
 
-        RecyclerView recycler=new RecyclerView(this);
-        recycler.setLayoutManager(new LinearLayoutManager(this));
-        recycler.setHasFixedSize(true);
-        recycler.setItemAnimator(null);
-        body.addView(recycler,new LinearLayout.LayoutParams(-1,0,1));
-
         if(controller==null||controller.getMediaItemCount()==0){
-            TextView e=text("A fila está vazia.",16,textSecondary());e.setGravity(Gravity.CENTER);
+            TextView e=text("A fila está vazia.",16,textSecondary());
+            e.setGravity(Gravity.CENTER);
             body.addView(e,new LinearLayout.LayoutParams(-1,0,1));
             return;
         }
 
+        ScrollView scroll=new ScrollView(this);
         LinearLayout list=new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0,dp(4),0,dp(16));
+        scroll.addView(list,new ScrollView.LayoutParams(-1,-2));
+        body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+
         for(int i=0;i<controller.getMediaItemCount();i++){
             final int index=i;
             MediaItem m=controller.getMediaItemAt(i);
@@ -781,8 +781,7 @@ public final class MainActivity extends AppCompatActivity {
             TextView number=text(String.valueOf(i+1),12,textSecondary());
             number.setGravity(Gravity.CENTER);
             row.addView(number,new LinearLayout.LayoutParams(dp(36),dp(64)));
-            LinearLayout labels=labels(t,a);
-            row.addView(labels,new LinearLayout.LayoutParams(0,dp(64),1));
+            row.addView(labels(t,a),new LinearLayout.LayoutParams(0,dp(64),1));
             TextView remove=text("×",24,textSecondary());
             remove.setGravity(Gravity.CENTER);
             row.addView(remove,new LinearLayout.LayoutParams(dp(46),dp(64)));
@@ -802,17 +801,6 @@ public final class MainActivity extends AppCompatActivity {
             });
             list.addView(row,new LinearLayout.LayoutParams(-1,dp(70)));
         }
-        recycler.setAdapter(new RecyclerView.Adapter<QueueHolder>() {
-            @NonNull @Override public QueueHolder onCreateViewHolder(@NonNull ViewGroup parent,int viewType) {
-                return new QueueHolder(list);
-            }
-            @Override public void onBindViewHolder(@NonNull QueueHolder holder,int position) {}
-            @Override public int getItemCount() { return list.getChildCount(); }
-        });
-    }
-
-    private static final class QueueHolder extends RecyclerView.ViewHolder {
-        QueueHolder(View item) { super(item); }
     }
 
     private void showSortDialog() {
