@@ -15,6 +15,7 @@ import androidx.media3.common.AuxEffectInfo;
 import androidx.media3.common.C;
 import androidx.media3.common.audio.ChannelMixingMatrix;
 import androidx.media3.common.Player;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.audio.ChannelMixingAudioProcessor;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
@@ -41,6 +42,21 @@ public final class PlaybackService extends MediaSessionService {
     private long abStartMs = -1L;
     private long abEndMs = -1L;
     private long sleepEndAtMs = 0L;
+    private String recoveryMediaId = "";
+    private int recoveryAttempts = 0;
+    private final android.os.Handler recoveryHandler = new android.os.Handler();
+    private final Runnable recoveryRunnable = () -> {
+        if (player == null || !player.isCommandAvailable(Player.COMMAND_PREPARE)) return;
+        try {
+            int index = Math.max(0, player.getCurrentMediaItemIndex());
+            long position = Math.max(0L, player.getCurrentPosition());
+            player.prepare();
+            if (player.getMediaItemCount() > 0) player.seekTo(index, position);
+            player.play();
+        } catch (Throwable ignored) {
+            skipAfterPlaybackError();
+        }
+    };
     private final android.os.Handler sleepHandler = new android.os.Handler();
     private final Runnable sleepTimer = new Runnable() {
         @Override public void run() {
@@ -106,7 +122,32 @@ public final class PlaybackService extends MediaSessionService {
     };
 
     private final Player.Listener audioListener = new Player.Listener() {
-        @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item, int reason) { resetAB(); }
+        @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item, int reason) {
+            resetAB();
+            recoveryMediaId = item == null ? "" : item.mediaId;
+            recoveryAttempts = 0;
+        }
+
+        @Override public void onPlaybackStateChanged(int state) {
+            if (state == Player.STATE_READY) recoveryAttempts = 0;
+        }
+
+        @Override public void onPlayerError(PlaybackException error) {
+            androidx.media3.common.MediaItem item = player == null ? null : player.getCurrentMediaItem();
+            String id = item == null ? "" : item.mediaId;
+            if (!id.equals(recoveryMediaId)) {
+                recoveryMediaId = id;
+                recoveryAttempts = 0;
+            }
+            if (recoveryAttempts < 1) {
+                recoveryAttempts++;
+                recoveryHandler.removeCallbacks(recoveryRunnable);
+                recoveryHandler.postDelayed(recoveryRunnable, 350L);
+            } else {
+                skipAfterPlaybackError();
+            }
+        }
+
         @Override public void onAudioSessionIdChanged(int audioSessionId) {
             if (audioSessionId > 0) {
                 effects.attachToSession(audioSessionId);
@@ -141,6 +182,8 @@ public final class PlaybackService extends MediaSessionService {
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build(), true);
         player.setHandleAudioBecomingNoisy(true);
+        player.setSeekBackIncrementMs(10_000L);
+        player.setSeekForwardIncrementMs(30_000L);
         boolean savedEffects = getSharedPreferences("nexauren", MODE_PRIVATE)
                 .getBoolean("effects", true);
         skipSilence = getSharedPreferences("nexauren", MODE_PRIVATE)
@@ -227,23 +270,30 @@ public final class PlaybackService extends MediaSessionService {
     }
 
     private void applyChannelMix() {
-        if (player == null || channelMixer == null) return;
-        boolean playing = player.isPlaying();
-        int index = Math.max(0, player.getCurrentMediaItemIndex());
-        long position = Math.max(0, player.getCurrentPosition());
+        if (channelMixer == null) return;
         try {
             if (mono) {
-                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
+                channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 1, new float[]{0.5f, 0.5f}));
             } else {
                 float left = balance < 0 ? 1f : 1f - balance;
                 float right = balance > 0 ? 1f : 1f + balance;
-                channelMixer.putChannelMixingMatrix(new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
+                channelMixer.putChannelMixingMatrix(
+                        new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
             }
-            if (player.getMediaItemCount() > 0) {
-                player.stop();
+        } catch (Throwable ignored) {}
+    }
+
+    private void skipAfterPlaybackError() {
+        if (player == null || player.getMediaItemCount() == 0) return;
+        try {
+            int index = player.getCurrentMediaItemIndex();
+            if (index >= 0 && index + 1 < player.getMediaItemCount()) {
+                player.seekToNextMediaItem();
                 player.prepare();
-                player.seekTo(index, position);
-                if (playing) player.play();
+                player.play();
+            } else {
+                player.pause();
             }
         } catch (Throwable ignored) {}
     }
@@ -322,6 +372,7 @@ public final class PlaybackService extends MediaSessionService {
     @Override public void onDestroy() {
         abHandler.removeCallbacks(abLoop);
         sleepHandler.removeCallbacks(sleepTimer);
+        recoveryHandler.removeCallbacks(recoveryRunnable);
         resetAB();
         if (player != null) player.removeListener(audioListener);
         try { if (reverb != null) reverb.release(); } catch (Throwable ignored) {}
