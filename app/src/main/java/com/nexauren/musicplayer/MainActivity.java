@@ -1613,8 +1613,8 @@ public final class MainActivity extends AppCompatActivity {
     private void showSleepTimer() {
         String[] values = {"Desligado", "15 minutos", "30 minutos", "45 minutos", "60 minutos"};
         new AlertDialog.Builder(this).setTitle("Temporizador de sono").setItems(values, (d, which) -> {
-            if (which == 0) sleepEndAtMs = 0L;
-            else sleepEndAtMs = System.currentTimeMillis() + Long.parseLong(values[which].split(" ")[0]) * 60_000L;
+            long minutes = which == 0 ? 0L : Long.parseLong(values[which].split(" ")[0]);
+            PlaybackService.setSleepTimer(this, minutes);
             Toast.makeText(this, which == 0 ? "Temporizador desligado." : "A música vai parar em " + values[which] + ".", Toast.LENGTH_SHORT).show();
         }).show();
     }
