@@ -83,31 +83,42 @@ public final class PlaybackService extends MediaSessionService {
         public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
                 MediaSession mediaSession, MediaSession.ControllerInfo controllerInfo, boolean isForPlayback) {
             long currentId = PlaybackStateStore.currentId(PlaybackService.this);
-            if (currentId < 0L) return Futures.immediateCancelledFuture();
+            if (currentId < 0L) {
+                return Futures.immediateFuture(
+                        new MediaSession.MediaItemsWithStartPosition(
+                                java.util.Collections.emptyList(), C.INDEX_UNSET, C.TIME_UNSET));
+            }
 
-            java.util.ArrayList<Long> savedIds =
-                    new java.util.ArrayList<>(PlaybackStateStore.queue(PlaybackService.this));
-            if (savedIds.isEmpty()) savedIds.add(currentId);
+            Uri currentUri = ContentUris.withAppendedId(
+                    android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, currentId);
+            long position = Math.max(0L, PlaybackStateStore.positionMs(PlaybackService.this));
 
             java.util.ArrayList<androidx.media3.common.MediaItem> items = new java.util.ArrayList<>();
-            int startIndex = -1;
-            for (Long id : savedIds) {
-                if (id == null || id < 0L) continue;
-                Uri uri = ContentUris.withAppendedId(
-                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
-                if (id == currentId) startIndex = items.size();
+            int startIndex = 0;
+
+            if (!isForPlayback) {
                 items.add(new androidx.media3.common.MediaItem.Builder()
-                        .setMediaId(String.valueOf(id)).setUri(uri).build());
-            }
-            if (startIndex < 0) {
-                Uri uri = ContentUris.withAppendedId(
-                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, currentId);
-                startIndex = 0;
-                items.add(0, new androidx.media3.common.MediaItem.Builder()
-                        .setMediaId(String.valueOf(currentId)).setUri(uri).build());
+                        .setMediaId(String.valueOf(currentId)).setUri(currentUri).build());
+            } else {
+                java.util.ArrayList<Long> savedIds =
+                        new java.util.ArrayList<>(PlaybackStateStore.queue(PlaybackService.this));
+                if (savedIds.isEmpty()) savedIds.add(currentId);
+                startIndex = -1;
+                for (Long id : savedIds) {
+                    if (id == null || id < 0L) continue;
+                    Uri uri = ContentUris.withAppendedId(
+                            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+                    if (id == currentId) startIndex = items.size();
+                    items.add(new androidx.media3.common.MediaItem.Builder()
+                            .setMediaId(String.valueOf(id)).setUri(uri).build());
+                }
+                if (startIndex < 0) {
+                    items.add(0, new androidx.media3.common.MediaItem.Builder()
+                            .setMediaId(String.valueOf(currentId)).setUri(currentUri).build());
+                    startIndex = 0;
+                }
             }
 
-            long position = Math.max(0L, PlaybackStateStore.positionMs(PlaybackService.this));
             if (isForPlayback) {
                 player.setRepeatMode(PlaybackStateStore.repeatMode(PlaybackService.this));
                 player.setShuffleModeEnabled(PlaybackStateStore.shuffle(PlaybackService.this));
@@ -126,6 +137,8 @@ public final class PlaybackService extends MediaSessionService {
             resetAB();
             recoveryMediaId = item == null ? "" : item.mediaId;
             recoveryAttempts = 0;
+            persistPlaybackState();
+            recoveryAttempts = 0;
         }
 
         @Override public void onPlayerError(PlaybackException error) {
@@ -138,6 +151,7 @@ public final class PlaybackService extends MediaSessionService {
             if (recoveryAttempts < 1) {
                 recoveryAttempts++;
                 recoveryHandler.removeCallbacks(recoveryRunnable);
+        persistPlaybackState();
                 recoveryHandler.postDelayed(recoveryRunnable, 350L);
             } else {
                 skipAfterPlaybackError();
@@ -278,6 +292,26 @@ public final class PlaybackService extends MediaSessionService {
                         new ChannelMixingMatrix(2, 2, new float[]{left, 0f, 0f, right}));
             }
         } catch (Throwable ignored) {}
+    }
+
+    private void persistPlaybackState() {
+        if (player == null || player.getMediaItemCount() == 0) return;
+        java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < player.getMediaItemCount(); i++) {
+            try {
+                ids.add(Long.parseLong(player.getMediaItemAt(i).mediaId));
+            } catch (Exception ignored) {}
+        }
+        long currentId = -1L;
+        if (player.getCurrentMediaItem() != null) {
+            try { currentId = Long.parseLong(player.getCurrentMediaItem().mediaId); }
+            catch (Exception ignored) {}
+        }
+        PlaybackStateStore.save(
+                this, ids, currentId, Math.max(0L, player.getCurrentPosition()),
+                player.getRepeatMode(), player.getShuffleModeEnabled(),
+                player.getPlaybackParameters().speed, player.getPlaybackParameters().pitch,
+                player.getVolume());
     }
 
     private void skipAfterPlaybackError() {
