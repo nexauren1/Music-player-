@@ -93,11 +93,11 @@ public final class UpdateDownloadWorker extends Worker {
                         .edit().putString("downloaded_version", version).apply();
 
                 postReadyNotification(version);
+                activeOutput = null;
                 return Result.success(new Data.Builder().putString("path", output.getAbsolutePath()).putString("version", version).build());
             } finally {
                 connection.disconnect();
                 activeConnection = null;
-                activeOutput = null;
             }
         } catch (Exception error) {
             if (activeOutput != null && activeOutput.exists()) {
@@ -105,6 +105,7 @@ public final class UpdateDownloadWorker extends Worker {
                 activeOutput.delete();
             }
             postErrorNotification(version, error.getMessage());
+            activeOutput = null;
             return Result.failure();
         }
     }
