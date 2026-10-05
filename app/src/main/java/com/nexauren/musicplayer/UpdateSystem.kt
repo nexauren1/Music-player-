@@ -100,13 +100,27 @@ object UpdateManager {
     suspend fun check(context: Context, notify: Boolean = false): UpdateInfo? =
         withContext(Dispatchers.IO) {
             runCatching {
+                val manifestUrl = BuildConfig.UPDATE_MANIFEST_URL.trim()
+                    .ifBlank {
+                        "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
+                    }
+                val separator = if (manifestUrl.contains("?")) "&" else "?"
                 val connection =
-                    URL(BuildConfig.UPDATE_MANIFEST_URL).openConnection() as HttpURLConnection
+                    URL(manifestUrl + separator + "t=" + System.currentTimeMillis())
+                        .openConnection() as HttpURLConnection
 
                 connection.connectTimeout = 10_000
                 connection.readTimeout = 15_000
                 connection.requestMethod = "GET"
+                connection.instanceFollowRedirects = true
                 connection.setRequestProperty("Accept", "application/json")
+                connection.setRequestProperty("Cache-Control", "no-cache")
+
+                val responseCode = connection.responseCode
+                if (responseCode !in 200..299) {
+                    connection.disconnect()
+                    throw IllegalStateException("Update manifest returned HTTP $responseCode.")
+                }
 
                 val body = connection.inputStream.bufferedReader().use { it.readText() }
                 connection.disconnect()
@@ -148,7 +162,9 @@ object UpdateManager {
         connection.connect()
 
         if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("Update download failed: " + connection.responseCode)
+            val code = connection.responseCode
+            connection.disconnect()
+            throw IllegalStateException("Update download failed: HTTP $code.")
         }
 
         val total = connection.contentLengthLong
@@ -230,10 +246,13 @@ object ApkInstaller {
             apk
         )
 
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
+        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
+            type = "application/vnd.android.package-archive"
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            putExtra(Intent.EXTRA_RETURN_RESULT, false)
         }
 
         try {
