@@ -625,7 +625,16 @@ private fun MusicPlayerRoot(
                                 onOpen = { nowPlaying = true },
                                 onPlayPause = vm::togglePlayPause,
                                 onNext = vm::next,
-                                onFavorite = { vm.favorite(song) }
+                                onFavorite = { vm.favorite(song) },
+                                onOpenEffects = { effectsOpen = true },
+                                onOpenEqualizer = { screen = AppScreen.EQUALIZER },
+                                onDrivingMode = {
+                                    drivingMode = true
+                                    drivingModeOpen = true
+                                    context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE)
+                                        .edit().putBoolean("driving_mode", true).apply()
+                                },
+                                onResetEffects = vm::resetEffects
                             )
                         }
 
@@ -1430,7 +1439,11 @@ private fun MiniPlayer(
     onOpen: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onFavorite: () -> Unit
+    onFavorite: () -> Unit,
+    onOpenEffects: () -> Unit,
+    onOpenEqualizer: () -> Unit,
+    onDrivingMode: () -> Unit,
+    onResetEffects: () -> Unit
 ) {
     val progress = if (duration > 0) {
         (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
@@ -1486,6 +1499,31 @@ private fun MiniPlayer(
                 }
                 IconButton(onClick = onNext) {
                     Icon(Icons.Filled.SkipNext, I18n.t("Next track"))
+                }
+                var menuOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, I18n.t("More options"))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(I18n.t("Effects")) },
+                            onClick = { menuOpen = false; onOpenEffects() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(I18n.t("Equalizer")) },
+                            onClick = { menuOpen = false; onOpenEqualizer() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(I18n.t("Driving mode")) },
+                            onClick = { menuOpen = false; onDrivingMode() },
+                            leadingIcon = { Icon(Icons.Filled.DirectionsCar, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(I18n.t("Reset effects")) },
+                            onClick = { menuOpen = false; onResetEffects() }
+                        )
+                    }
                 }
             }
             LinearProgressIndicator(
