@@ -494,6 +494,7 @@ private fun MusicPlayerRoot(
                         vm = vm,
                         songs = filteredSongs,
                         query = query,
+                        premium = premiumRepo.isPremium(),
                         onQueryChange = { query = it }
                     )
                     AppScreen.LIBRARY -> LibraryScreen(
@@ -700,6 +701,7 @@ private fun HomeScreen(
     vm: PlayerViewModel,
     songs: List<Song>,
     query: String,
+    premium: Boolean,
     onQueryChange: (String) -> Unit
 ) {
     val current by vm.currentSong.collectAsState()
@@ -745,7 +747,13 @@ private fun HomeScreen(
             }
         }
 
-        item { BannerAd() }
+        if (!premium) {
+            item { BannerAd() }
+        } else {
+            item {
+                PremiumHomeBadge()
+            }
+        }
     }
 }
 
