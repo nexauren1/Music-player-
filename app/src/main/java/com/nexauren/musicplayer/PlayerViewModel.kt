@@ -111,6 +111,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (list.isEmpty()) return
 
         val index = list.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        repository.recordPlay(song.id)
         val items = list.map { it.toMediaItem() }
         c.setMediaItems(items, index, 0L)
         c.prepare()
@@ -188,6 +189,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             controller?.pause()
         }
     }
+
+    fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
 
     private fun syncCurrent(mediaItem: MediaItem?) {
         val id = mediaItem?.mediaId?.toLongOrNull() ?: return
