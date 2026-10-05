@@ -313,6 +313,8 @@ private fun MusicPlayerRoot(
     var updating by remember { mutableStateOf(false) }
     var updateProgress by remember { mutableIntStateOf(0) }
     var updateError by remember { mutableStateOf("") }
+    var premiumProcessing by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
@@ -589,40 +591,73 @@ private fun MusicPlayerRoot(
                         premium = premiumRepo.loadLocal(),
                         previewUses = premiumRepo.remainingPreviewUses(),
                         onAccount = { screen = AppScreen.ACCOUNT },
+                        processing = premiumProcessing,
                         onRefresh = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
+                                    premiumProcessing = true
                                     val account = accountRepo.currentAccount()
 
                                     if (account != null) {
-                                        PayPalCheckout.verifyPending(
-                                            context,
-                                            account.uid,
-                                            premiumRepo
-                                        )
+                                        val pending = PayPalCheckout.loadPending(context)
 
-                                        val local = premiumRepo.loadLocal()
-                                        if (local.plan != PremiumPlan.NONE) {
-                                            PayPalVerifier.verifyWithRetry(
+                                        if (pending != null) {
+                                            val verification = PayPalVerifier.verifyWithRetry(
                                                 uid = account.uid,
-                                                plan = local.plan,
-                                                orderId = local.orderId,
-                                                subscriptionId = local.subscriptionId
-                                            ).onSuccess { result ->
-                                                if (result.verified) {
-                                                    premiumRepo.setVerifiedFromWorker(
-                                                        result.plan,
-                                                        result.expiresAtMillis,
-                                                        result.orderId,
-                                                        result.subscriptionId
-                                                    )
+                                                plan = pending.plan,
+                                                orderId = pending.orderId,
+                                                subscriptionId = pending.subscriptionId
+                                            )
+                                            val result = verification.getOrNull()
+                                            if (result?.verified == true) {
+                                                premiumRepo.setVerifiedFromWorker(
+                                                    result.plan,
+                                                    result.expiresAtMillis,
+                                                    result.orderId,
+                                                    result.subscriptionId
+                                                )
+                                                PayPalCheckout.clearPending(context)
+                                                premiumMessage = "Payment verified. Premium is now active."
+                                            } else if (verification.isFailure) {
+                                                premiumMessage = "Premium verification is temporarily unavailable. Your payment remains pending."
+                                            } else {
+                                                premiumMessage = "Payment is still processing. We will keep the purchase pending until PayPal confirms it."
+                                            }
+                                        } else {
+                                            val local = premiumRepo.loadLocal()
+                                            if (local.plan != PremiumPlan.NONE && local.verified) {
+                                                PayPalVerifier.verifyWithRetry(
+                                                    uid = account.uid,
+                                                    plan = local.plan,
+                                                    orderId = local.orderId,
+                                                    subscriptionId = local.subscriptionId
+                                                ).onSuccess { result ->
+                                                    if (result.verified) {
+                                                        premiumRepo.setVerifiedFromWorker(
+                                                            result.plan,
+                                                            result.expiresAtMillis,
+                                                            result.orderId,
+                                                            result.subscriptionId
+                                                        )
+                                                        premiumMessage = "Premium status verified."
+                                                    } else {
+                                                        premiumRepo.clearVerifiedPremium()
+                                                        premiumMessage = "Premium is no longer active."
+                                                    }
+                                                }.onFailure {
+                                                    premiumMessage = "Premium verification is temporarily unavailable."
                                                 }
+                                            } else {
+                                                premiumMessage = "No pending Premium purchase was found."
                                             }
                                         }
+                                    } else {
+                                        premiumMessage = "Sign in to verify Premium."
                                     }
 
                                     premiumRepo.syncFromFirebase()
                                     premiumRefresh++
+                                    premiumProcessing = false
                                 }
                             }
                         },
@@ -634,8 +669,11 @@ private fun MusicPlayerRoot(
                                 Toast.makeText(context, "Choose a Premium plan.", Toast.LENGTH_SHORT).show()
                             } else {
                                 activity?.lifecycleScope?.launch {
+                                    premiumProcessing = true
                                     PayPalCheckout.createCheckout(context, account.uid, plan)
                                         .onSuccess { approvalUrl ->
+                                            premiumProcessing = false
+                                            premiumMessage = "PayPal checkout opened. Waiting for payment confirmation."
                                             runCatching {
                                                 context.startActivity(
                                                     Intent(Intent.ACTION_VIEW, android.net.Uri.parse(approvalUrl))
@@ -649,6 +687,7 @@ private fun MusicPlayerRoot(
                                             }
                                         }
                                         .onFailure {
+                                            premiumProcessing = false
                                             Toast.makeText(
                                                 context,
                                                 "PayPal checkout failed: " + (it.message ?: "Unknown error"),
@@ -703,7 +742,17 @@ private fun MusicPlayerRoot(
                         onCheckUpdates = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
-                                    updateInfo = UpdateManager.check(context)
+                                    checkingUpdate = true
+                                    val found = UpdateManager.check(context)
+                                    updateInfo = found
+                                    checkingUpdate = false
+                                    if (found == null) {
+                                        Toast.makeText(
+                                            context,
+                                            "Music Player is up to date.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
                             }
                         }
@@ -1814,6 +1863,7 @@ private fun PremiumScreen(
     modifier: Modifier,
     account: AccountSnapshot?,
     premium: PremiumSnapshot,
+    processing: Boolean,
     previewUses: Int,
     onAccount: () -> Unit,
     onRefresh: () -> Unit,
@@ -1847,6 +1897,35 @@ private fun PremiumScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 150.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (processing) {
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Processing", fontWeight = FontWeight.ExtraBold)
+                                Text(
+                                    "Checking PayPal status and synchronizing your Premium access.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
+
         item {
             Card(
                 Modifier.fillMaxWidth(),
@@ -1985,7 +2064,7 @@ private fun PremiumScreen(
                     "$5",
                     "Every 3 months",
                     true,
-                    quarterlyCheckoutReady
+                    quarterlyCheckoutReady && !hasPendingPurchase && !processing
                 ) { onPurchase(PremiumPlan.QUARTERLY) }
             }
             item {
@@ -1994,7 +2073,7 @@ private fun PremiumScreen(
                     "$30",
                     "One-time payment • permanent",
                     false,
-                    lifetimeCheckoutReady
+                    lifetimeCheckoutReady && !hasPendingPurchase && !processing
                 ) { onPurchase(PremiumPlan.LIFETIME) }
             }
             if (hasPendingPurchase) {
@@ -2007,18 +2086,22 @@ private fun PremiumScreen(
                     ) {
                         Column(Modifier.padding(18.dp)) {
                             Text(
-                                "Payment waiting for verification",
+                                if (processing) "Processing payment" else "Payment waiting for verification",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Spacer(Modifier.height(5.dp))
                             Text(
-                                "Your PayPal checkout was started. Verify it here if the browser did not return to the app.",
+                                if (processing)
+                                    "PayPal payment is being checked. Keep this purchase pending until confirmation."
+                                else
+                                    "Your PayPal checkout was started. Verify it here if the browser did not return to the app.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(12.dp))
                             Button(
                                 onClick = onRefresh,
+                                enabled = !processing,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Filled.Refresh, null)
