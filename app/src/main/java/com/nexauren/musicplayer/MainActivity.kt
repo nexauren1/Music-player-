@@ -269,38 +269,71 @@ private fun MusicPlayerRoot(
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updating by remember { mutableStateOf(false) }
     var updateProgress by remember { mutableIntStateOf(0) }
+    var updateError by remember { mutableStateOf("") }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { vm.scan() }
+    var notificationsAllowed by remember {
+        mutableStateOf(NotificationHelper.areNotificationsEnabled(context))
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        notificationsAllowed = NotificationHelper.areNotificationsEnabled(context)
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        vm.scan()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(Unit) {
         val audioPermission =
             if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
             else Manifest.permission.READ_EXTERNAL_STORAGE
 
-        val permissions = buildList {
-            add(audioPermission)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        val missing = permissions.filter {
-            androidx.core.content.ContextCompat.checkSelfPermission(
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
-                it
+                audioPermission
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing.toTypedArray())
+        ) {
+            audioPermissionLauncher.launch(audioPermission)
         } else {
             vm.scan()
+            if (Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
 
         premiumRepo.syncFromFirebase()
+        delay(1500)
+        if (updateInfo == null) {
+            updateInfo = UpdateManager.check(context)
+        }
+    }
+
+    LaunchedEffect(premiumEvent) {
+        if (premiumEvent > 0) {
+            premiumRefresh++
+            screen = AppScreen.PREMIUM
+            Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     BackHandler(enabled = nowPlaying) {
