@@ -2941,7 +2941,7 @@ private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) ->
 @Composable
 private fun LanguageChoices(selected: AppLanguage, onSelected: (AppLanguage) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AppLanguage.values().forEach { language ->
+        items(AppLanguage.values().toList()) { language ->
             AssistChip(
                 onClick = { onSelected(language) },
                 label = { Text(language.label) }
