@@ -13,6 +13,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -101,10 +106,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -154,13 +161,20 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
     var screen by rememberSaveable { mutableStateOf(AppScreen.HOME) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var darkMode by rememberSaveable { mutableStateOf(false) }
+    val storedAppearance = remember { AppearanceStore.load(context) }
+    var darkMode by rememberSaveable { mutableStateOf(storedAppearance.darkMode) }
+    var themeName by rememberSaveable { mutableStateOf(storedAppearance.theme.name) }
+    var backgroundName by rememberSaveable { mutableStateOf(storedAppearance.background.name) }
+    var showAppearanceSetup by rememberSaveable { mutableStateOf(!storedAppearance.configured) }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
     var premiumRefresh by remember { mutableIntStateOf(0) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updating by remember { mutableStateOf(false) }
     var updateProgress by remember { mutableIntStateOf(0) }
+
+    val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
+    val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -212,7 +226,8 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
         if (drawerOpen) drawerState.open() else drawerState.close()
     }
 
-    MaterialTheme(colorScheme = if (darkMode) darkColors() else lightColors()) {
+    MaterialTheme(colorScheme = themeColors(appTheme, darkMode)) {
+        AppBackdrop(style = appBackground, dark = darkMode, theme = appTheme) {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -279,6 +294,7 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
             }
         ) {
             Scaffold(
+                containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets.statusBars,
                 topBar = {
                     CenterAlignedTopAppBar(
@@ -403,7 +419,7 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                                 if (url.isBlank() || url.startsWith("https://example.com")) {
                                     Toast.makeText(
                                         context,
-                                        "Checkout is not connected yet.",
+                                        "PayPal payment link is not configured for this plan.",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else {
@@ -418,13 +434,30 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                                 }
                             }
                         },
+                        quarterlyCheckoutReady = BuildConfig.PAYPAL_QUARTERLY_URL.isNotBlank() &&
+                            !BuildConfig.PAYPAL_QUARTERLY_URL.startsWith("https://example.com"),
+                        lifetimeCheckoutReady = BuildConfig.PAYPAL_LIFETIME_URL.isNotBlank() &&
+                            !BuildConfig.PAYPAL_LIFETIME_URL.startsWith("https://example.com"),
                         refreshToken = premiumRefresh
                     )
                     AppScreen.SETTINGS -> SettingsScreen(
                         modifier = Modifier.padding(padding),
                         vm = vm,
                         darkMode = darkMode,
-                        onDarkMode = { darkMode = it },
+                        onDarkMode = {
+                            darkMode = it
+                            AppearanceStore.save(context, appTheme, appBackground, it)
+                        },
+                        themeName = themeName,
+                        backgroundName = backgroundName,
+                        onThemeChange = {
+                            themeName = it.name
+                            AppearanceStore.save(context, it, appBackground, darkMode)
+                        },
+                        onBackgroundChange = {
+                            backgroundName = it.name
+                            AppearanceStore.save(context, appTheme, it, darkMode)
+                        },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
                         onAccount = { accountDialog = true },
                         onCheckUpdates = {
@@ -490,6 +523,22 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                     }
                 }
             )
+        }
+
+        if (showAppearanceSetup) {
+            AppearanceSetupDialog(
+                theme = appTheme,
+                background = appBackground,
+                darkMode = darkMode,
+                onThemeChange = { themeName = it.name },
+                onBackgroundChange = { backgroundName = it.name },
+                onDarkModeChange = { darkMode = it },
+                onSave = {
+                    AppearanceStore.save(context, appTheme, appBackground, darkMode)
+                    showAppearanceSetup = false
+                }
+            )
+        }
         }
     }
 }
@@ -604,49 +653,77 @@ private fun SectionTitle(title: String, subtitle: String) {
 
 @Composable
 private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
+    val transition = rememberInfiniteTransition(label = "home_now_playing")
+    val pulse by transition.animateFloat(0.88f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "pulse")
+
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        shape = RoundedCornerShape(30.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Row(
-            Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            Modifier.fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ),
+                    RoundedCornerShape(30.dp)
+                )
+                .padding(18.dp)
         ) {
-            if (song == null) {
-                Surface(
-                    Modifier.size(64.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest
-                ) {
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(18.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (song == null) {
+                    Surface(
+                        Modifier.size(72.dp).graphicsLayer {
+                            alpha = pulse
+                            scaleX = pulse
+                            scaleY = pulse
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(20.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text("Nothing playing", fontWeight = FontWeight.ExtraBold)
+                        Text("Start a track from All songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Artwork(
+                        song,
+                        Modifier.size(82.dp).graphicsLayer {
+                            scaleX = if (playing) pulse else 1f
+                            scaleY = if (playing) pulse else 1f
+                        }
                     )
-                }
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text("Nothing playing", fontWeight = FontWeight.Bold)
-                    Text(
-                        "Start a track from All songs.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                Artwork(song, Modifier.size(76.dp))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(7.dp))
-                    AssistChip(
-                        onClick = {},
-                        enabled = false,
-                        label = { Text(if (playing) "Playing now" else "Paused") },
-                        leadingIcon = { Icon(Icons.Filled.CheckCircle, null) }
-                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
+                        Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AnimatedBars(playing)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (playing) "Live playback" else "Paused",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        AssistChip(
+                            onClick = {},
+                            enabled = false,
+                            label = { Text(if (playing) "Playing now" else "Paused") },
+                            leadingIcon = { Icon(Icons.Filled.CheckCircle, null) }
+                        )
+                    }
                 }
             }
         }
@@ -755,25 +832,71 @@ private fun MiniPlayer(
 ) {
     val progress = if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
-    Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = onOpen),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        tonalElevation = 6.dp
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
     ) {
-        Column {
+        Column(
+            Modifier.fillMaxWidth().background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.secondaryContainer
+                    )
+                )
+            )
+        ) {
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(2.dp)
+                modifier = Modifier.fillMaxWidth().height(3.dp)
             )
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(song, Modifier.size(52.dp))
-                Spacer(Modifier.width(11.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpen)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box {
+                    Artwork(song, Modifier.size(56.dp))
+                    if (playing) {
+                        Surface(
+                            Modifier.align(Alignment.BottomEnd).size(18.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(3.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
-                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        song.artist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 IconButton(onClick = onPlayPause) {
-                    Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null)
+                    Surface(Modifier.size(42.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                        Icon(
+                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(9.dp)
+                        )
+                    }
                 }
                 IconButton(onClick = onNext) {
                     Icon(Icons.Filled.SkipNext, null)
@@ -795,59 +918,144 @@ private fun NowPlayingSheet(
     onEqualizer: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
+    val transition = rememberInfiniteTransition(label = "now_playing_effects")
+    val pulse by transition.animateFloat(
+        0.94f,
+        1.02f,
+        infiniteRepeatable(tween(950), RepeatMode.Reverse),
+        label = "artPulse"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Now Playing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onEqualizer) { Icon(Icons.Filled.Tune, "Equalizer") }
-            }
-            Spacer(Modifier.height(12.dp))
-            Artwork(song, Modifier.fillMaxWidth().height(310.dp))
-            Spacer(Modifier.height(16.dp))
-            Text(song.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-            Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(
-                value = if (duration > 0) position.toFloat().coerceIn(0f, duration.toFloat()) else 0f,
-                onValueChange = { vm.seekTo(it.toLong()) },
-                valueRange = 0f..duration.coerceAtLeast(1L).toFloat()
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatDuration(position))
-                Text(formatDuration(duration))
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { vm.setVolume(0f) }) { Icon(Icons.Filled.VolumeDown, "Mute") }
-                Slider(value = volume, onValueChange = vm::setVolume, modifier = Modifier.weight(1f))
-                IconButton(onClick = { vm.setVolume(1f) }) { Icon(Icons.Filled.VolumeUp, "Max volume") }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, "Shuffle") }
-                IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, null, Modifier.size(34.dp)) }
-                Surface(Modifier.size(70.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
-                    IconButton(onClick = vm::togglePlayPause) {
-                        Icon(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(38.dp)
-                        )
+        LazyColumn(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    )
+                                ),
+                                RoundedCornerShape(32.dp)
+                            )
+                            .padding(18.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "NOW PLAYING",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        "Your sound. Your space.",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                                IconButton(onClick = onEqualizer) {
+                                    Icon(Icons.Filled.Tune, "Equalizer")
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Box(
+                                Modifier.fillMaxWidth().height(320.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Surface(
+                                    Modifier.size(300.dp).alpha(if (playing) 0.34f else 0.22f),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {}
+                                Artwork(
+                                    song,
+                                    Modifier.fillMaxWidth().height(292.dp).graphicsLayer {
+                                        scaleX = if (playing) pulse else 1f
+                                        scaleY = if (playing) pulse else 1f
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        song.title,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                AnimatedBars(playing)
+                            }
+                            Slider(
+                                value = if (duration > 0) position.toFloat().coerceIn(0f, duration.toFloat()) else 0f,
+                                onValueChange = { vm.seekTo(it.toLong()) },
+                                valueRange = 0f..duration.coerceAtLeast(1L).toFloat()
+                            )
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(formatDuration(position), style = MaterialTheme.typography.labelSmall)
+                                Text(formatDuration(duration), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
-                IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, null, Modifier.size(34.dp)) }
-                IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, "Repeat") }
             }
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = { vm.startSleepTimer(15) }, label = { Text("15 min") })
-                AssistChip(onClick = { vm.startSleepTimer(30) }, label = { Text("30 min") })
-                AssistChip(onClick = { vm.startSleepTimer(60) }, label = { Text("60 min") })
+            item {
+                Card(shape = RoundedCornerShape(24.dp)) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { vm.setVolume(0f) }) { Icon(Icons.Filled.VolumeDown, "Mute") }
+                            Slider(value = volume, onValueChange = vm::setVolume, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { vm.setVolume(1f) }) { Icon(Icons.Filled.VolumeUp, "Max volume") }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, "Shuffle") }
+                            IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, null, Modifier.size(32.dp)) }
+                            Surface(Modifier.size(72.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                                IconButton(onClick = vm::togglePlayPause) {
+                                    Icon(
+                                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(38.dp)
+                                    )
+                                }
+                            }
+                            IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, null, Modifier.size(32.dp)) }
+                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, "Repeat") }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AssistChip(onClick = { vm.startSleepTimer(15) }, label = { Text("15 min") })
+                            AssistChip(onClick = { vm.startSleepTimer(30) }, label = { Text("30 min") })
+                            AssistChip(onClick = { vm.startSleepTimer(60) }, label = { Text("60 min") })
+                        }
+                    }
+                }
             }
-            Spacer(Modifier.height(28.dp))
         }
     }
 }
@@ -962,65 +1170,59 @@ private fun PremiumScreen(
     onAccount: () -> Unit,
     onRefresh: () -> Unit,
     onPurchase: (PremiumPlan) -> Unit,
+    quarterlyCheckoutReady: Boolean,
+    lifetimeCheckoutReady: Boolean,
     refreshToken: Int
 ) {
     LaunchedEffect(refreshToken) { }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text("Optional account. Premium is for users who want paid features and cloud entitlement.")
-                    Spacer(Modifier.height(10.dp))
-                    if (account == null) {
-                        Text("A verified account is required before a paid checkout.")
+            Card(shape = RoundedCornerShape(30.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                )
+                            ),
+                            RoundedCornerShape(30.dp)
+                        )
+                        .padding(20.dp)
+                ) {
+                    Column {
+                        Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Unlock the full audio experience and keep your entitlement synced to your account.")
                         Spacer(Modifier.height(10.dp))
-                        Button(onClick = onAccount) { Text("Sign in / create account") }
-                    } else {
-                        Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                        if (account == null) {
+                            Text("Sign in before purchasing so the entitlement can be linked to your account.")
+                            Spacer(Modifier.height(10.dp))
+                            Button(onClick = onAccount) { Text("Sign in / create account") }
+                        } else {
+                            Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                        }
                     }
                 }
             }
         }
-        item {
-            PlanCard(
-                name = "Quarterly",
-                price = "$5",
-                detail = "Every 3 months",
-                highlight = true,
-                onClick = { onPurchase(PremiumPlan.QUARTERLY) }
-            )
-        }
-        item {
-            PlanCard(
-                name = "Lifetime",
-                price = "$30",
-                detail = "One-time payment • permanent",
-                highlight = false,
-                onClick = { onPurchase(PremiumPlan.LIFETIME) }
-            )
-        }
+        item { PlanCard("Quarterly", "$5", "Every 3 months", true, quarterlyCheckoutReady) { onPurchase(PremiumPlan.QUARTERLY) } }
+        item { PlanCard("Lifetime", "$30", "One-time payment • permanent", false, lifetimeCheckoutReady) { onPurchase(PremiumPlan.LIFETIME) } }
         item {
             Card(shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(18.dp)) {
-                    Text("Testing limits", fontWeight = FontWeight.ExtraBold)
+                    Text("Premium previews", fontWeight = FontWeight.ExtraBold)
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Free users get up to §{PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT} premium preset previews. " +
-                            "A purchase is not treated as premium until the payment is verified and the Firebase entitlement is synced."
-                    )
+                    Text("Free users get up to ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT} premium preset previews. A purchase becomes premium after the payment is verified and Firebase entitlement is synced.")
                     Spacer(Modifier.height(8.dp))
-                    Text("Previews used: §{previewUses} / §{PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT}")
+                    Text("Previews used: $previewUses / ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT}")
                     if (premium.verified) {
-                        Spacer(Modifier.height(6.dp))
                         Text(
                             "Current plan: " + premium.plan.name.lowercase(),
                             color = MaterialTheme.colorScheme.primary,
@@ -1031,16 +1233,10 @@ private fun PremiumScreen(
             }
         }
         item {
-            Card(
-                Modifier.fillMaxWidth().clickable(onClick = onRefresh),
-                shape = RoundedCornerShape(22.dp)
-            ) {
+            Card(Modifier.fillMaxWidth().clickable(onClick = onRefresh), shape = RoundedCornerShape(22.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Refresh entitlement", fontWeight = FontWeight.Bold)
-                    Text(
-                        "Sync the premium status from Firebase when connected.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("Sync premium status from Firebase.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1053,24 +1249,32 @@ private fun PlanCard(
     price: String,
     detail: String,
     highlight: Boolean,
+    checkoutReady: Boolean,
     onClick: () -> Unit
 ) {
     Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
+        Modifier.fillMaxWidth().clickable(enabled = checkoutReady, onClick = onClick),
+        shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (highlight) MaterialTheme.colorScheme.secondaryContainer
             else MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.size(54.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+            Surface(Modifier.size(56.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
                 Icon(Icons.Filled.Star, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(14.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                 Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    if (checkoutReady) "PayPal checkout ready" else "Payment link not configured",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (checkoutReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Text(price, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
         }
@@ -1078,6 +1282,7 @@ private fun PlanCard(
 }
 
 @Composable
+private fun AccountDialog@Composable
 private fun AccountDialog(
     activity: Activity?,
     repo: FirebaseAccountRepository,
@@ -1195,12 +1400,18 @@ private fun SettingsScreen(
     vm: PlayerViewModel,
     darkMode: Boolean,
     onDarkMode: (Boolean) -> Unit,
+    themeName: String,
+    backgroundName: String,
+    onThemeChange: (AppThemeStyle) -> Unit,
+    onBackgroundChange: (AppBackgroundStyle) -> Unit,
     onOpenPremium: () -> Unit,
     onAccount: () -> Unit,
     onCheckUpdates: () -> Unit
 ) {
     var autoScan by rememberSaveable { mutableStateOf(true) }
     var notifications by rememberSaveable { mutableStateOf(true) }
+    val selectedTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
+    val selectedBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1240,7 +1451,15 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Appearance", "Clean cards, rounded surfaces and light/dark mode.") {
+            SettingsSection("Appearance", "Choose the visual identity, background and light/dark mode.") {
+                Text("Theme", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(7.dp))
+                ThemeChoices(selectedTheme, onThemeChange)
+                Spacer(Modifier.height(13.dp))
+                Text("Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(7.dp))
+                BackgroundChoices(selectedBackground, onBackgroundChange)
+                Spacer(Modifier.height(5.dp))
                 SwitchRow("Dark mode", "Use the darker color system.", darkMode, onDarkMode)
             }
         }
@@ -1271,12 +1490,49 @@ private fun SettingsScreen(
 
 @Composable
 private fun SettingsSection(title: String, subtitle: String, content: @Composable () -> Unit) {
-    Card(shape = RoundedCornerShape(24.dp)) {
-        Column(Modifier.padding(16.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(Modifier.padding(17.dp)) {
             Text(title, fontWeight = FontWeight.ExtraBold)
             Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             content()
+        }
+    }
+}
+
+@Composable
+private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(AppThemeStyle.values().toList()) { theme ->
+            AssistChip(
+                onClick = { onSelected(theme) },
+                label = { Text(theme.label) },
+                leadingIcon = {
+                    Surface(
+                        Modifier.size(16.dp),
+                        shape = CircleShape,
+                        color = when (theme) {
+                            AppThemeStyle.VIOLET -> Color(0xFF6D42E8)
+                            AppThemeStyle.OCEAN -> Color(0xFF006B94)
+                            AppThemeStyle.SUNSET -> Color(0xFFC54836)
+                            AppThemeStyle.MINT -> Color(0xFF087A58)
+                        }
+                    ) {}
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackgroundChoices(selected: AppBackgroundStyle, onSelected: (AppBackgroundStyle) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(AppBackgroundStyle.values().toList()) { background ->
+            AssistChip(onClick = { onSelected(background) }, label = { Text(background.label) })
         }
     }
 }
@@ -1293,6 +1549,66 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheck
 }
 
 @Composable
+private fun AppearanceSetupDialog(
+    theme: AppThemeStyle,
+    background: AppBackgroundStyle,
+    darkMode: Boolean,
+    onThemeChange: (AppThemeStyle) -> Unit,
+    onBackgroundChange: (AppBackgroundStyle) -> Unit,
+    onDarkModeChange: (Boolean) -> Unit,
+    onSave: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Make Music Player yours", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Choose your theme and background before you start.")
+                Text("Theme", fontWeight = FontWeight.Bold)
+                ThemeChoices(theme, onThemeChange)
+                Text("Background", fontWeight = FontWeight.Bold)
+                BackgroundChoices(background, onBackgroundChange)
+                SwitchRow("Dark mode", "You can change this later in Settings.", darkMode, onDarkModeChange)
+            }
+        },
+        confirmButton = { Button(onClick = onSave) { Text("Continue") } }
+    )
+}
+
+@Composable
+private fun AnimatedBars(active: Boolean) {
+    val transition = rememberInfiniteTransition(label = "bars")
+    val a by transition.animateFloat(
+        initialValue = 8f,
+        targetValue = if (active) 26f else 10f,
+        animationSpec = infiniteRepeatable(tween(420), RepeatMode.Reverse),
+        label = "barA"
+    )
+    val b by transition.animateFloat(
+        initialValue = 14f,
+        targetValue = if (active) 34f else 12f,
+        animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+        label = "barB"
+    )
+    val c by transition.animateFloat(
+        initialValue = 10f,
+        targetValue = if (active) 22f else 9f,
+        animationSpec = infiniteRepeatable(tween(460), RepeatMode.Reverse),
+        label = "barC"
+    )
+    Row(
+        Modifier.height(36.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(Modifier.width(4.dp).height(a.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary) {}
+        Surface(Modifier.width(4.dp).height(b.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.secondary) {}
+        Surface(Modifier.width(4.dp).height(c.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.tertiary) {}
+    }
+}
+
+@Composable
+private fun EmptyCard@Composable
 private fun EmptyCard(text: String) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
         Column(
