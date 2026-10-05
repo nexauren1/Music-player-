@@ -136,7 +136,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handlePayPalIntent(intent)
-        setContent { MusicPlayerRoot(playerViewModel, premiumEvent, premiumMessage) }
+        setContent {
+            MusicPlayerRoot(
+                playerViewModel,
+                premiumEvent,
+                premiumMessage
+            ) { message ->
+                premiumMessage = message
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -284,7 +292,8 @@ private enum class AppScreen(val label: String) {
 private fun MusicPlayerRoot(
     vm: PlayerViewModel,
     premiumEvent: Int,
-    premiumMessage: String
+    premiumMessage: String,
+    onPremiumMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
@@ -618,11 +627,11 @@ private fun MusicPlayerRoot(
                                                     result.subscriptionId
                                                 )
                                                 PayPalCheckout.clearPending(context)
-                                                premiumMessage = "Payment verified. Premium is now active."
+                                                onPremiumMessage("Payment verified. Premium is now active.")
                                             } else if (verification.isFailure) {
-                                                premiumMessage = "Premium verification is temporarily unavailable. Your payment remains pending."
+                                                onPremiumMessage("Premium verification is temporarily unavailable. Your payment remains pending.")
                                             } else {
-                                                premiumMessage = "Payment is still processing. We will keep the purchase pending until PayPal confirms it."
+                                                onPremiumMessage("Payment is still processing. We will keep the purchase pending until PayPal confirms it.")
                                             }
                                         } else {
                                             val local = premiumRepo.loadLocal()
@@ -640,20 +649,20 @@ private fun MusicPlayerRoot(
                                                             result.orderId,
                                                             result.subscriptionId
                                                         )
-                                                        premiumMessage = "Premium status verified."
+                                                        onPremiumMessage("Premium status verified.")
                                                     } else {
                                                         premiumRepo.clearVerifiedPremium()
-                                                        premiumMessage = "Premium is no longer active."
+                                                        onPremiumMessage("Premium is no longer active.")
                                                     }
                                                 }.onFailure {
-                                                    premiumMessage = "Premium verification is temporarily unavailable."
+                                                    onPremiumMessage("Premium verification is temporarily unavailable.")
                                                 }
                                             } else {
-                                                premiumMessage = "No pending Premium purchase was found."
+                                                onPremiumMessage("No pending Premium purchase was found.")
                                             }
                                         }
                                     } else {
-                                        premiumMessage = "Sign in to verify Premium."
+                                        onPremiumMessage("Sign in to verify Premium.")
                                     }
 
                                     premiumRepo.syncFromFirebase()
@@ -674,7 +683,7 @@ private fun MusicPlayerRoot(
                                     PayPalCheckout.createCheckout(context, account.uid, plan)
                                         .onSuccess { approvalUrl ->
                                             premiumProcessing = false
-                                            premiumMessage = "PayPal checkout opened. Waiting for payment confirmation."
+                                            onPremiumMessage("PayPal checkout opened. Waiting for payment confirmation.")
                                             runCatching {
                                                 context.startActivity(
                                                     Intent(Intent.ACTION_VIEW, android.net.Uri.parse(approvalUrl))
