@@ -612,6 +612,20 @@ private fun MusicPlayerRoot(
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
                         onAccount = { accountDialog = true },
+                        notificationsAllowed = notificationsAllowed,
+                        onRequestNotifications = {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                context.startActivity(
+                                    Intent(
+                                        android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                                    ).apply {
+                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                )
+                            }
+                        },
                         onCheckUpdates = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
@@ -1779,10 +1793,11 @@ private fun SettingsScreen(
     onBackgroundChange: (AppBackgroundStyle) -> Unit,
     onOpenPremium: () -> Unit,
     onAccount: () -> Unit,
+    notificationsAllowed: Boolean,
+    onRequestNotifications: () -> Unit,
     onCheckUpdates: () -> Unit
 ) {
     var autoScan by rememberSaveable { mutableStateOf(true) }
-    var notifications by rememberSaveable { mutableStateOf(true) }
     val selectedTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val selectedBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
@@ -1838,8 +1853,42 @@ private fun SettingsScreen(
         }
         item {
             SettingsSection("Notifications", "Playback and update notifications.") {
-                SwitchRow("Update notifications", "Allow update checks to notify you.", notifications) {
-                    notifications = it
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (notificationsAllowed) "Notifications enabled" else "Notifications disabled",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (notificationsAllowed)
+                                "Music Player can automatically report updates and playback status."
+                            else
+                                "Allow notifications so automatic update checks can alert you."
+                        )
+                    }
+                    Surface(
+                        Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = if (notificationsAllowed)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Icon(
+                            if (notificationsAllowed) Icons.Filled.CheckCircle else Icons.Filled.Update,
+                            null,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = onRequestNotifications,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (notificationsAllowed) "Open notification settings" else "Enable notifications")
                 }
             }
         }
