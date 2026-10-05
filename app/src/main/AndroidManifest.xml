@@ -40,6 +40,10 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".ApkInstallReceiver"
+            android:exported="false" />
+
         <service
             android:name=".PlaybackService"
             android:exported="true"
