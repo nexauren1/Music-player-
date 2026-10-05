@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "1.4.0",
-  "apkUrl": "https://github.com/nexauren1/Music-player-/releases/download/v1.4.0/app-release.apk",
+  "versionCode": 8,
+  "versionName": "1.5.0",
+  "apkUrl": "https://github.com/nexauren1/Music-player-/releases/download/v1.5.0/app-release.apk",
   "sha256": "",
-  "changelog": "Verified PayPal return and Premium activation, real Premium limits, automatic notification checks, improved APK updates, expanded colors and animated visual design, and a new premium mini player."
+  "changelog": "Major visual redesign with a modern Now Playing home, stronger mini player, Most Played dashboard, richer colors and animations, plus automatic PayPal Premium recovery after browser checkout."
 }
