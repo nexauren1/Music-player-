@@ -85,7 +85,7 @@ object NotificationHelper {
     fun showInstallSuccess(context: Context, message: String) {
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Music Player update failed")
+            .setContentTitle("Music Player update installed")
             .setContentText(message)
             .setAutoCancel(true)
             .build()
