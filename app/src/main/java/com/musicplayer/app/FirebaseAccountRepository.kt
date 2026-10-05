@@ -8,6 +8,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -101,6 +102,26 @@ class FirebaseAccountRepository(private val context: Context) {
 
             persist(user.uid)
             AccountSnapshot(user.uid, user.email, user.displayName)
+        }
+    }
+
+    suspend fun updateDisplayName(name: String): Result<AccountSnapshot> {
+        if (!isFirebaseConfigured()) return Result.failure(IllegalStateException("Firebase is not configured yet."))
+        val clean = name.trim()
+        if (clean.isBlank()) return Result.failure(IllegalArgumentException("Name cannot be empty."))
+        return runCatching {
+            val user = FirebaseAuth.getInstance().currentUser ?: error("No account is signed in.")
+            user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(clean).build()).await()
+            AccountSnapshot(user.uid, user.email, user.displayName)
+        }
+    }
+
+    suspend fun deleteAccount(): Result<Unit> {
+        if (!isFirebaseConfigured()) return Result.failure(IllegalStateException("Firebase is not configured yet."))
+        return runCatching {
+            val user = FirebaseAuth.getInstance().currentUser ?: error("No account is signed in.")
+            user.delete().await()
+            prefs.edit().clear().apply()
         }
     }
 
