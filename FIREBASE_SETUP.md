@@ -44,7 +44,14 @@ Quarterly purchases should be renewed by the payment backend and receive a new `
 - Quarterly: USD 5 every 3 months
 - Lifetime: USD 30 one-time
 
-The Android client only opens the configured checkout URL. Payment verification and entitlement writing must happen server-side before setting `verified = true`.
+The Android client only opens the configured checkout URL and reads its own entitlement. Payment verification and entitlement writing happen in the Cloudflare Worker after PayPal confirms the purchase.
+
+The Worker needs these Cloudflare secrets:
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+
+Use a Firebase service-account key with permission to write Firestore. Never commit the JSON key or paste the private key into GitHub/source code.
 
 ## Account rules
 
