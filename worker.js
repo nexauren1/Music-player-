@@ -665,10 +665,17 @@ export default {
           deepLink.searchParams.set("plan", result.plan);
           if (result.orderId) deepLink.searchParams.set("orderId", result.orderId);
           if (result.subscriptionId) deepLink.searchParams.set("subscriptionId", result.subscriptionId);
-          return html(
-            "Premium activated",
-            "Your payment is verified. Music Player will open automatically and activate Premium.",
-            deepLink.toString()
+          const appLink = deepLink.toString();
+          const safeLink = appLink.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+          return new Response(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"1;url=" +
+              safeLink +
+              "\"><title>Premium activated</title><style>body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#5b21b6,#0891b2);color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}main{text-align:center;max-width:520px;margin:24px;padding:32px;border-radius:30px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px)}a{display:inline-block;margin-top:16px;padding:14px 22px;border-radius:999px;background:#fff;color:#4c1d95;text-decoration:none;font-weight:800}</style></head><body><main><div style=\"font-size:54px\">✓</div><h1>Premium activated</h1><p>Payment verified successfully. Returning to Music Player…</p><a href=\"" +
+              safeLink +
+              "\">Open Music Player</a><script>setTimeout(function(){window.location.replace(" +
+              JSON.stringify(appLink) +
+              ")},250);</script></main></body></html>",
+            { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
           );
         } catch (error) {
           return html(
