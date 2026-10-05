@@ -246,7 +246,7 @@ object I18n {
         "Premium low-end enhancement inside the equalizer." to "Reforço Premium de graves no equalizador.",
         "Premium spatial effect inside the equalizer." to "Efeito espacial Premium no equalizador.",
         "Premium gain enhancement inside the equalizer." to "Aumento de ganho Premium no equalizador.",
-        "DJ preset library" to "Biblioteca de presets DJ",
+        "Premium preset library" to "Biblioteca de presets Premium",
         "Studio, Deep Bass, Hip-Hop, EDM, Bright and Lo-Fi." to "Studio, Deep Bass, Hip-Hop, EDM, Bright e Lo-Fi.",
         "Verified access" to "Acesso verificado",
         "Your Premium equalizer entitlement is linked to your account." to "A autorização Premium do equalizador está ligada à sua conta.",
@@ -272,7 +272,7 @@ object I18n {
         "is available" to "está disponível",
         "Open Music Player to download the update." to "Abra o Music Player para baixar a atualização.",
         "Music Player update installed" to "Atualização do Music Player instalada",
-        "Music Player update failed" to "Falha na atualização do Music Player"
+        "Music Player update failed" to "Falha na atualização do Music Player",
         "Processing payment" to "Processando pagamento",
         "Pause" to "Pausar",
         "Play" to "Reproduzir",
