@@ -123,14 +123,107 @@ import androidx.media3.common.Player
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val playerViewModel by viewModels<PlayerViewModel>()
+    private val premiumRepository by lazy { PremiumRepository(this) }
+    private var premiumEvent by mutableIntStateOf(0)
+    private var premiumMessage by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MusicPlayerRoot(playerViewModel) }
+        handlePayPalIntent(intent)
+        setContent { MusicPlayerRoot(playerViewModel, premiumEvent, premiumMessage) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handlePayPalIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ApkInstaller.resumeIfPending(this)
+        lifecycleScope.launch {
+            val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
+            val local = premiumRepository.loadLocal()
+            if (account != null && local.verified && local.plan != PremiumPlan.NONE) {
+                val result = PayPalVerifier.verify(
+                    uid = account.uid,
+                    plan = local.plan,
+                    orderId = local.orderId,
+                    subscriptionId = local.subscriptionId
+                )
+                result.onSuccess {
+                    if (it.verified) {
+                        premiumRepository.setVerifiedFromWorker(
+                            it.plan,
+                            it.expiresAtMillis,
+                            it.orderId,
+                            it.subscriptionId
+                        )
+                    } else {
+                        premiumRepository.clearVerifiedPremium()
+                        premiumEvent++
+                        premiumMessage = "Premium is no longer active."
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handlePayPalIntent(intent: Intent?) {
+        if (intent?.scheme != "musicplayer" || intent.host != "paypal") return
+
+        if (intent.path == "/cancel") {
+            premiumMessage = "Payment cancelled. Premium was not activated."
+            premiumEvent++
+            return
+        }
+
+        if (intent.path != "/success") return
+
+        val account = FirebaseAccountRepository(this).currentAccount()
+        if (account == null) {
+            premiumMessage = "Sign in again so Music Player can verify this purchase."
+            premiumEvent++
+            return
+        }
+
+        val plan = when (intent.getStringExtra("plan") ?: intent.data?.getQueryParameter("plan")) {
+            "quarterly" -> PremiumPlan.QUARTERLY
+            "lifetime" -> PremiumPlan.LIFETIME
+            else -> PremiumPlan.NONE
+        }
+        val orderId = intent.getStringExtra("orderId")
+            ?: intent.data?.getQueryParameter("orderId")
+        val subscriptionId = intent.getStringExtra("subscriptionId")
+            ?: intent.data?.getQueryParameter("subscriptionId")
+
+        lifecycleScope.launch {
+            PayPalVerifier.verify(account.uid, plan, orderId, subscriptionId)
+                .onSuccess {
+                    if (it.verified) {
+                        premiumRepository.setVerifiedFromWorker(
+                            it.plan,
+                            it.expiresAtMillis,
+                            it.orderId,
+                            it.subscriptionId
+                        )
+                        premiumMessage = "Premium activated. All premium features are now unlocked."
+                    } else {
+                        premiumMessage = "Payment returned, but PayPal has not confirmed Premium yet."
+                    }
+                    premiumEvent++
+                }
+                .onFailure {
+                    premiumMessage = "Premium verification failed: " + (it.message ?: "Unknown error")
+                    premiumEvent++
+                }
+        }
     }
 }
 
@@ -146,7 +239,11 @@ private enum class AppScreen(val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MusicPlayerRoot(vm: PlayerViewModel) {
+private fun MusicPlayerRoot(
+    vm: PlayerViewModel,
+    premiumEvent: Int,
+    premiumMessage: String
+) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val songs by vm.songs.collectAsState()
@@ -172,38 +269,71 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updating by remember { mutableStateOf(false) }
     var updateProgress by remember { mutableIntStateOf(0) }
+    var updateError by remember { mutableStateOf("") }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { vm.scan() }
+    var notificationsAllowed by remember {
+        mutableStateOf(NotificationHelper.areNotificationsEnabled(context))
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        notificationsAllowed = NotificationHelper.areNotificationsEnabled(context)
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        vm.scan()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(Unit) {
         val audioPermission =
             if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
             else Manifest.permission.READ_EXTERNAL_STORAGE
 
-        val permissions = buildList {
-            add(audioPermission)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        val missing = permissions.filter {
-            androidx.core.content.ContextCompat.checkSelfPermission(
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
-                it
+                audioPermission
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing.toTypedArray())
+        ) {
+            audioPermissionLauncher.launch(audioPermission)
         } else {
             vm.scan()
+            if (Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
 
         premiumRepo.syncFromFirebase()
+        delay(1500)
+        if (updateInfo == null) {
+            updateInfo = UpdateManager.check(context)
+        }
+    }
+
+    LaunchedEffect(premiumEvent) {
+        if (premiumEvent > 0) {
+            premiumRefresh++
+            screen = AppScreen.PREMIUM
+            Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     BackHandler(enabled = nowPlaying) {
@@ -364,6 +494,7 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                         vm = vm,
                         songs = filteredSongs,
                         query = query,
+                        premium = premiumRepo.isPremium(),
                         onQueryChange = { query = it }
                     )
                     AppScreen.LIBRARY -> LibraryScreen(
@@ -481,6 +612,20 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
                         onAccount = { accountDialog = true },
+                        notificationsAllowed = notificationsAllowed,
+                        onRequestNotifications = {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                context.startActivity(
+                                    Intent(
+                                        android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                                    ).apply {
+                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                )
+                            }
+                        },
                         onCheckUpdates = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
@@ -528,18 +673,24 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                 info = info,
                 progress = updateProgress,
                 updating = updating,
+                error = updateError,
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
                     updating = true
+                    updateError = ""
                     activity?.let { host ->
                         host.lifecycleScope.launch {
                             runCatching {
                                 UpdateManager.downloadAndInstall(context, info) {
                                     updateProgress = it
                                 }
+                            }.onFailure {
+                                updateError = it.message ?: "The update could not be installed."
                             }
                             updating = false
-                            updateInfo = null
+                            if (updateError.isBlank()) {
+                                updateInfo = null
+                            }
                         }
                     }
                 }
@@ -570,6 +721,7 @@ private fun HomeScreen(
     vm: PlayerViewModel,
     songs: List<Song>,
     query: String,
+    premium: Boolean,
     onQueryChange: (String) -> Unit
 ) {
     val current by vm.currentSong.collectAsState()
@@ -615,7 +767,13 @@ private fun HomeScreen(
             }
         }
 
-        item { BannerAd() }
+        if (!premium) {
+            item { BannerAd() }
+        } else {
+            item {
+                PremiumHomeBadge()
+            }
+        }
     }
 }
 
@@ -852,75 +1010,118 @@ private fun MiniPlayer(
     onNext: () -> Unit
 ) {
     val progress = if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
+    val transition = rememberInfiniteTransition(label = "mini_player")
+    val glow by transition.animateFloat(
+        0.72f,
+        1f,
+        infiniteRepeatable(tween(850), RepeatMode.Reverse),
+        label = "miniGlow"
+    )
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(24.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
     ) {
-        Column(
-            Modifier.fillMaxWidth().background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.secondaryContainer
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
                     )
                 )
-            )
         ) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(3.dp)
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpen)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box {
-                    Artwork(song, Modifier.size(56.dp))
-                    if (playing) {
+            if (playing) {
+                Surface(
+                    Modifier.size(120.dp).align(Alignment.TopEnd).alpha(glow * 0.18f),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {}
+            }
+            Column {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpen)
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box {
+                        Artwork(
+                            song,
+                            Modifier
+                                .size(58.dp)
+                                .graphicsLayer {
+                                    rotationZ = if (playing) glow * 0.7f else 0f
+                                }
+                        )
                         Surface(
-                            Modifier.align(Alignment.BottomEnd).size(18.dp),
+                            Modifier
+                                .size(20.dp)
+                                .align(Alignment.BottomEnd)
+                                .alpha(if (playing) 1f else 0f),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary
                         ) {
                             Icon(
-                                Icons.Filled.PlayArrow,
+                                Icons.Filled.VolumeUp,
                                 null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(3.dp)
+                                modifier = Modifier.padding(4.dp)
                             )
                         }
                     }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-                    Text(
-                        song.artist,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onPlayPause) {
-                    Surface(Modifier.size(42.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
-                        Icon(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(9.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (playing) "NOW PLAYING" else "PAUSED",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            song.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            song.artist,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Filled.SkipNext, null)
+                    AnimatedBars(playing)
+                    IconButton(onClick = onPlayPause) {
+                        Surface(
+                            Modifier.size(42.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Icon(
+                                if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(9.dp)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onNext) {
+                        Icon(Icons.Filled.SkipNext, null)
+                    }
                 }
             }
         }
@@ -939,6 +1140,7 @@ private fun NowPlayingSheet(
     onEqualizer: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
+    val premiumActive = remember { PremiumRepository(LocalContext.current) }.isPremium()
     val transition = rememberInfiniteTransition(label = "now_playing_effects")
     val pulse by transition.animateFloat(
         0.94f,
@@ -1071,8 +1273,36 @@ private fun NowPlayingSheet(
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AssistChip(onClick = { vm.startSleepTimer(15) }, label = { Text("15 min") })
-                            AssistChip(onClick = { vm.startSleepTimer(30) }, label = { Text("30 min") })
-                            AssistChip(onClick = { vm.startSleepTimer(60) }, label = { Text("60 min") })
+                            AssistChip(
+                                onClick = {
+                                    if (premiumActive) {
+                                        vm.startSleepTimer(30)
+                                    } else {
+                                        Toast.makeText(
+                                            LocalContext.current,
+                                            "30 minute sleep timer is Premium.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                label = { Text("30 min • Premium") },
+                                leadingIcon = { Icon(Icons.Filled.Star, null) }
+                            )
+                            AssistChip(
+                                onClick = {
+                                    if (premiumActive) {
+                                        vm.startSleepTimer(60)
+                                    } else {
+                                        Toast.makeText(
+                                            LocalContext.current,
+                                            "60 minute sleep timer is Premium.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                label = { Text("60 min • Premium") },
+                                leadingIcon = { Icon(Icons.Filled.Star, null) }
+                            )
                         }
                     }
                 }
@@ -1093,6 +1323,7 @@ private fun EqualizerScreen(
     var attached by remember { mutableStateOf(false) }
     var levels by remember { mutableStateOf(List(5) { .5f }) }
     var message by remember { mutableStateOf("Effects are saved when you leave the page.") }
+    val premiumActive = premiumRepo.isPremium()
 
     DisposableEffect(audioSessionId) {
         eq.attach(audioSessionId)
@@ -1128,17 +1359,18 @@ private fun EqualizerScreen(
                             AssistChip(
                                 onClick = {
                                     if (!attached) return@AssistChip
-                                    if (premiumRepo.isPremium() || premiumRepo.consumePreviewUse()) {
+                                    val freePreset = label == "Flat"
+                                    if (freePreset || premiumActive || premiumRepo.consumePreviewUse()) {
                                         val index = listOf("Flat", "Bass", "Treble", "Vocal", "Rock").indexOf(label)
                                         eq.setPreset(index.toShort())
                                         levels = eq.normalizedLevels().ifEmpty { List(5) { .5f } }
-                                        message = if (premiumRepo.isPremium()) {
-                                            "Premium preset applied."
+                                        message = if (premiumActive || freePreset) {
+                                            "Preset applied."
                                         } else {
-                                            "Premium preview used. ${premiumRepo.remainingPreviewUses()} preview(s) left."
+                                            "Premium preview used. " + premiumRepo.remainingPreviewUses() + " preview(s) left."
                                         }
                                     } else {
-                                        message = "Premium preview limit reached. Choose a plan in Premium."
+                                        message = "The 3 free premium previews are finished. Unlock Premium for unlimited effects."
                                     }
                                 },
                                 label = { Text(label) },
@@ -1154,14 +1386,18 @@ private fun EqualizerScreen(
         item {
             Card(shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Bands", fontWeight = FontWeight.Bold)
+                    Text("Bands" + if (premiumActive) "" else " • Premium", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     levels.forEachIndexed { index, value ->
                         Text("Band ${index + 1}", style = MaterialTheme.typography.labelLarge)
                         Slider(
                             value = value,
+                            enabled = attached && premiumActive,
                             onValueChange = {
-                                if (!attached) return@Slider
+                                if (!attached || !premiumActive) {
+                                    message = "Band controls are Premium. Use the free presets to preview effects."
+                                    return@Slider
+                                }
                                 levels = levels.toMutableList().also { list -> list[index] = it }
                                 val range = (eq.upperBound() - eq.lowerBound()).coerceAtLeast(1)
                                 val level = eq.lowerBound() + (range * it).toInt()
@@ -1195,6 +1431,13 @@ private fun PremiumScreen(
     lifetimeCheckoutReady: Boolean,
     refreshToken: Int
 ) {
+    val premiumActive = premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY ->
+            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
     LaunchedEffect(refreshToken) { }
 
     LazyColumn(
@@ -1202,64 +1445,194 @@ private fun PremiumScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            Card(shape = RoundedCornerShape(30.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
-                Box(
-                    Modifier.fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                )
-                            ),
-                            RoundedCornerShape(30.dp)
-                        )
-                        .padding(20.dp)
+        if (premiumActive) {
+            item { PremiumUnlockedCard(premium) }
+            item {
+                SettingsSection("Everything Premium", "Your account is verified and protected by the PayPal verification service.") {
+                    PremiumBenefit("No ads", "Enjoy Music Player without banner advertising.")
+                    PremiumBenefit("Unlimited equalizer", "Use all presets and band controls without the free preview limit.")
+                    PremiumBenefit("Advanced sleep timer", "Use 15, 30 and 60 minute sleep timers.")
+                    PremiumBenefit("Premium effects", "Unlock the full visual and audio effects experience.")
+                    PremiumBenefit("Account recovery", "Your verified purchase stays linked to your Music Player account.")
+                }
+            }
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable(onClick = onRefresh),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 ) {
-                    Column {
-                        Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Unlock the full audio experience and keep your entitlement synced to your account.")
-                        Spacer(Modifier.height(10.dp))
-                        if (account == null) {
-                            Text("Sign in before purchasing so the entitlement can be linked to your account.")
-                            Spacer(Modifier.height(10.dp))
-                            Button(onClick = onAccount) { Text("Sign in / create account") }
-                        } else {
-                            Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Refresh, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Verify again", fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                "Refresh PayPal status before using Premium on another device.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
-        }
-        item { PlanCard("Quarterly", "$5", "Every 3 months", true, quarterlyCheckoutReady) { onPurchase(PremiumPlan.QUARTERLY) } }
-        item { PlanCard("Lifetime", "$30", "One-time payment • permanent", false, lifetimeCheckoutReady) { onPurchase(PremiumPlan.LIFETIME) } }
-        item {
-            Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("Premium previews", fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text("Free users get up to ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT} premium preset previews. A purchase becomes premium after the payment is verified and Firebase entitlement is synced.")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Previews used: $previewUses / ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT}")
-                    if (premium.verified) {
+        } else {
+            item {
+                Card(
+                    shape = RoundedCornerShape(30.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    )
+                                ),
+                                RoundedCornerShape(30.dp)
+                            )
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.height(6.dp))
+                            Text("Unlock the complete Music Player experience with verified account access.")
+                            Spacer(Modifier.height(10.dp))
+                            if (account == null) {
+                                Text("Sign in before purchasing so the verified purchase can return to this account.")
+                                Spacer(Modifier.height(10.dp))
+                                Button(onClick = onAccount) { Text("Sign in / create account") }
+                            } else {
+                                Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                            }
+                        }
+                    }
+                }
+            }
+            item { PlanCard("Quarterly", "$5", "Every 3 months", true, quarterlyCheckoutReady) { onPurchase(PremiumPlan.QUARTERLY) } }
+            item { PlanCard("Lifetime", "$30", "One-time payment • permanent", false, lifetimeCheckoutReady) { onPurchase(PremiumPlan.LIFETIME) } }
+            item {
+                Card(shape = RoundedCornerShape(24.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Free limits", fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Free users get " + PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT + " premium effect previews. After the limit, premium equalizer controls stay locked until a verified plan is active.")
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            "Current plan: " + premium.plan.name.lowercase(),
-                            color = MaterialTheme.colorScheme.primary,
+                            "Previews used: " + previewUses + " / " + PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT,
+                            color = if (previewUses >= PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT)
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        }
-        item {
-            Card(Modifier.fillMaxWidth().clickable(onClick = onRefresh), shape = RoundedCornerShape(22.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Refresh entitlement", fontWeight = FontWeight.Bold)
-                    Text("Sync premium status from Firebase.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            item {
+                Card(Modifier.fillMaxWidth().clickable(onClick = onRefresh), shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Refresh, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Refresh entitlement", fontWeight = FontWeight.Bold)
+                            Text("Check the latest verified account state.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
+    val transition = rememberInfiniteTransition(label = "premium_glow")
+    val alpha by transition.animateFloat(
+        0.55f,
+        1f,
+        infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "premiumAlpha"
+    )
+
+    Card(
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            Modifier.fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ),
+                    RoundedCornerShape(32.dp)
+                )
+                .padding(22.dp)
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        Modifier.size(66.dp).alpha(alpha),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(15.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text("PREMIUM ACTIVE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold)
+                        Text("Everything unlocked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    premium.plan.name.lowercase().replaceFirstChar { it.uppercase() } +
+                        if (premium.plan == PremiumPlan.QUARTERLY && premium.expiresAtMillis != null)
+                            " • renews automatically"
+                        else " • permanent access"
+                )
+                premium.expiresAtMillis?.takeIf { it > 0L }?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Next billing: " + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Your payment was verified by the Music Player payment service.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumBenefit(title: String, detail: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(Modifier.size(32.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.padding(6.dp))
+        }
+        Spacer(Modifier.width(11.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1426,10 +1799,11 @@ private fun SettingsScreen(
     onBackgroundChange: (AppBackgroundStyle) -> Unit,
     onOpenPremium: () -> Unit,
     onAccount: () -> Unit,
+    notificationsAllowed: Boolean,
+    onRequestNotifications: () -> Unit,
     onCheckUpdates: () -> Unit
 ) {
     var autoScan by rememberSaveable { mutableStateOf(true) }
-    var notifications by rememberSaveable { mutableStateOf(true) }
     val selectedTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val selectedBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
 
@@ -1485,8 +1859,42 @@ private fun SettingsScreen(
         }
         item {
             SettingsSection("Notifications", "Playback and update notifications.") {
-                SwitchRow("Update notifications", "Allow update checks to notify you.", notifications) {
-                    notifications = it
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (notificationsAllowed) "Notifications enabled" else "Notifications disabled",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (notificationsAllowed)
+                                "Music Player can automatically report updates and playback status."
+                            else
+                                "Allow notifications so automatic update checks can alert you."
+                        )
+                    }
+                    Surface(
+                        Modifier.size(36.dp),
+                        shape = CircleShape,
+                        color = if (notificationsAllowed)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Icon(
+                            if (notificationsAllowed) Icons.Filled.CheckCircle else Icons.Filled.Update,
+                            null,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = onRequestNotifications,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (notificationsAllowed) "Open notification settings" else "Enable notifications")
                 }
             }
         }
@@ -1535,12 +1943,7 @@ private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) ->
                     Surface(
                         Modifier.size(16.dp),
                         shape = CircleShape,
-                        color = when (theme) {
-                            AppThemeStyle.VIOLET -> Color(0xFF6D42E8)
-                            AppThemeStyle.OCEAN -> Color(0xFF006B94)
-                            AppThemeStyle.SUNSET -> Color(0xFFC54836)
-                            AppThemeStyle.MINT -> Color(0xFF087A58)
-                        }
+                        color = themeColors(theme, false).primary
                     ) {}
                 }
             )
@@ -1652,6 +2055,52 @@ private fun StatCard(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
+private fun PremiumHomeBadge() {
+    val transition = rememberInfiniteTransition(label = "premium_home_badge")
+    val alpha by transition.animateFloat(
+        0.55f,
+        1f,
+        infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+        label = "premiumBadgeAlpha"
+    )
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                Modifier.size(42.dp).alpha(alpha),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Filled.Star,
+                    null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("Premium active", fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "Ad-free playback • unlimited effects",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BannerAd() {
     val context = LocalContext.current
     AndroidView(
@@ -1704,6 +2153,7 @@ private fun UpdateDialog(
     info: UpdateInfo,
     progress: Int,
     updating: Boolean,
+    error: String,
     onDismiss: () -> Unit,
     onInstall: () -> Unit
 ) {
@@ -1719,6 +2169,10 @@ private fun UpdateDialog(
                     Spacer(Modifier.height(14.dp))
                     LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
                     Text("$progress%", modifier = Modifier.padding(top = 6.dp))
+                }
+                if (error.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(error, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             }
         },
