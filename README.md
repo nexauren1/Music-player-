@@ -25,3 +25,6 @@ Music Player is a polished offline-first Android music player built with Kotlin,
 
 
 Music Player 1.5.6 release.
+
+
+Music Player 1.5.7: persistent equalizer engine, refreshed mini player, premium reverb, clearer Premium state, and lightweight theme rendering.
