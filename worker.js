@@ -835,6 +835,26 @@ async function createLifetimeCheckout(request, env, uid, options = {}) {
   });
 }
 
+async function manageQuarterlySubscription(env, input) {
+  const uid = input?.uid;
+  const subscriptionId = input?.subscriptionId;
+  const action = input?.action;
+  if (!uid || !subscriptionId) throw new Error("uid and subscriptionId are required.");
+  const token = await paypalToken(env);
+  const path = "/v1/billing/subscriptions/" + encodeURIComponent(subscriptionId);
+  const subscription = await paypalRequest(env, token, path, { method: "GET" });
+  if (subscription?.custom_id !== uid) throw new Error("Subscription does not belong to this account.");
+  if (action === "cancel") {
+    await paypalRequest(env, token, path + "/cancel", { method: "POST", headers: { "PayPal-Request-Id": "music-player-cancel-" + subscriptionId }, body: JSON.stringify({ reason: "Customer requested cancellation." }) });
+    return { ok: true, action: "cancel", status: "CANCELLED", expiresAtMillis: unixMillis(subscription?.billing_info?.next_billing_time) };
+  }
+  if (action === "resume") {
+    if (subscription?.status !== "SUSPENDED") throw new Error("This subscription cannot be resumed. A new checkout may be required.");
+    await paypalRequest(env, token, path + "/activate", { method: "POST", headers: { "PayPal-Request-Id": "music-player-resume-" + subscriptionId }, body: JSON.stringify({ reason: "Customer resumed the subscription." }) });
+    return { ok: true, action: "resume", status: "ACTIVE" };
+  }
+  throw new Error("Unknown subscription action.");
+}
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -892,6 +912,15 @@ export default {
         }
       }
 
+      if (url.pathname === "/paypal/subscription/cancel" && request.method === "POST") {
+        const body = await safeJson(request);
+        return json(await manageQuarterlySubscription(env, { uid: body?.uid, subscriptionId: body?.subscriptionId, action: "cancel" }));
+      }
+
+      if (url.pathname === "/paypal/subscription/resume" && request.method === "POST") {
+        const body = await safeJson(request);
+        return json(await manageQuarterlySubscription(env, { uid: body?.uid, subscriptionId: body?.subscriptionId, action: "resume" }));
+      }
       if (url.pathname === "/paypal/verify" && request.method === "GET") {
         const result = await verifyPurchase(env, {
           plan: url.searchParams.get("plan"),
