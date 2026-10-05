@@ -1909,8 +1909,10 @@ private fun SettingsScreen(
     onDarkMode: (Boolean) -> Unit,
     themeName: String,
     backgroundName: String,
+    languageName: String,
     onThemeChange: (AppThemeStyle) -> Unit,
     onBackgroundChange: (AppBackgroundStyle) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
     onOpenPremium: () -> Unit,
     onAccount: () -> Unit,
     notificationsAllowed: Boolean,
@@ -1928,7 +1930,7 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            SettingsSection("Account", "Optional. Used for premium purchases and cloud entitlement.") {
+            SettingsSection(I18n.t("Account"), I18n.t("Optional. Used for premium purchases and cloud entitlement.")) {
                 Button(onClick = onAccount, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Person, null)
                     Spacer(Modifier.width(8.dp))
@@ -1937,7 +1939,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Premium", "Quarterly $5 or Lifetime $30.") {
+            SettingsSection(I18n.t("Premium"), I18n.t("Quarterly $5 or Lifetime $30.")) {
                 Button(onClick = onOpenPremium, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Star, null)
                     Spacer(Modifier.width(8.dp))
@@ -1946,8 +1948,8 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Library", "Local songs stay on the device.") {
-                SwitchRow("Auto-scan new music", "Refresh the library when the app opens.", autoScan) {
+            SettingsSection(I18n.t("Library"), I18n.t("Local songs stay on the device.")) {
+                SwitchRow(I18n.t("Auto-scan new music"), I18n.t("Refresh the library when the app opens."), autoScan) {
                     autoScan = it
                     if (it) vm.scan()
                 }
@@ -1960,7 +1962,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Appearance", "Choose the visual identity, background and light/dark mode.") {
+            SettingsSection(I18n.t("Appearance"), I18n.t("Choose the visual identity, background and light/dark mode.")) {
                 Text(I18n.t("Theme"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(7.dp))
                 ThemeChoices(selectedTheme, onThemeChange)
@@ -1973,7 +1975,17 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Notifications", "Playback and update notifications.") {
+            SettingsSection(I18n.t("Language"), I18n.t("Choose the interface language.")) {
+                Text(I18n.t("Language"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(7.dp))
+                LanguageChoices(
+                    selected = runCatching { AppLanguage.valueOf(languageName) }.getOrDefault(AppLanguage.ENGLISH),
+                    onSelected = onLanguageChange
+                )
+            }
+        }
+        item {
+            SettingsSection(I18n.t("Notifications"), I18n.t("Playback and update notifications.")) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -2014,7 +2026,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("Updates", "Keep Music Player current.") {
+            SettingsSection(I18n.t("Updates"), I18n.t("Keep Music Player current.")) {
                 Button(
                     onClick = onCheckUpdates,
                     enabled = !checkingUpdate,
@@ -2033,7 +2045,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            SettingsSection("About", "Music Player is a local-first Android audio player.") {
+            SettingsSection(I18n.t("About"), I18n.t("Music Player is a local-first Android audio player.")) {
                 Text(I18n.t("Music Player ") + BuildConfig.VERSION_NAME, fontWeight = FontWeight.Bold)
                 Text(I18n.t("Offline-first playback powered by AndroidX Media3."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -2063,7 +2075,7 @@ private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) ->
         items(AppThemeStyle.values().toList()) { theme ->
             AssistChip(
                 onClick = { onSelected(theme) },
-                label = { Text(theme.label) },
+                label = { Text(I18n.t(theme.label)) },
                 leadingIcon = {
                     Surface(
                         Modifier.size(16.dp),
@@ -2077,10 +2089,22 @@ private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) ->
 }
 
 @Composable
+private fun LanguageChoices(selected: AppLanguage, onSelected: (AppLanguage) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AppLanguage.values().forEach { language ->
+            AssistChip(
+                onClick = { onSelected(language) },
+                label = { Text(language.label) }
+            )
+        }
+    }
+}
+
+@Composable
 private fun BackgroundChoices(selected: AppBackgroundStyle, onSelected: (AppBackgroundStyle) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(AppBackgroundStyle.values().toList()) { background ->
-            AssistChip(onClick = { onSelected(background) }, label = { Text(background.label) })
+            AssistChip(onClick = { onSelected(background) }, label = { Text(I18n.t(background.label)) })
         }
     }
 }
@@ -2101,9 +2125,11 @@ private fun AppearanceSetupDialog(
     theme: AppThemeStyle,
     background: AppBackgroundStyle,
     darkMode: Boolean,
+    language: AppLanguage,
     onThemeChange: (AppThemeStyle) -> Unit,
     onBackgroundChange: (AppBackgroundStyle) -> Unit,
     onDarkModeChange: (Boolean) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
     onSave: () -> Unit
 ) {
     AlertDialog(
