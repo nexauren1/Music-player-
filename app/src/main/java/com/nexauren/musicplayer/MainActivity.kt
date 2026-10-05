@@ -394,27 +394,27 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                         onPurchase = { plan ->
                             if (accountRepo.currentAccount() == null) {
                                 accountDialog = true
-                                return@PremiumScreen
-                            }
-                            val url = when (plan) {
+                            } else {
+                                val url = when (plan) {
                                 PremiumPlan.QUARTERLY -> BuildConfig.PAYPAL_QUARTERLY_URL
                                 PremiumPlan.LIFETIME -> BuildConfig.PAYPAL_LIFETIME_URL
                                 PremiumPlan.NONE -> ""
                             }
-                            if (url.isBlank() || url.startsWith("https://example.com")) {
-                                Toast.makeText(
-                                    context,
-                                    "Checkout is not connected yet.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(
-                                            Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(url)
+                                if (url.isBlank() || url.startsWith("https://example.com")) {
+                                    Toast.makeText(
+                                        context,
+                                        "Checkout is not connected yet.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent(
+                                                Intent.ACTION_VIEW,
+                                                android.net.Uri.parse(url)
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                         },
