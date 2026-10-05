@@ -11,7 +11,8 @@ data class DjEffectState(
     val bassBoost: Float = 0f,
     val surround: Float = 0f,
     val loudness: Float = 0f,
-    val reverb: Float = 0f
+    val reverb: Float = 0f,
+    val delay: Float = 0f
 )
 
 class EqualizerController(context: Context) {
@@ -114,7 +115,8 @@ class EqualizerController(context: Context) {
             bassBoost = prefs.getInt("bass", 0) / 1000f,
             surround = prefs.getInt("surround", 0) / 1000f,
             loudness = prefs.getInt("loudness", 0) / 10000f,
-            reverb = prefs.getInt("reverb", 0) / 1000f
+            reverb = prefs.getInt("reverb", 0) / 1000f,
+            delay = prefs.getInt("delay", 0) / 1000f
         )
 
     fun setBassBoost(normalized: Float) {
@@ -137,11 +139,27 @@ class EqualizerController(context: Context) {
 
     fun setReverb(normalized: Float) {
         val value = (normalized.coerceIn(0f, 1f) * 1000f).toInt()
-        val roomLevel = (-9000 + (9000 * normalized.coerceIn(0f, 1f))).toInt().toShort()
-        val reverbLevel = (-9000 + (9000 * normalized.coerceIn(0f, 1f))).toInt().toShort()
-        runCatching { environmentalReverb?.setRoomLevel(roomLevel) }
-        runCatching { environmentalReverb?.setReverbLevel(reverbLevel) }
+        val level = (-9000 + (9000 * normalized.coerceIn(0f, 1f))).toInt().toShort()
+        runCatching { environmentalReverb?.setRoomLevel(level) }
+        runCatching { environmentalReverb?.setReverbLevel(level) }
         prefs.edit().putInt("reverb", value).apply()
+    }
+
+    fun setDelay(normalized: Float) {
+        val value = (normalized.coerceIn(0f, 1f) * 1000f).toInt()
+        val milliseconds = (normalized.coerceIn(0f, 1f) * 500f).toInt().coerceIn(0, 500).toShort()
+        runCatching { environmentalReverb?.setReflectionsDelay(milliseconds) }
+        runCatching { environmentalReverb?.setReverbDelay(milliseconds) }
+        prefs.edit().putInt("delay", value).apply()
+    }
+
+    fun resetAll() {
+        applyCustomPreset(List(10) { .5f })
+        setBassBoost(0f)
+        setSurround(0f)
+        setLoudness(0f)
+        setReverb(0f)
+        setDelay(0f)
     }
 
     fun release() {
@@ -177,5 +195,6 @@ class EqualizerController(context: Context) {
         setSurround(effectState().surround)
         setLoudness(effectState().loudness)
         setReverb(effectState().reverb)
+        setDelay(effectState().delay)
     }
 }
