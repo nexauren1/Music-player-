@@ -1,6 +1,7 @@
 package com.musicplayer.app
 
 import android.content.Context
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -143,7 +144,29 @@ object PayPalCheckout {
                     PremiumPlan.LIFETIME -> "/paypal/checkout/lifetime"
                     PremiumPlan.NONE -> error("Choose a Premium plan.")
                 }
-                val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
+                val returnUrl = "musicplayer://paypal/success"
+                val cancelUrl = "musicplayer://paypal/cancel"
+                val appSwitchContext = JSONObject()
+                    .put(
+                        "nativeApp",
+                        JSONObject()
+                            .put("returnAppUrl", returnUrl)
+                            .put("cancelAppUrl", cancelUrl)
+                            .put("osType", "ANDROID")
+                            .put("osVersion", Build.VERSION.RELEASE ?: "unknown")
+                    )
+
+                val payload = JSONObject()
+                    .put("uid", uid)
+                    .put("returnUrl", returnUrl)
+                    .put("cancelUrl", cancelUrl)
+                    .put("appSwitchContext", appSwitchContext)
+
+                val checkoutUrl = base + path +
+                    "?returnUrl=" + java.net.URLEncoder.encode(returnUrl, "UTF-8") +
+                    "&cancelUrl=" + java.net.URLEncoder.encode(cancelUrl, "UTF-8")
+
+                val connection = (URL(checkoutUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 15_000
                     readTimeout = 20_000
                     requestMethod = "POST"
@@ -151,7 +174,7 @@ object PayPalCheckout {
                     setRequestProperty("Accept", "application/json")
                     setRequestProperty("Content-Type", "application/json")
                 }
-                connection.outputStream.use { it.write(JSONObject().put("uid", uid).toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                 val responseCode = connection.responseCode
                 val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
                 val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
