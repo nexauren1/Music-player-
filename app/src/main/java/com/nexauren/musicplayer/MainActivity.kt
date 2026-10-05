@@ -630,14 +630,14 @@ private fun MusicPlayerRoot(
                     AppScreen.FAVORITES -> SongListScreen(
                         modifier = Modifier.padding(padding),
                         vm = vm,
-                        title = "Favorites",
+                        title = I18n.t("Favorites"),
                         songs = vm.favorites(),
                         showPlays = false
                     )
                     AppScreen.MOST_PLAYED -> SongListScreen(
                         modifier = Modifier.padding(padding),
                         vm = vm,
-                        title = "Most played",
+                        title = I18n.t("Most played"),
                         songs = vm.mostPlayed(),
                         showPlays = true
                     )
@@ -975,13 +975,13 @@ private fun HomeScreen(
         }
 
         item { SearchBar(query, onQueryChange) }
-        item { SectionTitle("Now playing", "Live status • view only") }
+        item { SectionTitle(I18n.t("Now playing"), I18n.t("Live status • view only")) }
         item { NowPlayingInfoCard(current, playing) }
-        item { SectionTitle("Recently added", "Newest music on your device • view only") }
+        item { SectionTitle(I18n.t("Recently added"), I18n.t("Newest music on your device • view only")) }
 
         item {
             if (recent.isEmpty()) {
-                EmptyCard("No recently added music yet.")
+                EmptyCard(I18n.t("No recently added music yet."))
             } else {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -1000,14 +1000,14 @@ private fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SectionTitle("Most played", "Your listening history")
+                SectionTitle(I18n.t("Most played"), I18n.t("Your listening history"))
                 Text(I18n.t("${mostPlayed.size}"), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
             }
         }
 
         item {
             if (mostPlayed.isEmpty()) {
-                EmptyCard("Your most played songs will appear here.")
+                EmptyCard(I18n.t("Your most played songs will appear here."))
             } else {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -1026,13 +1026,13 @@ private fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SectionTitle("All songs", "Your complete playable library")
+                SectionTitle(I18n.t("All songs"), I18n.t("Your complete playable library"))
                 Text(I18n.t("${songs.size}"), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
             }
         }
 
         if (songs.isEmpty()) {
-            item { EmptyCard("No songs found. Scan your library from Settings.") }
+            item { EmptyCard(I18n.t("No songs found. Scan your library from Settings.")) }
         } else {
             itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays = false)
@@ -1057,14 +1057,14 @@ private fun LibraryScreen(
         item { SearchBar(query, onQueryChange) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard("Tracks", songs.size.toString(), Modifier.weight(1f))
-                StatCard("Albums", songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
-                StatCard("Artists", songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
+                StatCard(I18n.t("Tracks"), songs.size.toString(), Modifier.weight(1f))
+                StatCard(I18n.t("Albums"), songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
+                StatCard(I18n.t("Artists"), songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
             }
         }
-        item { SectionTitle("All music", "Your complete local library") }
+        item { SectionTitle(I18n.t("All music"), I18n.t("Your complete local library")) }
         if (songs.isEmpty()) {
-            item { EmptyCard("No songs found.") }
+            item { EmptyCard(I18n.t("No songs found.")) }
         } else {
             itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays = false)
@@ -1146,7 +1146,7 @@ private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
                         color = Color.White.copy(alpha = 0.16f)
                     ) {
                         Text(
-                            if (playing) "PLAYING" else "PAUSED",
+                            if (playing) I18n.t("PLAYING") else I18n.t("PAUSED"),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
@@ -1204,7 +1204,7 @@ private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
 
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            if (playing) "Listening now" else "Playback paused",
+                            if (playing) I18n.t("Listening now") else I18n.t("Playback paused"),
                             color = Color.White.copy(alpha = 0.86f),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f)
@@ -1296,7 +1296,7 @@ private fun SongListScreen(
     ) {
         item { SectionTitle(title, songs.size.toString() + " tracks") }
         if (songs.isEmpty()) {
-            item { EmptyCard("Nothing here yet.") }
+            item { EmptyCard(I18n.t("Nothing here yet.")) }
         } else {
             itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays)
@@ -2036,7 +2036,7 @@ private fun EqualizerScreen(
                                 fontWeight = FontWeight.Black
                             )
                             Text(
-                                if (attached) "Live engine connected" else "Start playback to connect",
+                                if (attached) I18n.t("Live engine connected") else I18n.t("Start playback to connect"),
                                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .78f),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -2046,7 +2046,7 @@ private fun EqualizerScreen(
                             color = Color.White.copy(alpha = .18f)
                         ) {
                             Text(
-                                if (premiumActive) "PREMIUM" else "FREE",
+                                if (premiumActive) I18n.t("PREMIUM") else I18n.t("FREE"),
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall,
@@ -2076,7 +2076,7 @@ private fun EqualizerScreen(
                         Column(Modifier.weight(1f)) {
                             Text(I18n.t("LIVE EQ"), color = Color.White, fontWeight = FontWeight.Black)
                             Text(
-                                if (premiumActive) "10-band studio control" else "5-band free control",
+                                if (premiumActive) I18n.t("10-band studio control") else I18n.t("5-band free control"),
                                 color = Color.White.copy(alpha = .65f),
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -2239,7 +2239,7 @@ private fun EqualizerScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                if (premiumActive) "PREMIUM MIXER UNLOCKED" else "PREMIUM MIXER",
+                                if (premiumActive) I18n.t("PREMIUM MIXER UNLOCKED") else I18n.t("PREMIUM MIXER"),
                                 fontWeight = FontWeight.Black
                             )
                             Text(
@@ -2553,7 +2553,7 @@ private fun PremiumScreen(
                     ) {
                         Column(Modifier.padding(18.dp)) {
                             Text(
-                                if (processing) "Processing payment" else "Payment waiting for verification",
+                                if (processing) I18n.t("Processing payment") else I18n.t("Payment waiting for verification"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -2606,7 +2606,7 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
                 Column(Modifier.weight(1f)) {
                     Text(I18n.t("VERIFIED PURCHASE"), style = MaterialTheme.typography.labelMedium, color = accent, fontWeight = FontWeight.ExtraBold)
                     Text(
-                        if (premium.plan == PremiumPlan.LIFETIME) "Lifetime Premium" else "Quarterly Premium",
+                        if (premium.plan == PremiumPlan.LIFETIME) I18n.t("Lifetime Premium") else I18n.t("Quarterly Premium"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -2746,7 +2746,7 @@ private fun PlanCard(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    if (checkoutReady) "PayPal" else "Offline",
+                    if (checkoutReady) I18n.t("PayPal") else I18n.t("Offline"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2814,7 +2814,7 @@ private fun AccountScreen(
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                if (premiumActive) "PRO ACCOUNT" else "MUSIC PLAYER ACCOUNT",
+                                if (premiumActive) I18n.t("PRO ACCOUNT") else I18n.t("MUSIC PLAYER ACCOUNT"),
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Black
@@ -2883,7 +2883,7 @@ private fun AccountScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (premiumActive) "Premium account" else "Free account",
+                                    if (premiumActive) I18n.t("Premium account") else I18n.t("Free account"),
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
@@ -2957,7 +2957,7 @@ private fun AccountDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(if (current == null) "Optional account" else "Your account", fontWeight = FontWeight.ExtraBold) },
+        title = { Text(if (current == null) I18n.t("Optional account") else I18n.t("Your account"), fontWeight = FontWeight.ExtraBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (current != null) {
