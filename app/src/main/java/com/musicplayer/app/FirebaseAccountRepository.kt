@@ -272,7 +272,4 @@ class PremiumRepository(private val context: Context) {
         }
     }
 
-    companion object {
-        const val TEST_PREMIUM_PREVIEW_LIMIT = 3
-    }
 }
