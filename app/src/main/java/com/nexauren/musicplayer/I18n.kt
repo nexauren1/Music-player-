@@ -307,7 +307,7 @@ object I18n {
         "Playback, Flat, Rock, Vocal and Jazz presets plus 5 live bands are free." to "Os presets Playback, Flat, Rock, Vocal e Jazz, além de 5 bandas ao vivo, são gratuitos.",
         "Bass Boost • 3D Space • Loudness • Reverb • 10-band mixer" to "Bass Boost • 3D Space • Loudness • Reverb • mixer de 10 bandas",
         "Premium preset library" to "Biblioteca de presets Premium",
-        "Bass Impact" to "Impacto de graves"
+        "Bass Impact" to "Impacto de graves",
         "Recently played" to "Reproduzidas recentemente",
         "Clear history" to "Limpar histórico",
         "Play next" to "Reproduzir a seguir",
