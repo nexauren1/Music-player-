@@ -31,7 +31,21 @@ data class UpdateInfo(
     val changelog: String,
     val sha256: String = ""
 ) {
-    fun isNewer(): Boolean = versionCode > BuildConfig.VERSION_CODE
+    fun isNewer(): Boolean {
+        if (versionCode > 0L) {
+            return versionCode > BuildConfig.VERSION_CODE ||
+                (versionCode == BuildConfig.VERSION_CODE && versionName != BuildConfig.VERSION_NAME)
+        }
+
+        fun parse(value: String) = value
+            .split('.')
+            .map { it.toIntOrNull() ?: 0 }
+            .let { listOf(it.getOrElse(0) { 0 }, it.getOrElse(1) { 0 }, it.getOrElse(2) { 0 }) }
+
+        val remote = parse(versionName)
+        val local = parse(BuildConfig.VERSION_NAME)
+        return remote > local
+    }
 }
 
 object NotificationHelper {
@@ -169,12 +183,6 @@ object UpdateManager {
             }
         }
 
-    private fun versionCodeFromName(versionName: String): Long =
-        versionName
-            .split('.')
-            .mapNotNull { it.toLongOrNull() }
-            .fold(0L) { acc, value -> acc * 1000L + value }
-
     private suspend fun fetchLatestGithubRelease(): UpdateInfo? =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -205,7 +213,7 @@ object UpdateManager {
                 } ?: error("Release APK was not found.")
 
                 UpdateInfo(
-                    versionCode = versionCodeFromName(version),
+                    versionCode = 0L,
                     versionName = version,
                     apkUrl = apk.optString("browser_download_url"),
                     changelog = release.optString(
