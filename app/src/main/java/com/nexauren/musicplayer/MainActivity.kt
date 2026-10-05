@@ -172,16 +172,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        runCatching {
-            ApkInstaller.resumeIfPending(this)
-        }.onFailure {
-            // Never let a broken/stale pending APK prevent the app from launching.
-            getSharedPreferences("update_install", MODE_PRIVATE)
-                .edit()
-                .remove("pending_apk")
-                .apply()
-        }
-
         lifecycleScope.launch {
             runCatching {
                 val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
