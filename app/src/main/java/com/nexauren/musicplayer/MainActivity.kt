@@ -990,75 +990,118 @@ private fun MiniPlayer(
     onNext: () -> Unit
 ) {
     val progress = if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
+    val transition = rememberInfiniteTransition(label = "mini_player")
+    val glow by transition.animateFloat(
+        0.72f,
+        1f,
+        infiniteRepeatable(tween(850), RepeatMode.Reverse),
+        label = "miniGlow"
+    )
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(24.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
     ) {
-        Column(
-            Modifier.fillMaxWidth().background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.secondaryContainer
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
                     )
                 )
-            )
         ) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(3.dp)
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpen)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box {
-                    Artwork(song, Modifier.size(56.dp))
-                    if (playing) {
+            if (playing) {
+                Surface(
+                    Modifier.size(120.dp).align(Alignment.TopEnd).alpha(glow * 0.18f),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {}
+            }
+            Column {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpen)
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box {
+                        Artwork(
+                            song,
+                            Modifier
+                                .size(58.dp)
+                                .graphicsLayer {
+                                    rotationZ = if (playing) glow * 0.7f else 0f
+                                }
+                        )
                         Surface(
-                            Modifier.align(Alignment.BottomEnd).size(18.dp),
+                            Modifier
+                                .size(20.dp)
+                                .align(Alignment.BottomEnd)
+                                .alpha(if (playing) 1f else 0f),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary
                         ) {
                             Icon(
-                                Icons.Filled.PlayArrow,
+                                Icons.Filled.VolumeUp,
                                 null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(3.dp)
+                                modifier = Modifier.padding(4.dp)
                             )
                         }
                     }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-                    Text(
-                        song.artist,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onPlayPause) {
-                    Surface(Modifier.size(42.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
-                        Icon(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(9.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (playing) "NOW PLAYING" else "PAUSED",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            song.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            song.artist,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Filled.SkipNext, null)
+                    AnimatedBars(playing)
+                    IconButton(onClick = onPlayPause) {
+                        Surface(
+                            Modifier.size(42.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Icon(
+                                if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(9.dp)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onNext) {
+                        Icon(Icons.Filled.SkipNext, null)
+                    }
                 }
             }
         }
@@ -1077,6 +1120,7 @@ private fun NowPlayingSheet(
     onEqualizer: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
+    val premiumActive = remember { PremiumRepository(LocalContext.current) }.isPremium()
     val transition = rememberInfiniteTransition(label = "now_playing_effects")
     val pulse by transition.animateFloat(
         0.94f,
@@ -1209,8 +1253,36 @@ private fun NowPlayingSheet(
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AssistChip(onClick = { vm.startSleepTimer(15) }, label = { Text("15 min") })
-                            AssistChip(onClick = { vm.startSleepTimer(30) }, label = { Text("30 min") })
-                            AssistChip(onClick = { vm.startSleepTimer(60) }, label = { Text("60 min") })
+                            AssistChip(
+                                onClick = {
+                                    if (premiumActive) {
+                                        vm.startSleepTimer(30)
+                                    } else {
+                                        Toast.makeText(
+                                            LocalContext.current,
+                                            "30 minute sleep timer is Premium.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                label = { Text("30 min • Premium") },
+                                leadingIcon = { Icon(Icons.Filled.Star, null) }
+                            )
+                            AssistChip(
+                                onClick = {
+                                    if (premiumActive) {
+                                        vm.startSleepTimer(60)
+                                    } else {
+                                        Toast.makeText(
+                                            LocalContext.current,
+                                            "60 minute sleep timer is Premium.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                label = { Text("60 min • Premium") },
+                                leadingIcon = { Icon(Icons.Filled.Star, null) }
+                            )
                         }
                     }
                 }
