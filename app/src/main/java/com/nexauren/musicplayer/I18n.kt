@@ -250,7 +250,11 @@ object I18n {
         "Premium account" to "Conta Premium",
         "Free account" to "Conta grátis",
         "Optional account" to "Conta opcional",
-        "Your account" to "A sua conta"
+        "Your account" to "A sua conta",
+        "is available" to "está disponível",
+        "Open Music Player to download the update." to "Abra o Music Player para baixar a atualização.",
+        "Music Player update installed" to "Atualização do Music Player instalada",
+        "Music Player update failed" to "Falha na atualização do Music Player"
     )
 
     fun t(value: String): String =
