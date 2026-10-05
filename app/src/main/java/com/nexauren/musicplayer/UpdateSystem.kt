@@ -82,7 +82,7 @@ object NotificationHelper {
         manager(context).notify(UPDATE_NOTIFICATION_ID, notification)
     }
 
-    fun showInstallFailure(context: Context, message: String) {
+    fun showInstallSuccess(context: Context, message: String) {
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
             .setContentTitle("Music Player update failed")
@@ -90,6 +90,16 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
+        manager(context).notify(INSTALL_NOTIFICATION_ID, notification)
+    }
+
+    fun showInstallFailure(context: Context, message: String) {
+        val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_music)
+            .setContentTitle("Music Player update failed")
+            .setContentText(message)
+            .setAutoCancel(true)
+            .build()
         manager(context).notify(INSTALL_NOTIFICATION_ID, notification)
     }
 
@@ -127,7 +137,7 @@ object UpdateManager {
                 connection.disconnect()
 
                 val json = JSONObject(body)
-                val info = UpdateInfo(
+                val manifestInfo = UpdateInfo(
                     versionCode = json.optLong("versionCode"),
                     versionName = json.optString("versionName"),
                     apkUrl = json.optString("apkUrl"),
@@ -138,12 +148,72 @@ object UpdateManager {
                     sha256 = json.optString("sha256", "")
                 )
 
-                if (info.isNewer()) {
+                val info = if (
+                    manifestInfo.versionCode > 0L &&
+                    manifestInfo.versionName.isNotBlank() &&
+                    manifestInfo.apkUrl.isNotBlank()
+                ) {
+                    manifestInfo
+                } else {
+                    fetchLatestGithubRelease()
+                }
+
+                if (info?.isNewer() == true) {
                     if (notify) NotificationHelper.showUpdateAvailable(context, info)
                     info
                 } else {
                     null
                 }
+            }.getOrElse {
+                fetchLatestGithubRelease()?.takeIf { it.isNewer() }
+            }
+        }
+
+    private fun versionCodeFromName(versionName: String): Long =
+        versionName
+            .split('.')
+            .mapNotNull { it.toLongOrNull() }
+            .fold(0L) { acc, value -> acc * 1000L + value }
+
+    private suspend fun fetchLatestGithubRelease(): UpdateInfo? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val connection = (URL(
+                    "https://api.github.com/repos/nexauren1/Music-player-/releases/latest"
+                ).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10_000
+                    readTimeout = 15_000
+                    requestMethod = "GET"
+                    instanceFollowRedirects = true
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("User-Agent", "MusicPlayer/" + BuildConfig.VERSION_NAME)
+                }
+
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val responseBody = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                connection.disconnect()
+                if (code !in 200..299) error("GitHub release lookup returned HTTP $code.")
+
+                val release = JSONObject(responseBody)
+                val version = release.optString("tag_name").removePrefix("v")
+                val assets = release.optJSONArray("assets")
+                val apk = assets?.let { array ->
+                    (0 until array.length())
+                        .map { array.getJSONObject(it) }
+                        .firstOrNull { it.optString("name") == "app-release.apk" }
+                } ?: error("Release APK was not found.")
+
+                UpdateInfo(
+                    versionCode = versionCodeFromName(version),
+                    versionName = version,
+                    apkUrl = apk.optString("browser_download_url"),
+                    changelog = release.optString(
+                        "body",
+                        "Performance and stability improvements."
+                    ),
+                    sha256 = ""
+                )
             }.getOrNull()
         }
 
@@ -188,6 +258,10 @@ object UpdateManager {
         }
         connection.disconnect()
 
+        require(info.apkUrl.startsWith("https://")) {
+            "The update URL is not secure."
+        }
+
         if (info.sha256.isNotBlank()) {
             val actual = sha256(target)
             check(actual.equals(info.sha256, ignoreCase = true)) {
@@ -224,7 +298,7 @@ class ApkInstallReceiver : android.content.BroadcastReceiver() {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
 
         if (status == PackageInstaller.STATUS_SUCCESS) {
-            NotificationHelper.showInstallFailure(
+            NotificationHelper.showInstallSuccess(
                 context,
                 "Update installed successfully. Reopen Music Player if needed."
             )
