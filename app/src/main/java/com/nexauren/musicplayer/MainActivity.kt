@@ -182,8 +182,13 @@ class MainActivity : ComponentActivity() {
                             it.orderId,
                             it.subscriptionId
                         )
+                        val cloudSync = premiumRepository.syncVerifiedToFirebase()
                         premiumEvent++
-                        premiumMessage = "Premium status verified."
+                        premiumMessage = if (cloudSync.isSuccess) {
+                            "Premium status verified."
+                        } else {
+                            "Premium verified. Account sync is still processing."
+                        }
                     } else {
                         premiumRepository.clearVerifiedPremium()
                         premiumEvent++
@@ -262,8 +267,13 @@ class MainActivity : ComponentActivity() {
                         it.orderId,
                         it.subscriptionId
                     )
+                    val cloudSync = premiumRepository.syncVerifiedToFirebase()
                     PayPalCheckout.clearPending(this@MainActivity)
-                    premiumMessage = "Premium activated. All premium features are now unlocked."
+                    premiumMessage = if (cloudSync.isSuccess) {
+                        "Premium activated. Your Firebase account is now synced."
+                    } else {
+                        "Premium activated. Firebase account sync is still processing."
+                    }
                 } else {
                     premiumMessage = "PayPal returned successfully, but Premium is still synchronizing."
                 }
@@ -626,8 +636,14 @@ private fun MusicPlayerRoot(
                                                     result.orderId,
                                                     result.subscriptionId
                                                 )
+                                                val cloudSync = premiumRepo.syncVerifiedToFirebase()
                                                 PayPalCheckout.clearPending(context)
-                                                onPremiumMessage("Payment verified. Premium is now active.")
+                                                onPremiumMessage(
+                                                    if (cloudSync.isSuccess)
+                                                        "Payment verified. Premium is now active and synced to your account."
+                                                    else
+                                                        "Payment verified. Account sync is still processing."
+                                                )
                                             } else if (verification.isFailure) {
                                                 onPremiumMessage("Premium verification is temporarily unavailable. Your payment remains pending.")
                                             } else {
@@ -649,7 +665,13 @@ private fun MusicPlayerRoot(
                                                             result.orderId,
                                                             result.subscriptionId
                                                         )
-                                                        onPremiumMessage("Premium status verified.")
+                                                        val cloudSync = premiumRepo.syncVerifiedToFirebase()
+                                                        onPremiumMessage(
+                                                            if (cloudSync.isSuccess)
+                                                                "Premium status verified and synced to your account."
+                                                            else
+                                                                "Premium verified. Account sync is still processing."
+                                                        )
                                                     } else {
                                                         premiumRepo.clearVerifiedPremium()
                                                         onPremiumMessage("Premium is no longer active.")
