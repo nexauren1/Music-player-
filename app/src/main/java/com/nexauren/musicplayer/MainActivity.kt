@@ -1282,7 +1282,6 @@ private fun PlanCard(
 }
 
 @Composable
-private fun AccountDialog@Composable
 private fun AccountDialog(
     activity: Activity?,
     repo: FirebaseAccountRepository,
@@ -1608,7 +1607,6 @@ private fun AnimatedBars(active: Boolean) {
 }
 
 @Composable
-private fun EmptyCard@Composable
 private fun EmptyCard(text: String) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
         Column(
