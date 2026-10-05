@@ -553,6 +553,7 @@ private fun MusicPlayerRoot(
                         selected = appLanguage,
                         onSelected = {
                             languageName = it.name
+                            I18n.language = it
                             AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
                         }
                     )
@@ -869,6 +870,7 @@ private fun MusicPlayerRoot(
                         },
                         onLanguageChange = {
                             languageName = it.name
+                            I18n.language = it
                             AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
@@ -981,22 +983,16 @@ private fun MusicPlayerRoot(
                 error = updateError,
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
-                    updating = true
-                    updateError = ""
-                    activity?.let { host ->
-                        host.lifecycleScope.launch {
-                            runCatching {
-                                UpdateManager.downloadAndInstall(context, info) {
-                                    updateProgress = it
-                                }
-                            }.onFailure {
-                                updateError = it.message ?: "The update could not be installed."
-                            }
-                            updating = false
-                            if (updateError.isBlank()) {
-                                updateInfo = null
-                            }
-                        }
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse(info.apkUrl)
+                            )
+                        )
+                        updateInfo = null
+                    }.onFailure {
+                        updateError = I18n.t("Unable to open the update page.")
                     }
                 }
             )
@@ -1019,7 +1015,10 @@ private fun MusicPlayerRoot(
                 onThemeChange = { themeName = it.name },
                 onBackgroundChange = { backgroundName = it.name },
                 onDarkModeChange = { darkMode = it },
-                onLanguageChange = { languageName = it.name },
+                onLanguageChange = {
+                    languageName = it.name
+                    I18n.language = it
+                },
                 onSave = {
                     AppearanceStore.save(context, appTheme, appBackground, darkMode, appLanguage)
                     showAppearanceSetup = false
@@ -2081,7 +2080,7 @@ private fun EqualizerScreen(
             "Jazz" to listOf(.58f, .56f, .52f, .58f, .70f, .76f, .70f, .60f, .56f, .52f),
             "Club" to listOf(.72f, .62f, .54f, .56f, .66f, .76f, .72f, .64f, .60f, .64f),
             "Deep Bass" to listOf(.96f, .88f, .76f, .62f, .54f, .50f, .50f, .52f, .56f, .60f),
-            "DJ Punch" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
+            "Bass Impact" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
             "Hip-Hop" to listOf(.90f, .78f, .60f, .50f, .58f, .72f, .84f, .76f, .66f, .60f),
             "EDM" to listOf(.88f, .74f, .58f, .56f, .66f, .84f, .92f, .84f, .72f, .66f),
             "Bright" to listOf(.44f, .46f, .52f, .62f, .72f, .80f, .86f, .90f, .86f, .80f),
@@ -2129,7 +2128,7 @@ private fun EqualizerScreen(
         }
         val count = if (premiumActive) eq.bandCount() else minOf(5, eq.bandCount())
         eq.applyCustomPreset(fitPreset(values, count))
-        if (name == "DJ Punch" && premiumActive) {
+        if (name == "Bass Impact" && premiumActive) {
             eq.setBassBoost(.82f)
             eq.setSurround(.66f)
             eq.setLoudness(.42f)
@@ -3758,7 +3757,7 @@ private fun UpdateDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Download & install")) } },
+        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Open update page")) } },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !updating) { Text(I18n.t("Later")) } }
     )
 }
