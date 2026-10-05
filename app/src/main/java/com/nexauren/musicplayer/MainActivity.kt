@@ -1333,6 +1333,13 @@ private fun PremiumScreen(
     lifetimeCheckoutReady: Boolean,
     refreshToken: Int
 ) {
+    val premiumActive = premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY ->
+            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
     LaunchedEffect(refreshToken) { }
 
     LazyColumn(
@@ -1340,64 +1347,194 @@ private fun PremiumScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item {
-            Card(shape = RoundedCornerShape(30.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
-                Box(
-                    Modifier.fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                )
-                            ),
-                            RoundedCornerShape(30.dp)
-                        )
-                        .padding(20.dp)
+        if (premiumActive) {
+            item { PremiumUnlockedCard(premium) }
+            item {
+                SettingsSection("Everything Premium", "Your account is verified and protected by the PayPal verification service.") {
+                    PremiumBenefit("No ads", "Enjoy Music Player without banner advertising.")
+                    PremiumBenefit("Unlimited equalizer", "Use all presets and band controls without the free preview limit.")
+                    PremiumBenefit("Advanced sleep timer", "Use 15, 30 and 60 minute sleep timers.")
+                    PremiumBenefit("Premium effects", "Unlock the full visual and audio effects experience.")
+                    PremiumBenefit("Account recovery", "Your verified purchase stays linked to your Music Player account.")
+                }
+            }
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable(onClick = onRefresh),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 ) {
-                    Column {
-                        Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Unlock the full audio experience and keep your entitlement synced to your account.")
-                        Spacer(Modifier.height(10.dp))
-                        if (account == null) {
-                            Text("Sign in before purchasing so the entitlement can be linked to your account.")
-                            Spacer(Modifier.height(10.dp))
-                            Button(onClick = onAccount) { Text("Sign in / create account") }
-                        } else {
-                            Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Refresh, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Verify again", fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                "Refresh PayPal status before using Premium on another device.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
-        }
-        item { PlanCard("Quarterly", "$5", "Every 3 months", true, quarterlyCheckoutReady) { onPurchase(PremiumPlan.QUARTERLY) } }
-        item { PlanCard("Lifetime", "$30", "One-time payment • permanent", false, lifetimeCheckoutReady) { onPurchase(PremiumPlan.LIFETIME) } }
-        item {
-            Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("Premium previews", fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text("Free users get up to ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT} premium preset previews. A purchase becomes premium after the payment is verified and Firebase entitlement is synced.")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Previews used: $previewUses / ${PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT}")
-                    if (premium.verified) {
+        } else {
+            item {
+                Card(
+                    shape = RoundedCornerShape(30.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    )
+                                ),
+                                RoundedCornerShape(30.dp)
+                            )
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Text("Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.height(6.dp))
+                            Text("Unlock the complete Music Player experience with verified account access.")
+                            Spacer(Modifier.height(10.dp))
+                            if (account == null) {
+                                Text("Sign in before purchasing so the verified purchase can return to this account.")
+                                Spacer(Modifier.height(10.dp))
+                                Button(onClick = onAccount) { Text("Sign in / create account") }
+                            } else {
+                                Text("Signed in as " + (account.email ?: account.displayName.orEmpty()))
+                            }
+                        }
+                    }
+                }
+            }
+            item { PlanCard("Quarterly", "$5", "Every 3 months", true, quarterlyCheckoutReady) { onPurchase(PremiumPlan.QUARTERLY) } }
+            item { PlanCard("Lifetime", "$30", "One-time payment • permanent", false, lifetimeCheckoutReady) { onPurchase(PremiumPlan.LIFETIME) } }
+            item {
+                Card(shape = RoundedCornerShape(24.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Free limits", fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Free users get " + PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT + " premium effect previews. After the limit, premium equalizer controls stay locked until a verified plan is active.")
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            "Current plan: " + premium.plan.name.lowercase(),
-                            color = MaterialTheme.colorScheme.primary,
+                            "Previews used: " + previewUses + " / " + PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT,
+                            color = if (previewUses >= PremiumRepository.TEST_PREMIUM_PREVIEW_LIMIT)
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        }
-        item {
-            Card(Modifier.fillMaxWidth().clickable(onClick = onRefresh), shape = RoundedCornerShape(22.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Refresh entitlement", fontWeight = FontWeight.Bold)
-                    Text("Sync premium status from Firebase.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            item {
+                Card(Modifier.fillMaxWidth().clickable(onClick = onRefresh), shape = RoundedCornerShape(22.dp)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Refresh, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Refresh entitlement", fontWeight = FontWeight.Bold)
+                            Text("Check the latest verified account state.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
+    val transition = rememberInfiniteTransition(label = "premium_glow")
+    val alpha by transition.animateFloat(
+        0.55f,
+        1f,
+        infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "premiumAlpha"
+    )
+
+    Card(
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            Modifier.fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ),
+                    RoundedCornerShape(32.dp)
+                )
+                .padding(22.dp)
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        Modifier.size(66.dp).alpha(alpha),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(15.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text("PREMIUM ACTIVE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold)
+                        Text("Everything unlocked", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    premium.plan.name.lowercase().replaceFirstChar { it.uppercase() } +
+                        if (premium.plan == PremiumPlan.QUARTERLY && premium.expiresAtMillis != null)
+                            " • renews automatically"
+                        else " • permanent access"
+                )
+                premium.expiresAtMillis?.takeIf { it > 0L }?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Next billing: " + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Your payment was verified by the Music Player payment service.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumBenefit(title: String, detail: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(Modifier.size(32.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.padding(6.dp))
+        }
+        Spacer(Modifier.width(11.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
