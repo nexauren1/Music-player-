@@ -148,8 +148,8 @@ class EqualizerController(context: Context) {
     fun setDelay(normalized: Float) {
         val value = (normalized.coerceIn(0f, 1f) * 1000f).toInt()
         val milliseconds = (normalized.coerceIn(0f, 1f) * 500f).toInt().coerceIn(0, 500).toShort()
-        runCatching { environmentalReverb?.setReflectionsDelay(milliseconds) }
-        runCatching { environmentalReverb?.setReverbDelay(milliseconds) }
+        runCatching { environmentalReverb?.setReflectionsDelay(milliseconds.toInt()) }
+        runCatching { environmentalReverb?.setReverbDelay(milliseconds.toInt()) }
         prefs.edit().putInt("delay", value).apply()
     }
 
