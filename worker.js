@@ -389,8 +389,8 @@ function bytesToBase64Url(bytes) {
     binary += String.fromCharCode(view[i]);
   }
   return btoa(binary)
-    .replace(/\\+/g, "-")
-    .replace(/\\//g, "_")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
 
@@ -402,7 +402,7 @@ function pemToArrayBuffer(pem) {
   const normalized = String(pem || "")
     .replace(/-----BEGIN PRIVATE KEY-----/g, "")
     .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\\s+/g, "");
+    .replace(/\s+/g, "");
   const binary = atob(normalized);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
