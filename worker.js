@@ -11,9 +11,10 @@
  *   FIREBASE_CLIENT_EMAIL
  *   FIREBASE_PRIVATE_KEY
  *
- * Optional variables:
- *   PAYPAL_ENV = "sandbox" | "live" (default: sandbox)
- *   PUBLIC_BASE_URL = Worker public URL, used for checkout redirects.
+ * Production mode:
+ *   PayPal is permanently LIVE for production releases.
+ *   Keep PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET as Cloudflare Worker secrets.
+ *   PUBLIC_BASE_URL is optional and used for checkout redirects.
  */
 
 const PRODUCT_IDS = {
@@ -35,10 +36,8 @@ const LIFETIME = {
   currency: "USD",
 };
 
-function paypalBase(env) {
-  return String(env.PAYPAL_ENV || "sandbox").toLowerCase() === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
+function paypalBase() {
+  return "https://api-m.paypal.com";
 }
 
 function json(data, status = 200) {
@@ -75,7 +74,7 @@ async function paypalToken(env) {
   );
 
   const response = await fetch(
-    `${paypalBase(env)}/v1/oauth2/token`,
+    `${paypalBase()}/v1/oauth2/token`,
     {
       method: "POST",
       headers: {
@@ -114,7 +113,7 @@ async function paypalRequest(env, token, path, options = {}) {
   headers.set("Accept", "application/json");
   headers.set("Content-Type", "application/json");
 
-  const response = await fetch(`${paypalBase(env)}${path}`, {
+  const response = await fetch(`${paypalBase()}${path}`, {
     ...options,
     headers,
   });
@@ -323,7 +322,7 @@ async function provision(env) {
   );
 
   return {
-    environment: String(env.PAYPAL_ENV || "sandbox").toLowerCase(),
+    environment: "live",
     quarterly: {
       productId: quarterlyProduct.id,
       planId: quarterlyPlan.id,
@@ -849,7 +848,7 @@ export default {
         return json({
           ok: true,
           service: "music-player-paypal",
-          environment: String(env.PAYPAL_ENV || "sandbox").toLowerCase(),
+          environment: "live",
         });
       }
 
