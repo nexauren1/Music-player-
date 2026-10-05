@@ -2141,8 +2141,6 @@ private fun PremiumScreen(
                     }
                 }
             }
-
-            }
         }
     }
 }
@@ -2772,7 +2770,8 @@ private fun SettingsSection(title: String, subtitle: String, content: @Composabl
     }
 }
 
-@Composableprivate fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) -> Unit) {
+@Composable
+private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(AppThemeStyle.values().toList()) { theme ->
             AssistChip(
