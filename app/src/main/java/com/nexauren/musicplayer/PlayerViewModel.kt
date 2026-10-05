@@ -42,6 +42,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val libraryVersion = _libraryVersion.asStateFlow()
 
     private var controller: MediaController? = null
+    private val audioEffects = EqualizerController(application)
     private var positionJob: Job? = null
     private var sleepJob: Job? = null
 
@@ -84,10 +85,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
 
                     override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                        audioEffects.attach(audioSessionId)
                         _libraryVersion.value += 1
                     }
                 })
 
+                audioEffects.attach(connected.audioSessionId)
                 withContext(Dispatchers.Main) {
                     syncCurrent(connected.currentMediaItem)
                     syncPosition()
@@ -111,7 +114,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (list.isEmpty()) return
 
         val index = list.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        repository.recordPlay(song.id)
         repository.recordPlay(song.id)
         val items = list.map { it.toMediaItem() }
         c.setMediaItems(items, index, 0L)
@@ -163,6 +165,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun repeatMode(): Int = controller?.repeatMode ?: Player.REPEAT_MODE_OFF
 
     fun audioSessionId(): Int = controller?.audioSessionId ?: 0
+
+    fun equalizerController(): EqualizerController = audioEffects
 
     fun favorite(song: Song) {
         repository.toggleFavorite(song.id)
@@ -242,6 +246,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         positionJob?.cancel()
         sleepJob?.cancel()
         controller?.release()
+        audioEffects.release()
         super.onCleared()
     }
 }
