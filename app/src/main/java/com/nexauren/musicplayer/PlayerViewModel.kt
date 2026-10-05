@@ -35,6 +35,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _duration = MutableStateFlow(0L)
     val duration = _duration.asStateFlow()
 
+    private val _volume = MutableStateFlow(1f)
+    val volume = _volume.asStateFlow()
+
     private val _libraryVersion = MutableStateFlow(0)
     val libraryVersion = _libraryVersion.asStateFlow()
 
@@ -57,7 +60,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     getApplication(),
                     ComponentName(getApplication(), PlaybackService::class.java)
                 )
-                val connected = MediaController.Builder(getApplication(), token).buildAsync().get()
+                val connected =
+                    MediaController.Builder(getApplication(), token).buildAsync().get()
                 controller = connected
 
                 connected.addListener(object : Player.Listener {
@@ -87,15 +91,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 withContext(Dispatchers.Main) {
                     syncCurrent(connected.currentMediaItem)
                     syncPosition()
+                    syncVolume()
                 }
             }
         }
     }
 
-    suspend fun scan() {
-        _songs.value = repository.scan()
-        _libraryVersion.value += 1
-        syncCurrent(controller?.currentMediaItem)
+    fun scan() {
+        viewModelScope.launch {
+            _songs.value = repository.scan()
+            _libraryVersion.value += 1
+            syncCurrent(controller?.currentMediaItem)
+        }
     }
 
     fun play(song: Song) {
@@ -127,6 +134,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seekTo(position: Long) {
         controller?.seekTo(position)
         _position.value = position
+    }
+
+    fun setVolume(value: Float) {
+        val normalized = value.coerceIn(0f, 1f)
+        controller?.volume = normalized
+        _volume.value = normalized
     }
 
     fun toggleShuffle() {
@@ -189,11 +202,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun syncVolume() {
+        controller?.let {
+            _volume.value = it.volume.coerceIn(0f, 1f)
+        }
+    }
+
     private fun startPositionTicker() {
         positionJob?.cancel()
         positionJob = viewModelScope.launch {
             while (true) {
                 syncPosition()
+                syncVolume()
                 delay(500)
             }
         }
