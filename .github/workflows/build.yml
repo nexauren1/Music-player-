@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${PAYPAL_CLIENT_ID:-}" ] && [ -z "${PAYPAL_CLIENT_SECRET:-}" ]; then
-            echo "PayPal Sandbox credentials are not configured yet; skipping validation."
+            echo "PayPal Live credentials are not configured yet."
             exit 0
           fi
 
@@ -56,27 +56,18 @@ jobs:
           echo "$response" | jq -e '.access_token and .token_type == "Bearer"' >/dev/null
           echo "PayPal Live credentials validated successfully."
 
-      - name: Prepare release signing
+      - name: Prepare production release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ] && [ -z "${KEYSTORE_PASSWORD:-}" ] && [ -z "${KEY_ALIAS:-}" ] && [ -z "${KEY_PASSWORD:-}" ]; then
-            if [[ "${HEAD_MESSAGE:-}" == *"[release]"* ]]; then
-              echo "Release builds require the persistent signing Secrets."
-              exit 1
-            fi
-            echo "No signing Secrets configured; building an unsigned release artifact for testing."
-            exit 0
-          fi
-          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ] || [ -z "${KEY_PASSWORD:-}" ]; then
-            echo "All four signing Secrets are required together."
-            exit 1
-          fi
+          : "${KEYSTORE_BASE64:?KEYSTORE_BASE64 must be configured.}"
+          : "${KEYSTORE_PASSWORD:?KEYSTORE_PASSWORD must be configured.}"
+          : "${KEY_ALIAS:?KEY_ALIAS must be configured.}"
+          : "${KEY_PASSWORD:?KEY_PASSWORD must be configured.}"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/music-player-release.jks
           chmod 600 app/music-player-release.jks
 
@@ -159,4 +150,4 @@ jobs:
 # Client secrets must stay server-side and must never be embedded in an APK.
 
 
-# Music Player release trigger [release]
+# Production release trigger [release]
