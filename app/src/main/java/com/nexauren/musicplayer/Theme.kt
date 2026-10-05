@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.musicplayer.app
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
