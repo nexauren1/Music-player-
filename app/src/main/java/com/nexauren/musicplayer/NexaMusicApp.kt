@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.musicplayer.app
 
 import android.app.Application
 import com.google.android.gms.ads.MobileAds
