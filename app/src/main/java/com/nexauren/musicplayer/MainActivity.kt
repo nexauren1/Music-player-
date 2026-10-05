@@ -2875,6 +2875,8 @@ private fun AccountScreen(
     refreshToken: Int
 ) {
     LaunchedEffect(refreshToken) { }
+    var renameOpen by rememberSaveable { mutableStateOf(false) }
+    var newName by rememberSaveable { mutableStateOf(account?.displayName.orEmpty()) }
 
     val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
         PremiumPlan.LIFETIME -> true
@@ -3015,7 +3017,7 @@ private fun AccountScreen(
                         Text(I18n.t("Account controls"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(10.dp))
                         Button(
-                            onClick = { onRename("") },
+                            onClick = { newName = account?.displayName.orEmpty(); renameOpen = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(I18n.t("Change display name"))
@@ -3073,6 +3075,31 @@ private fun AccountScreen(
                 }
             }
         }
+    }
+    if (renameOpen) {
+        AlertDialog(
+            onDismissRequest = { renameOpen = false },
+            title = { Text(I18n.t("Change display name")) },
+            text = {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text(I18n.t("Display name")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        renameOpen = false
+                        if (newName.isNotBlank()) onRename(newName)
+                    },
+                    enabled = newName.isNotBlank()
+                ) { Text(I18n.t("Save")) }
+            },
+            dismissButton = { TextButton(onClick = { renameOpen = false }) { Text(I18n.t("Cancel")) } }
+        )
     }
 }
 
