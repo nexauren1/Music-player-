@@ -724,25 +724,48 @@ private fun HomeScreen(
 ) {
     val current by vm.currentSong.collectAsState()
     val playing by vm.isPlaying.collectAsState()
-    val recent = remember(songs) {
-        songs.sortedByDescending { it.dateAddedMillis }.take(6)
-    }
+    val recent = remember(songs) { songs.sortedByDescending { it.dateAddedMillis }.take(8) }
+    val mostPlayed = remember(songs) { vm.mostPlayed().take(8) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 154.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+        item {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text(
+                    "YOUR MUSIC",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    "Music Player",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    if (songs.isEmpty()) "Add music to your library and start listening."
+                    else "${songs.size} tracks ready to play",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         item { SearchBar(query, onQueryChange) }
         item { SectionTitle("Now playing", "Live status • view only") }
         item { NowPlayingInfoCard(current, playing) }
-        item { SectionTitle("Recently added", "Fresh from your device • view only") }
+        item { SectionTitle("Recently added", "Newest music on your device • view only") }
 
         item {
             if (recent.isEmpty()) {
                 EmptyCard("No recently added music yet.")
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(end = 8.dp)
+                ) {
                     items(recent, key = { it.id }) { song ->
                         RecentAddedCard(song)
                     }
@@ -750,14 +773,25 @@ private fun HomeScreen(
             }
         }
 
-        item { SectionTitle("Most played", "Your listening history") }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SectionTitle("Most played", "Your listening history")
+                Text("${mostPlayed.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+            }
+        }
 
         item {
-            val mostPlayed = vm.mostPlayed().take(5)
             if (mostPlayed.isEmpty()) {
                 EmptyCard("Your most played songs will appear here.")
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(end = 8.dp)
+                ) {
                     items(mostPlayed, key = { it.id }) { song ->
                         MostPlayedCard(song, vm.playCount(song))
                     }
@@ -766,10 +800,14 @@ private fun HomeScreen(
         }
 
         item {
-            SectionTitle(
-                "All songs",
-                songs.size.toString() + " tracks • tap a track to play"
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SectionTitle("All songs", "Your complete playable library")
+                Text("${songs.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+            }
         }
 
         if (songs.isEmpty()) {
@@ -780,16 +818,9 @@ private fun HomeScreen(
             }
         }
 
-        if (!premium) {
-            item { BannerAd() }
-        } else {
-            item {
-                PremiumHomeBadge()
-            }
-        }
+        if (!premium) item { BannerAd() } else item { PremiumHomeBadge() }
     }
 }
-
 @Composable
 private fun LibraryScreen(
     modifier: Modifier,
@@ -847,149 +878,190 @@ private fun SectionTitle(title: String, subtitle: String) {
 private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
     val transition = rememberInfiniteTransition(label = "home_now_playing")
     val pulse by transition.animateFloat(
-        0.96f,
-        1.02f,
-        infiniteRepeatable(tween(1200), RepeatMode.Reverse),
-        label = "pulse"
+        0.97f,
+        1.015f,
+        infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+        label = "heroPulse"
     )
 
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(34.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 7.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
     ) {
         Box(
             Modifier.fillMaxWidth()
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary,
+                            MaterialTheme.colorScheme.tertiary
                         )
                     ),
                     RoundedCornerShape(34.dp)
                 )
                 .padding(18.dp)
         ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
                             "NOW PLAYING",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.ExtraBold
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.82f),
+                            fontWeight = FontWeight.Black
                         )
                         Text(
                             "Your sound. Your space.",
                             style = MaterialTheme.typography.headlineSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White.copy(alpha = 0.16f)
+                    ) {
+                        Text(
+                            if (playing) "PLAYING" else "PAUSED",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
-                    AnimatedBars(playing)
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(18.dp))
 
-                if (song == null) {
-                    Surface(
-                        Modifier.fillMaxWidth().height(270.dp),
-                        shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                if (song != null) {
+                    Box(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        Box(
+                            Modifier.size(286.dp)
+                                .graphicsLayer {
+                                    scaleX = if (playing) pulse else 1f
+                                    scaleY = if (playing) pulse else 1f
+                                }
+                                .clip(RoundedCornerShape(30.dp))
                         ) {
-                            Icon(Icons.Filled.LibraryMusic, null, modifier = Modifier.size(54.dp))
-                            Spacer(Modifier.height(8.dp))
-                            Text("Nothing playing", fontWeight = FontWeight.ExtraBold)
-                            Text("Start a song from All songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Artwork(song, Modifier.fillMaxSize())
+                            Box(
+                                Modifier.fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
+                                        )
+                                    )
+                            )
+                            Column(
+                                Modifier.align(Alignment.BottomStart).padding(16.dp)
+                            ) {
+                                Text(
+                                    song.title,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    song.artist,
+                                    color = Color.White.copy(alpha = 0.86f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (playing) "Listening now" else "Playback paused",
+                            color = Color.White.copy(alpha = 0.86f),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnimatedBars(playing)
                     }
                 } else {
                     Box(
-                        Modifier.fillMaxWidth().height(286.dp),
+                        Modifier.fillMaxWidth().height(220.dp)
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(Color.White.copy(alpha = 0.13f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Surface(
-                            Modifier.size(250.dp).alpha(if (playing) 0.28f else 0.16f),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
-                        ) {}
-                        Artwork(
-                            song,
-                            Modifier.fillMaxWidth().height(270.dp).graphicsLayer {
-                                scaleX = if (playing) pulse else 1f
-                                scaleY = if (playing) pulse else 1f
-                            }
-                        )
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    Text(
-                        song.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        song.artist,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(Modifier.height(9.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            Modifier.width(7.dp).height(7.dp),
-                            shape = CircleShape,
-                            color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                        ) {}
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            if (playing) "Live playback" else "Paused",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Filled.LibraryMusic,
+                                null,
+                                tint = Color.White.copy(alpha = 0.9f),
+                                modifier = Modifier.size(54.dp)
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text("Nothing playing yet", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                "Choose a track from All songs",
+                                color = Color.White.copy(alpha = 0.75f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
-
 @Composable
 private fun RecentAddedCard(song: Song) {
     Card(
-        Modifier.width(164.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        Modifier.width(172.dp),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(Modifier.padding(10.dp)) {
-            Artwork(song, Modifier.fillMaxWidth().height(140.dp))
-            Spacer(Modifier.height(9.dp))
-            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
-            Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box {
+                Artwork(song, Modifier.fillMaxWidth().height(152.dp))
+                Surface(
+                    Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                ) {
+                    Icon(
+                        Icons.Filled.LibraryMusic,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(8.dp).size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
+            Text(
+                song.artist,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
             Text(
                 "Recently added",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp)
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 6.dp)
             )
         }
     }
 }
-
 @Composable
 private fun SongListScreen(
     modifier: Modifier,
@@ -1061,37 +1133,39 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
 @Composable
 private fun MostPlayedCard(song: Song, plays: Int) {
     Card(
-        Modifier.width(176.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+        Modifier.width(186.dp),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(Modifier.padding(10.dp)) {
             Box {
-                Artwork(song, Modifier.fillMaxWidth().height(154.dp))
+                Artwork(song, Modifier.fillMaxWidth().height(158.dp))
                 Surface(
                     Modifier.align(Alignment.BottomStart).padding(8.dp),
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primary
                 ) {
                     Text(
-                        "#$plays plays",
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        "${plays} plays",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Black
                     )
                 }
             }
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(10.dp))
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-            Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                song.artist,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
-
 @Composable
 private fun MiniPlayer(
     song: Song,
@@ -1105,102 +1179,83 @@ private fun MiniPlayer(
     val progress = if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
     val transition = rememberInfiniteTransition(label = "mini_player")
     val glow by transition.animateFloat(
-        0.72f,
+        0.86f,
         1f,
-        infiniteRepeatable(tween(850), RepeatMode.Reverse),
+        infiniteRepeatable(tween(900), RepeatMode.Reverse),
         label = "miniGlow"
     )
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 6.dp).clickable(onClick = onOpen),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
     ) {
         Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.surface,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer
-                        )
+            Modifier.fillMaxWidth().background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.secondaryContainer
                     )
                 )
+            )
         ) {
             if (playing) {
                 Surface(
-                    Modifier.size(120.dp).align(Alignment.TopEnd).alpha(glow * 0.18f),
+                    Modifier.size(150.dp).align(Alignment.TopEnd).alpha(glow * 0.13f),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary
                 ) {}
             }
-            Column {
+
+            Column(Modifier.fillMaxWidth()) {
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                    modifier = Modifier.fillMaxWidth().height(4.dp)
                 )
+
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onOpen)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    Modifier.fillMaxWidth().padding(start = 13.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box {
-                        Artwork(
-                            song,
-                            Modifier
-                                .size(58.dp)
-                                .graphicsLayer {
-                                    rotationZ = if (playing) glow * 0.7f else 0f
-                                }
-                        )
-                        Surface(
-                            Modifier
-                                .size(20.dp)
-                                .align(Alignment.BottomEnd)
-                                .alpha(if (playing) 1f else 0f),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
-                        ) {
-                            Icon(
-                                Icons.Filled.VolumeUp,
-                                null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(4.dp)
-                            )
+                    Artwork(
+                        song,
+                        Modifier.size(70.dp).graphicsLayer {
+                            scaleX = if (playing) glow else 1f
+                            scaleY = if (playing) glow else 1f
                         }
-                    }
-                    Spacer(Modifier.width(10.dp))
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
                     Column(Modifier.weight(1f)) {
                         Text(
                             if (playing) "NOW PLAYING" else "PAUSED",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.Black
                         )
                         Text(
                             song.title,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
                             song.artist,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    AnimatedBars(playing)
+
                     IconButton(onClick = onPlayPause) {
                         Surface(
-                            Modifier.size(42.dp),
+                            Modifier.size(46.dp),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary
                         ) {
@@ -1208,20 +1263,19 @@ private fun MiniPlayer(
                                 if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                 null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(9.dp)
+                                modifier = Modifier.padding(10.dp)
                             )
                         }
                     }
+
                     IconButton(onClick = onNext) {
-                        Icon(Icons.Filled.SkipNext, null)
+                        Icon(Icons.Filled.SkipNext, "Next", modifier = Modifier.size(28.dp))
                     }
                 }
             }
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NowPlayingSheet(
     song: Song,
