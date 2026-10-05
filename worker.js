@@ -354,7 +354,7 @@ function html(title, message, redirectUrl = "") {
     ? '<p><a href="' + redirectUrl + '">Return to Music Player</a></p>'
     : "";
   const body =
-    "<!doctype html><html><head><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>" +
+    "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" +
     safeTitle +
     "</title><style>body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#11091d,#071923);color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}main{max-width:520px;margin:24px;padding:28px;border-radius:28px;background:rgba(255,255,255,.08);backdrop-filter:blur(20px);text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.35)}h1{margin:0 0 10px}p{color:#d6d5df;line-height:1.55}a{display:inline-block;padding:12px 18px;border-radius:999px;background:#8c63ff;color:#fff;text-decoration:none;font-weight:700}</style></head><body><main><h1>" +
     safeTitle +
