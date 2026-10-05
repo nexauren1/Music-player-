@@ -22,3 +22,6 @@ Music Player is a polished offline-first Android music player built with Kotlin,
 - AdMob-ready monetization
 - PayPal Premium checkout through the Cloudflare Worker
 - Automatic PayPal product and quarterly plan provisioning
+
+
+Music Player 1.5.6 release.
