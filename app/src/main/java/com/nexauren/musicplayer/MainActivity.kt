@@ -204,13 +204,20 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val plan = when (data.getQueryParameter("plan")) {
+        val pending = PayPalCheckout.loadPending(this)
+        val planFromIntent = when (data.getQueryParameter("plan")) {
             "quarterly" -> PremiumPlan.QUARTERLY
             "lifetime" -> PremiumPlan.LIFETIME
             else -> PremiumPlan.NONE
         }
+        val plan = if (planFromIntent != PremiumPlan.NONE) planFromIntent
+        else pending?.plan ?: PremiumPlan.NONE
         val orderId = data.getQueryParameter("orderId")
+            ?.takeIf { it.isNotBlank() }
+            ?: pending?.orderId
         val subscriptionId = data.getQueryParameter("subscriptionId")
+            ?.takeIf { it.isNotBlank() }
+            ?: pending?.subscriptionId
 
         lifecycleScope.launch {
             premiumMessage = "Verifying your PayPal payment…"
@@ -222,13 +229,13 @@ class MainActivity : ComponentActivity() {
             )
 
             if (pendingResult?.getOrNull() == true) {
-                premiumMessage = "Premium activated. All premium features are now unlocked."
+                premiumMessage = "Premium activated. All Premium features are now unlocked."
                 premiumEvent++
                 return@launch
             }
 
-            if (pendingResult != null) {
-                premiumMessage = "PayPal returned successfully, but Premium is still synchronizing."
+            if (plan == PremiumPlan.NONE) {
+                premiumMessage = "PayPal returned, but the purchase details could not be recovered."
                 premiumEvent++
                 return@launch
             }
@@ -1399,11 +1406,11 @@ fun NowPlayingSheet(
                             }
                             Spacer(Modifier.height(10.dp))
                             Box(
-                                Modifier.fillMaxWidth().height(320.dp),
+                                Modifier.fillMaxWidth().height(270.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Surface(
-                                    Modifier.size(300.dp).alpha(if (playing) 0.34f else 0.22f),
+                                    Modifier.size(250.dp).alpha(if (playing) 0.26f else 0.16f),
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary
                                 ) {}
@@ -1472,38 +1479,44 @@ fun NowPlayingSheet(
                             IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, "Repeat") }
                         }
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AssistChip(onClick = { vm.startSleepTimer(15) }, label = { Text("15 min") })
-                            AssistChip(
-                                onClick = {
-                                    if (premiumActive) {
-                                        vm.startSleepTimer(30)
-                                    } else {
-                                        Toast.makeText(
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            item {
+                                AssistChip(
+                                    onClick = { vm.startSleepTimer(15) },
+                                    label = { Text("15 min") }
+                                )
+                            }
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        if (premiumActive) vm.startSleepTimer(30)
+                                        else Toast.makeText(
                                             context,
                                             "30 minute sleep timer is Premium.",
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                    }
-                                },
-                                label = { Text("30 min • Premium") },
-                                leadingIcon = { Icon(Icons.Filled.Star, null) }
-                            )
-                            AssistChip(
-                                onClick = {
-                                    if (premiumActive) {
-                                        vm.startSleepTimer(60)
-                                    } else {
-                                        Toast.makeText(
+                                    },
+                                    label = { Text("30 min • Premium") },
+                                    leadingIcon = { Icon(Icons.Filled.Star, null) }
+                                )
+                            }
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        if (premiumActive) vm.startSleepTimer(60)
+                                        else Toast.makeText(
                                             context,
                                             "60 minute sleep timer is Premium.",
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                    }
-                                },
-                                label = { Text("60 min • Premium") },
-                                leadingIcon = { Icon(Icons.Filled.Star, null) }
-                            )
+                                    },
+                                    label = { Text("60 min • Premium") },
+                                    leadingIcon = { Icon(Icons.Filled.Star, null) }
+                                )
+                            }
                         }
                     }
                 }
@@ -1671,6 +1684,14 @@ private fun EqualizerScreen(
                                         val level = eq.lowerBound() + (range * it).toInt()
                                         eq.setBand(index, level)
                                     },
+                                    colors = androidx.compose.material3.SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        disabledThumbColor = MaterialTheme.colorScheme.outline,
+                                        disabledActiveTrackColor = MaterialTheme.colorScheme.outline,
+                                        disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -2183,7 +2204,7 @@ private fun AccountScreen(
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                if (account != null) "PRO ACCOUNT" else "MUSIC PLAYER ACCOUNT",
+                                if (premiumActive) "PRO ACCOUNT" else "MUSIC PLAYER ACCOUNT",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Black
@@ -2199,7 +2220,9 @@ private fun AccountScreen(
                             Text(
                                 if (account != null) account.email.orEmpty()
                                 else "Sync Premium purchases and settings.",
-                                color = Color.White.copy(alpha = .85f)
+                                color = Color.White.copy(alpha = .85f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -2292,7 +2315,10 @@ private fun AccountScreen(
                         Text("Security", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(5.dp))
                         Text(
-                            "Your Premium entitlement is verified against the account linked to the PayPal purchase.",
+                            if (premiumActive)
+                                "Your Premium entitlement is verified against the account linked to your purchase."
+                            else
+                                "Your account is ready for Premium purchases. Verified entitlements appear here automatically.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(12.dp))
