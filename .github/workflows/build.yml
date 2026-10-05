@@ -58,13 +58,14 @@ jobs:
         run: |
           gradle :app:assembleDebug \
             -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
-            -PPAYPAL_CHECKOUT_URL="${{ vars.PAYPAL_CHECKOUT_URL }}" \
+            -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
+      -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
             -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nexa-music-debug
+          name: music-player-debug
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Publish GitHub Release
@@ -79,8 +80,8 @@ jobs:
           gh release delete "${TAG}" --yes 2>/dev/null || true
           git push --delete origin "${TAG}" 2>/dev/null || true
           gh release create "${TAG}" "app-release.apk" \
-            --title "Nexa Music ${VERSION}" \
-            --notes "Nexa Music ${VERSION} test release." \
+            --title "Music Player ${VERSION}" \
+            --notes "Music Player ${VERSION} test release." \
             --prerelease
 
 # PAYPAL_CLIENT_SECRET is intentionally not passed into the Android build.
