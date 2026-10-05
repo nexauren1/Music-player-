@@ -199,16 +199,6 @@ class PremiumRepository(private val context: Context) {
             .apply()
     }
 
-    fun remainingPreviewUses(): Int =
-        prefs.getInt("preview_uses", 0).coerceAtLeast(0)
-
-    fun consumePreviewUse(): Boolean {
-        val used = remainingPreviewUses()
-        if (used >= TEST_PREMIUM_PREVIEW_LIMIT) return false
-        prefs.edit().putInt("preview_uses", used + 1).apply()
-        return true
-    }
-
     /**
      * Refreshes the read-only entitlement from Firestore.
      *
