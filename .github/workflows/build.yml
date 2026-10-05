@@ -121,8 +121,7 @@ jobs:
           git push --delete origin "${TAG}" 2>/dev/null || true
           gh release create "${TAG}" "app-release.apk" \
             --title "Music Player ${VERSION}" \
-            --notes "Music Player ${VERSION} test release." \
-            --prerelease
+            --notes "Music Player ${VERSION} release. APK attached."
 
 # PAYPAL_CLIENT_SECRET is intentionally not passed into the Android build.
 # Client secrets must stay server-side and must never be embedded in an APK.
