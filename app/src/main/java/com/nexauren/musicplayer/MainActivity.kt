@@ -265,6 +265,7 @@ private enum class AppScreen(val label: String) {
     LIBRARY("Library"),
     FAVORITES("Favorites"),
     MOST_PLAYED("Most played"),
+    ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
     PREMIUM("Premium"),
     SETTINGS("Settings")
@@ -298,7 +299,9 @@ private fun MusicPlayerRoot(
     var showAppearanceSetup by rememberSaveable { mutableStateOf(!storedAppearance.configured) }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
+    var accountRefresh by remember { mutableIntStateOf(0) }
     var premiumRefresh by remember { mutableIntStateOf(0) }
+    val accountSnapshot = remember(accountRefresh) { accountRepo.currentAccount() }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updating by remember { mutableStateOf(false) }
     var updateProgress by remember { mutableIntStateOf(0) }
@@ -430,6 +433,7 @@ private fun MusicPlayerRoot(
                         AppScreen.LIBRARY to Icons.Filled.LibraryMusic,
                         AppScreen.FAVORITES to Icons.Filled.Favorite,
                         AppScreen.MOST_PLAYED to Icons.Filled.BarChart,
+                        AppScreen.ACCOUNT to Icons.Filled.Person,
                         AppScreen.EQUALIZER to Icons.Filled.Tune,
                         AppScreen.PREMIUM to Icons.Filled.Star,
                         AppScreen.SETTINGS to Icons.Filled.Settings
@@ -473,9 +477,9 @@ private fun MusicPlayerRoot(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { accountDialog = true }) {
+                            IconButton(onClick = { screen = AppScreen.ACCOUNT }) {
                                 Icon(
-                                    if (accountRepo.currentAccount() != null)
+                                    if (accountSnapshot != null)
                                         Icons.Filled.AccountCircle
                                     else
                                         Icons.Filled.Person,
@@ -554,6 +558,18 @@ private fun MusicPlayerRoot(
                         songs = vm.mostPlayed(),
                         showPlays = true
                     )
+                    AppScreen.ACCOUNT -> AccountScreen(
+                        modifier = Modifier.padding(padding),
+                        account = accountSnapshot,
+                        premium = premiumRepo.loadLocal(),
+                        onSignIn = { accountDialog = true },
+                        onSignOut = {
+                            accountRepo.signOut()
+                            accountRefresh++
+                        },
+                        onPremium = { screen = AppScreen.PREMIUM },
+                        refreshToken = accountRefresh
+                    )
                     AppScreen.EQUALIZER -> EqualizerScreen(
                         modifier = Modifier.padding(padding),
                         audioSessionId = vm.audioSessionId(),
@@ -562,10 +578,10 @@ private fun MusicPlayerRoot(
                     )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
-                        account = accountRepo.currentAccount(),
+                        account = accountSnapshot,
                         premium = premiumRepo.loadLocal(),
                         previewUses = premiumRepo.remainingPreviewUses(),
-                        onAccount = { accountDialog = true },
+                        onAccount = { screen = AppScreen.ACCOUNT },
                         onRefresh = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
@@ -705,6 +721,7 @@ private fun MusicPlayerRoot(
                 onDismiss = { accountDialog = false },
                 onSigned = {
                     accountDialog = false
+                    accountRefresh++
                     activity?.lifecycleScope?.launch {
                         premiumRepo.syncFromFirebase()
                         premiumRefresh++
@@ -1505,59 +1522,113 @@ private fun EqualizerScreen(
     val eq = remember { EqualizerController(context) }
     var attached by remember { mutableStateOf(false) }
     var levels by remember { mutableStateOf(List(5) { .5f }) }
-    var message by remember { mutableStateOf("Effects are saved when you leave the page.") }
+    var effects by remember { mutableStateOf(DjEffectState()) }
+    var message by remember { mutableStateOf("Play a track to connect the DJ engine.") }
     val premiumActive = premiumRepo.isPremium()
+
+    val presets = remember {
+        listOf(
+            "Flat" to listOf(.50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f),
+            "Club" to listOf(.72f, .62f, .54f, .56f, .66f, .76f, .72f, .64f, .60f, .64f),
+            "Deep Bass" to listOf(.96f, .88f, .76f, .62f, .54f, .50f, .50f, .52f, .56f, .60f),
+            "DJ Punch" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
+            "Hip-Hop" to listOf(.90f, .78f, .60f, .50f, .58f, .72f, .84f, .76f, .66f, .60f),
+            "EDM" to listOf(.88f, .74f, .58f, .56f, .66f, .84f, .92f, .84f, .72f, .66f),
+            "Rock" to listOf(.78f, .66f, .52f, .46f, .56f, .72f, .84f, .78f, .68f, .60f),
+            "Vocal" to listOf(.40f, .44f, .52f, .66f, .78f, .82f, .72f, .62f, .56f, .52f),
+            "Bright" to listOf(.44f, .46f, .52f, .62f, .72f, .80f, .86f, .90f, .86f, .80f),
+            "Studio" to listOf(.50f, .50f, .52f, .54f, .56f, .56f, .56f, .54f, .52f, .50f),
+            "Lo-Fi" to listOf(.78f, .70f, .58f, .50f, .48f, .46f, .50f, .56f, .66f, .72f)
+        )
+    }
 
     DisposableEffect(audioSessionId) {
         eq.attach(audioSessionId)
         attached = audioSessionId > 0
-        if (attached) levels = eq.normalizedLevels().ifEmpty { List(5) { .5f } }
+        if (attached) {
+            levels = eq.normalizedLevels().ifEmpty { List(eq.bandCount()) { .5f } }
+            effects = eq.effectState()
+            message = "DJ engine connected. Tune your sound."
+        }
         onDispose {
             eq.release()
             attached = false
         }
     }
 
+    fun fitPreset(values: List<Float>, count: Int): List<Float> {
+        if (count <= 1) return listOf(values.first())
+        return List(count) { index ->
+            val source = ((index.toFloat() / (count - 1)) * (values.size - 1))
+            values[source.toInt().coerceIn(0, values.lastIndex)]
+        }
+    }
+
+    fun applyPreset(name: String, values: List<Float>) {
+        if (!attached) {
+            message = "Play a song first to enable the DJ engine."
+            return
+        }
+        val isFree = name == "Flat"
+        if (!isFree && !premiumActive && !premiumRepo.consumePreviewUse()) {
+            message = "Premium preview limit reached. Unlock Premium for unlimited DJ controls."
+            return
+        }
+        eq.applyCustomPreset(fitPreset(values, eq.bandCount()))
+        levels = eq.normalizedLevels().ifEmpty { levels }
+        if (name == "DJ Punch" && premiumActive) {
+            eq.setBassBoost(.82f)
+            eq.setSurround(.66f)
+            eq.setLoudness(.42f)
+            effects = eq.effectState()
+        }
+        message = if (isFree || premiumActive) "$name preset loaded."
+            else "$name preview loaded. ${premiumRepo.remainingPreviewUses()} preview(s) left."
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 145.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") }
-                Column {
-                    Text("Equalizer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                    Text(if (attached) "Connected to the active player" else "Play a song first", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(Modifier.weight(1f)) {
+                    Text("DJ Equalizer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                    Text(
+                        if (attached) "Professional audio engine connected" else "Play a song to connect the engine",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+                AssistChip(
+                    onClick = {},
+                    enabled = false,
+                    label = { Text(if (premiumActive) "PREMIUM" else "FREE") }
+                )
             }
         }
+
         item {
-            Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Presets", fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(9.dp))
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Column(Modifier.padding(17.dp)) {
+                    Text("DJ PRESETS", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Fast sound shaping for club, studio and headphone listening.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf("Flat", "Bass", "Treble", "Vocal", "Rock")) { label ->
+                        items(presets) { (name, values) ->
                             AssistChip(
-                                onClick = {
-                                    if (!attached) return@AssistChip
-                                    val freePreset = label == "Flat"
-                                    if (freePreset || premiumActive || premiumRepo.consumePreviewUse()) {
-                                        val index = listOf("Flat", "Bass", "Treble", "Vocal", "Rock").indexOf(label)
-                                        eq.setPreset(index.toShort())
-                                        levels = eq.normalizedLevels().ifEmpty { List(5) { .5f } }
-                                        message = if (premiumActive || freePreset) {
-                                            "Preset applied."
-                                        } else {
-                                            "Premium preview used. " + premiumRepo.remainingPreviewUses() + " preview(s) left."
-                                        }
-                                    } else {
-                                        message = "The 3 free premium previews are finished. Unlock Premium for unlimited effects."
-                                    }
-                                },
-                                label = { Text(label) },
-                                leadingIcon = if (label != "Flat") {
+                                onClick = { applyPreset(name, values) },
+                                label = { Text(name) },
+                                leadingIcon = if (name != "Flat") {
                                     { Icon(Icons.Filled.Star, null) }
                                 } else null
                             )
@@ -1566,31 +1637,140 @@ private fun EqualizerScreen(
                 }
             }
         }
+
         item {
-            Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Bands" + if (premiumActive) "" else " • Premium", fontWeight = FontWeight.Bold)
+            Card(shape = RoundedCornerShape(28.dp)) {
+                Column(Modifier.padding(17.dp)) {
+                    Text(
+                        "EQ BANDS" + if (!premiumActive) " • PREMIUM" else "",
+                        fontWeight = FontWeight.Black
+                    )
                     Spacer(Modifier.height(10.dp))
-                    levels.forEachIndexed { index, value ->
-                        Text("Band ${index + 1}", style = MaterialTheme.typography.labelLarge)
-                        Slider(
-                            value = value,
-                            enabled = attached && premiumActive,
-                            onValueChange = {
-                                if (!attached || !premiumActive) {
-                                    message = "Band controls are Premium. Use the free presets to preview effects."
-                                    return@Slider
-                                }
-                                levels = levels.toMutableList().also { list -> list[index] = it }
-                                val range = (eq.upperBound() - eq.lowerBound()).coerceAtLeast(1)
-                                val level = eq.lowerBound() + (range * it).toInt()
-                                eq.setBand(index, level)
+                    if (!attached) {
+                        Text(
+                            "Start playback to edit the live spectrum.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        levels.forEachIndexed { index, value ->
+                            val frequency = eq.bandFrequencyHz(index)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (frequency > 0) "${frequency}Hz" else "Band ${index + 1}",
+                                    modifier = Modifier.width(55.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Slider(
+                                    value = value,
+                                    enabled = premiumActive,
+                                    onValueChange = {
+                                        levels = levels.toMutableList().also { list -> list[index] = it }
+                                        val range = (eq.upperBound() - eq.lowerBound()).coerceAtLeast(1)
+                                        val level = eq.lowerBound() + (range * it).toInt()
+                                        eq.setBand(index, level)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(Modifier.padding(17.dp)) {
+                    Text("DJ FX", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                    Text("Premium processing effects", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+
+                    Text("Bass Boost", fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = effects.bassBoost,
+                        enabled = attached && premiumActive,
+                        onValueChange = {
+                            effects = effects.copy(bassBoost = it)
+                            eq.setBassBoost(it)
+                        }
+                    )
+
+                    Text("3D Space", fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = effects.surround,
+                        enabled = attached && premiumActive,
+                        onValueChange = {
+                            effects = effects.copy(surround = it)
+                            eq.setSurround(it)
+                        }
+                    )
+
+                    Text("Loudness", fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = effects.loudness,
+                        enabled = attached && premiumActive,
+                        onValueChange = {
+                            effects = effects.copy(loudness = it)
+                            eq.setLoudness(it)
+                        }
+                    )
+
+                    Text(
+                        if (premiumActive) "Bass + 3D Space + Loudness are active."
+                        else "Unlock Premium for live DJ effects.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(22.dp)) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        Modifier.size(42.dp),
+                        shape = CircleShape,
+                        color = if (premiumActive)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Icon(
+                            Icons.Filled.Tune,
+                            null,
+                            tint = if (premiumActive)
+                                MaterialTheme.colorScheme.onPrimary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (premiumActive) "DJ mode unlocked" else "DJ mode is Premium",
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            "Live EQ • DJ presets • Bass Boost • 3D Space • Loudness",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
         }
+
         item {
             Text(
                 message,
@@ -1935,6 +2115,187 @@ private fun PlanCard(
                 )
             }
             Text(price, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+@Composable
+private fun AccountScreen(
+    modifier: Modifier,
+    account: AccountSnapshot?,
+    premium: PremiumSnapshot,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    onPremium: () -> Unit,
+    refreshToken: Int
+) {
+    LaunchedEffect(refreshToken) { }
+
+    val premiumActive = premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY ->
+            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(30.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+            ) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            ),
+                            RoundedCornerShape(30.dp)
+                        )
+                        .padding(22.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            Modifier.size(68.dp),
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = .18f)
+                        ) {
+                            Icon(
+                                Icons.Filled.AccountCircle,
+                                null,
+                                tint = Color.White,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (account != null) "PRO ACCOUNT" else "MUSIC PLAYER ACCOUNT",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                account?.displayName?.takeIf { it.isNotBlank() }
+                                    ?: account?.email?.substringBefore("@")
+                                    ?: "Your personal music space",
+                                color = Color.White,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                if (account != null) account.email.orEmpty()
+                                else "Sync Premium purchases and settings.",
+                                color = Color.White.copy(alpha = .85f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (account == null) {
+            item {
+                Card(shape = RoundedCornerShape(26.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Private & local-first", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Your local music library stays on the device. An account is only needed for Premium purchases and cloud entitlement.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Filled.Person, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Sign in / create account")
+                        }
+                    }
+                }
+            }
+        } else {
+            item {
+                Card(shape = RoundedCornerShape(26.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Account status", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                Modifier.size(44.dp),
+                                shape = CircleShape,
+                                color = if (premiumActive)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Icon(
+                                    if (premiumActive) Icons.Filled.CheckCircle else Icons.Filled.Person,
+                                    null,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (premiumActive) "Premium account" else "Free account",
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    when (premium.plan) {
+                                        PremiumPlan.LIFETIME -> "Lifetime Premium"
+                                        PremiumPlan.QUARTERLY -> "Quarterly Premium"
+                                        PremiumPlan.NONE -> "No active Premium plan"
+                                    },
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(shape = RoundedCornerShape(26.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Premium control center", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            "Manage DJ effects, ad-free playback, equalizer controls and your verified PayPal entitlement.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = onPremium, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Filled.Star, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (premiumActive) "Open Premium" else "Explore Premium")
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(shape = RoundedCornerShape(26.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Security", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            "Your Premium entitlement is verified against the account linked to the PayPal purchase.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = onSignOut) { Text("Sign out") }
+                    }
+                }
+            }
         }
     }
 }
