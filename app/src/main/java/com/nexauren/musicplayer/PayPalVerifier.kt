@@ -100,7 +100,8 @@ object PayPalVerifier {
 data class PendingPayPalPurchase(
     val plan: PremiumPlan,
     val orderId: String?,
-    val subscriptionId: String?
+    val subscriptionId: String?,
+    val startedAtMillis: Long
 )
 
 object PayPalCheckout {
@@ -108,6 +109,7 @@ object PayPalCheckout {
     private const val PLAN = "plan"
     private const val ORDER_ID = "orderId"
     private const val SUBSCRIPTION_ID = "subscriptionId"
+    private const val STARTED_AT = "startedAtMillis"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -117,6 +119,7 @@ object PayPalCheckout {
             .putString(PLAN, plan.name)
             .putString(ORDER_ID, orderId)
             .putString(SUBSCRIPTION_ID, subscriptionId)
+            .putLong(STARTED_AT, System.currentTimeMillis())
             .apply()
     }
 
@@ -126,7 +129,8 @@ object PayPalCheckout {
         return PendingPayPalPurchase(
             plan,
             prefs(context).getString(ORDER_ID, null),
-            prefs(context).getString(SUBSCRIPTION_ID, null)
+            prefs(context).getString(SUBSCRIPTION_ID, null),
+            prefs(context).getLong(STARTED_AT, 0L)
         )
     }
 
