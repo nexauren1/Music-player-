@@ -1,0 +1,37 @@
+name: Android Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build debug APK
+        run: |
+          gradle :app:assembleDebug \
+            -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
+            -PPAYPAL_CHECKOUT_URL="${{ vars.PAYPAL_CHECKOUT_URL }}" \
+            -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexa-music-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+# PAYPAL_CLIENT_SECRET is intentionally not passed to the Android build.
+# Client secrets must stay server-side and must never be embedded in an APK.
+# For OTA releases, add a persistent signing key to GitHub Secrets and build
+# a signed release. Android will then require normal system confirmation.
