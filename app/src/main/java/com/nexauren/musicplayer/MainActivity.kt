@@ -132,7 +132,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handlePayPalIntent(intent)
         setContent {
             MusicPlayerRoot(
                 playerViewModel,
@@ -142,56 +141,76 @@ class MainActivity : ComponentActivity() {
                 premiumMessage = message
             }
         }
+
+        // Process deep links after Compose is attached so launch-from-browser is safe.
+        runCatching { handlePayPalIntent(intent) }
+            .onFailure { premiumMessage = "Music Player could not process the return link." }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePayPalIntent(intent)
+        runCatching { handlePayPalIntent(intent) }
+            .onFailure { premiumMessage = "Music Player could not process the return link." }
     }
 
     override fun onResume() {
         super.onResume()
-        ApkInstaller.resumeIfPending(this)
+        runCatching {
+            ApkInstaller.resumeIfPending(this)
+        }.onFailure {
+            // Never let a broken/stale pending APK prevent the app from launching.
+            getSharedPreferences("update_install", MODE_PRIVATE)
+                .edit()
+                .remove("pending_apk")
+                .apply()
+        }
+
         lifecycleScope.launch {
-            val account = FirebaseAccountRepository(this@MainActivity).currentAccount() ?: return@launch
+            runCatching {
+                val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
+                    ?: return@runCatching
 
-            PayPalCheckout.verifyPending(this@MainActivity, account.uid, premiumRepository)
-                ?.onSuccess { verified ->
-                    if (verified) {
-                        premiumEvent++
-                        premiumMessage = "Payment verified. Premium is now active."
-                    }
-                }
-
-            val local = premiumRepository.loadLocal()
-            if (local.verified && local.plan != PremiumPlan.NONE) {
-                PayPalVerifier.verify(
-                    uid = account.uid,
-                    plan = local.plan,
-                    orderId = local.orderId,
-                    subscriptionId = local.subscriptionId
-                ).onSuccess {
-                    if (it.verified) {
-                        premiumRepository.setVerifiedFromWorker(
-                            it.plan,
-                            it.expiresAtMillis,
-                            it.orderId,
-                            it.subscriptionId
-                        )
-                        val cloudSync = premiumRepository.syncVerifiedToFirebase()
-                        premiumEvent++
-                        premiumMessage = if (cloudSync.isSuccess) {
-                            "Premium status verified."
-                        } else {
-                            "Premium verified. Account sync is still processing."
+                PayPalCheckout.verifyPending(this@MainActivity, account.uid, premiumRepository)
+                    ?.onSuccess { verified ->
+                        if (verified) {
+                            premiumEvent++
+                            premiumMessage = "Payment verified. Premium is now active."
                         }
-                    } else {
-                        premiumRepository.clearVerifiedPremium()
-                        premiumEvent++
-                        premiumMessage = "Premium is no longer active."
+                    }
+
+                val local = premiumRepository.loadLocal()
+                if (local.verified && local.plan != PremiumPlan.NONE) {
+                    PayPalVerifier.verify(
+                        uid = account.uid,
+                        plan = local.plan,
+                        orderId = local.orderId,
+                        subscriptionId = local.subscriptionId
+                    ).onSuccess {
+                        if (it.verified) {
+                            premiumRepository.setVerifiedFromWorker(
+                                it.plan,
+                                it.expiresAtMillis,
+                                it.orderId,
+                                it.subscriptionId
+                            )
+                            val cloudSync = premiumRepository.syncVerifiedToFirebase()
+                            premiumEvent++
+                            premiumMessage = if (cloudSync.isSuccess) {
+                                "Premium status verified."
+                            } else {
+                                "Premium verified. Account sync is still processing."
+                            }
+                        } else {
+                            premiumRepository.clearVerifiedPremium()
+                            premiumEvent++
+                            premiumMessage = "Premium is no longer active."
+                        }
                     }
                 }
+            }.onFailure {
+                // Premium verification must never make the main activity crash.
+                premiumMessage = "Premium verification will retry automatically."
             }
         }
     }
