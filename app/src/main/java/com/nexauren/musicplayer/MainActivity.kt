@@ -123,14 +123,107 @@ import androidx.media3.common.Player
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val playerViewModel by viewModels<PlayerViewModel>()
+    private val premiumRepository by lazy { PremiumRepository(this) }
+    private var premiumEvent by mutableIntStateOf(0)
+    private var premiumMessage by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MusicPlayerRoot(playerViewModel) }
+        handlePayPalIntent(intent)
+        setContent { MusicPlayerRoot(playerViewModel, premiumEvent, premiumMessage) }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handlePayPalIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ApkInstaller.resumeIfPending(this)
+        lifecycleScope.launch {
+            val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
+            val local = premiumRepository.loadLocal()
+            if (account != null && local.verified && local.plan != PremiumPlan.NONE) {
+                val result = PayPalVerifier.verify(
+                    uid = account.uid,
+                    plan = local.plan,
+                    orderId = local.orderId,
+                    subscriptionId = local.subscriptionId
+                )
+                result.onSuccess {
+                    if (it.verified) {
+                        premiumRepository.setVerifiedFromWorker(
+                            it.plan,
+                            it.expiresAtMillis,
+                            it.orderId,
+                            it.subscriptionId
+                        )
+                    } else {
+                        premiumRepository.clearVerifiedPremium()
+                        premiumEvent++
+                        premiumMessage = "Premium is no longer active."
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handlePayPalIntent(intent: Intent?) {
+        if (intent?.scheme != "musicplayer" || intent.host != "paypal") return
+
+        if (intent.path == "/cancel") {
+            premiumMessage = "Payment cancelled. Premium was not activated."
+            premiumEvent++
+            return
+        }
+
+        if (intent.path != "/success") return
+
+        val account = FirebaseAccountRepository(this).currentAccount()
+        if (account == null) {
+            premiumMessage = "Sign in again so Music Player can verify this purchase."
+            premiumEvent++
+            return
+        }
+
+        val plan = when (intent.getStringExtra("plan") ?: intent.data?.getQueryParameter("plan")) {
+            "quarterly" -> PremiumPlan.QUARTERLY
+            "lifetime" -> PremiumPlan.LIFETIME
+            else -> PremiumPlan.NONE
+        }
+        val orderId = intent.getStringExtra("orderId")
+            ?: intent.data?.getQueryParameter("orderId")
+        val subscriptionId = intent.getStringExtra("subscriptionId")
+            ?: intent.data?.getQueryParameter("subscriptionId")
+
+        lifecycleScope.launch {
+            PayPalVerifier.verify(account.uid, plan, orderId, subscriptionId)
+                .onSuccess {
+                    if (it.verified) {
+                        premiumRepository.setVerifiedFromWorker(
+                            it.plan,
+                            it.expiresAtMillis,
+                            it.orderId,
+                            it.subscriptionId
+                        )
+                        premiumMessage = "Premium activated. All premium features are now unlocked."
+                    } else {
+                        premiumMessage = "Payment returned, but PayPal has not confirmed Premium yet."
+                    }
+                    premiumEvent++
+                }
+                .onFailure {
+                    premiumMessage = "Premium verification failed: " + (it.message ?: "Unknown error")
+                    premiumEvent++
+                }
+        }
     }
 }
 
@@ -146,7 +239,11 @@ private enum class AppScreen(val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MusicPlayerRoot(vm: PlayerViewModel) {
+private fun MusicPlayerRoot(
+    vm: PlayerViewModel,
+    premiumEvent: Int,
+    premiumMessage: String
+) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val songs by vm.songs.collectAsState()
