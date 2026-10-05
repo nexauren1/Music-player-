@@ -1322,7 +1322,7 @@ private fun BannerAd() {
     AndroidView(
         factory = {
             AdView(context).apply {
-                adSize = AdSize.BANNER
+                setAdSize(AdSize.BANNER)
                 adUnitId = "ca-app-pub-3940256099942544/6300978111"
                 loadAd(AdRequest.Builder().build())
             }
