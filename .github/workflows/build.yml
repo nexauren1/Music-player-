@@ -3,6 +3,8 @@ name: Android Build
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -60,10 +62,15 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_BASE64:-}" ] && [ -z "${KEYSTORE_PASSWORD:-}" ] && [ -z "${KEY_ALIAS:-}" ] && [ -z "${KEY_PASSWORD:-}" ]; then
-            echo "No signing Secrets configured; building a test APK."
+            if [[ "${HEAD_MESSAGE:-}" == *"[release]"* ]]; then
+              echo "Release builds require the persistent signing Secrets."
+              exit 1
+            fi
+            echo "No signing Secrets configured; building an unsigned release artifact for testing."
             exit 0
           fi
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ] || [ -z "${KEY_PASSWORD:-}" ]; then
@@ -90,14 +97,14 @@ jobs:
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
               -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
-              -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
+              -PUPDATE_MANIFEST_URL="https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
           else
-            gradle :app:assembleDebug \
+            gradle :app:assembleRelease \
               -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
               -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
-              -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
+              -PUPDATE_MANIFEST_URL="https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
           fi
 
       - name: Upload APK artifact
@@ -113,11 +120,11 @@ jobs:
         run: |
           VERSION="$(awk -F'"' '/versionName =/{print $2}' app/build.gradle.kts | head -1)"
           TAG="v${VERSION}"
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            APK="app/build/outputs/apk/release/app-release.apk"
-          else
-            APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
+            echo "Release APK was not produced."
+            exit 1
           fi
+          APK="app/build/outputs/apk/release/app-release.apk"
           cp "${APK}" "app-release.apk"
           gh release delete "${TAG}" --yes 2>/dev/null || true
           git push --delete origin "${TAG}" 2>/dev/null || true
