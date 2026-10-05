@@ -1294,7 +1294,7 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                     TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
                     TextButton(onClick = { vm.startSleepTimer(15); menu = false }) { Text(I18n.t("Sleep 15 min")) }
                     TextButton(onClick = { vm.favorite(song); menu = false }) {
-                        Text(if (vm.isFavorite(song)) "Remove favorite" else "Add favorite")
+                        Text(if (vm.isFavorite(song)) I18n.t("Remove favorite") else I18n.t("Add favorite"))
                     }
                 }
             }
@@ -1412,7 +1412,7 @@ private fun MiniPlayer(
                 }) {
                     Icon(
                         if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (favorite) "Remove favorite" else "Add favorite",
+                        contentDescription = if (favorite) I18n.t("Remove favorite") else I18n.t("Add favorite"),
                         tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -1427,7 +1427,7 @@ private fun MiniPlayer(
                     IconButton(onClick = onPlayPause) {
                         Icon(
                             if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (playing) "Pause" else "Play",
+                            contentDescription = if (playing) I18n.t("Pause") else I18n.t("Play"),
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.padding(8.dp)
                         )
@@ -1884,7 +1884,7 @@ private fun EqualizerScreen(
                     AssistChip(
                         onClick = { applyPreset(name, values) },
                         label = {
-                            Text(if (premiumActive || free) name else name + " • Premium")
+                            Text(if (premiumActive || free) name else name + " • " + I18n.t("Premium"))
                         },
                         leadingIcon = if (!free && !premiumActive) {
                             { Icon(Icons.Filled.Lock, null, modifier = Modifier.size(15.dp)) }
@@ -2612,7 +2612,7 @@ private fun AccountScreen(
                         Button(onClick = onPremium, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Filled.Star, null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (premiumActive) "Open Premium" else "Explore Premium")
+                            Text(if (premiumActive) I18n.t("Open Premium") else I18n.t("Explore Premium"))
                         }
                     }
                 }
