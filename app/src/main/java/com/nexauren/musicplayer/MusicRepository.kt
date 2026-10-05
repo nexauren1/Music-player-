@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.musicplayer.app
 
 import android.content.ContentUris
 import android.content.Context
@@ -56,6 +56,7 @@ class MusicRepository(private val context: Context) {
             val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
             while (cursor.moveToNext()) {
