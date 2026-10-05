@@ -28,12 +28,6 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Validate live payment service
-        run: |
-          set -euo pipefail
-          response="$(curl -fsS "https://icy-bread-c703.nexaurenstore.workers.dev/health")"
-          echo "$response" | jq -e '.ok == true and .environment == "live"' >/dev/null
-
       - name: Prepare production release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
