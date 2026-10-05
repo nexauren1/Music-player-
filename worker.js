@@ -344,6 +344,127 @@ function publicBaseUrl(request, env) {
   );
 }
 
+function html(title, message, redirectUrl = "") {
+  const safeTitle = String(title).replace(/[<>&"]/g, "");
+  const safeMessage = String(message).replace(/[<>&]/g, "");
+  const redirect = redirectUrl
+    ? "<script>setTimeout(function(){window.location.href=" + JSON.stringify(redirectUrl) + ";},400);</script>"
+    : "";
+  const link = redirectUrl
+    ? '<p><a href="' + redirectUrl + '">Return to Music Player</a></p>'
+    : "";
+  const body =
+    "<!doctype html><html><head><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>" +
+    safeTitle +
+    "</title><style>body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#11091d,#071923);color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}main{max-width:520px;margin:24px;padding:28px;border-radius:28px;background:rgba(255,255,255,.08);backdrop-filter:blur(20px);text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.35)}h1{margin:0 0 10px}p{color:#d6d5df;line-height:1.55}a{display:inline-block;padding:12px 18px;border-radius:999px;background:#8c63ff;color:#fff;text-decoration:none;font-weight:700}</style></head><body><main><h1>" +
+    safeTitle +
+    "</h1><p>" +
+    safeMessage +
+    "</p>" +
+    link +
+    "</main>" +
+    redirect +
+    "</body></html>";
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function unixMillis(value) {
+  const time = Date.parse(String(value || ""));
+  return Number.isFinite(time) ? time : null;
+}
+
+async function getOrder(env, token, orderId) {
+  return paypalRequest(
+    env,
+    token,
+    "/v2/checkout/orders/" + encodeURIComponent(orderId),
+    { method: "GET" }
+  );
+}
+
+async function captureLifetime(env, token, orderId) {
+  const existing = await getOrder(env, token, orderId);
+  if (existing?.status === "COMPLETED") return existing;
+  if (existing?.status !== "APPROVED") {
+    throw new Error(
+      "Lifetime order is not ready for capture: " + (existing?.status || "UNKNOWN")
+    );
+  }
+
+  return await paypalRequest(
+    env,
+    token,
+    "/v2/checkout/orders/" + encodeURIComponent(orderId) + "/capture",
+    {
+      method: "POST",
+      body: "{}",
+      headers: {
+        "PayPal-Request-Id": "music-player-capture-" + orderId,
+        Prefer: "return=representation",
+      },
+    }
+  );
+}
+
+async function verifyPurchase(env, { plan, uid, orderId, subscriptionId }) {
+  if (!uid) throw new Error("uid is required.");
+  const token = await paypalToken(env);
+
+  if (plan === "lifetime") {
+    if (!orderId) throw new Error("orderId is required for lifetime verification.");
+    const order = await captureLifetime(env, token, orderId);
+    const purchase = order?.purchase_units?.[0];
+    const amount = purchase?.amount;
+    const customId = purchase?.custom_id;
+    const completed =
+      order?.status === "COMPLETED" &&
+      customId === uid &&
+      amount?.currency_code === LIFETIME.currency &&
+      String(amount?.value) === LIFETIME.amount;
+
+    return {
+      verified: completed,
+      plan: completed ? "lifetime" : "none",
+      expiresAtMillis: null,
+      orderId,
+      subscriptionId: null,
+      paypalStatus: order?.status || null,
+    };
+  }
+
+  if (plan === "quarterly") {
+    if (!subscriptionId) throw new Error("subscriptionId is required for quarterly verification.");
+    const subscription = await paypalRequest(
+      env,
+      token,
+      "/v1/billing/subscriptions/" + encodeURIComponent(subscriptionId),
+      { method: "GET" }
+    );
+
+    const customId = subscription?.custom_id;
+    const status = subscription?.status;
+    const verified = customId === uid && status === "ACTIVE";
+    const expiresAtMillis = unixMillis(subscription?.billing_info?.next_billing_time);
+
+    return {
+      verified,
+      plan: verified ? "quarterly" : "none",
+      expiresAtMillis,
+      orderId: null,
+      subscriptionId,
+      paypalStatus: status || null,
+    };
+  }
+
+  throw new Error("Unknown premium plan.");
+}
+
 async function createQuarterlyCheckout(request, env, uid) {
   if (!uid) {
     return json(
@@ -515,12 +636,51 @@ export default {
         }
       }
 
-      if (url.pathname === "/paypal/success") {
-        return text("Payment approved. Return to Music Player to verify your premium access.");
+      if (url.pathname === "/paypal/verify" && request.method === "GET") {
+        const result = await verifyPurchase(env, {
+          plan: url.searchParams.get("plan"),
+          uid: url.searchParams.get("uid"),
+          orderId: url.searchParams.get("orderId") || url.searchParams.get("token"),
+          subscriptionId: url.searchParams.get("subscriptionId"),
+        });
+        return json(result);
       }
 
-      if (url.pathname === "/paypal/cancel") {
-        return text("Payment cancelled. No premium entitlement was granted.");
+      if (url.pathname === "/paypal/success" && request.method === "GET") {
+        const plan = url.searchParams.get("plan");
+        const uid = url.searchParams.get("uid");
+        const orderId = url.searchParams.get("token") || url.searchParams.get("orderId");
+        const subscriptionId = url.searchParams.get("subscription_id") || url.searchParams.get("subscriptionId");
+
+        try {
+          const result = await verifyPurchase(env, { plan, uid, orderId, subscriptionId });
+          if (!result.verified) {
+            return html(
+              "Payment not confirmed",
+              "PayPal returned to the store, but the payment has not reached a confirmed state yet. Please reopen Music Player and try again."
+            );
+          }
+
+          const deepLink = new URL("musicplayer://paypal/success");
+          deepLink.searchParams.set("plan", result.plan);
+          if (result.orderId) deepLink.searchParams.set("orderId", result.orderId);
+          if (result.subscriptionId) deepLink.searchParams.set("subscriptionId", result.subscriptionId);
+          return html(
+            "Premium activated",
+            "Your payment is verified. Music Player will open automatically and activate Premium.",
+            deepLink.toString()
+          );
+        } catch (error) {
+          return html(
+            "Payment verification failed",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
+
+      if (url.pathname === "/paypal/cancel" && request.method === "GET") {
+        const deepLink = new URL("musicplayer://paypal/cancel");
+        return html("Payment cancelled", "No premium access was granted.", deepLink.toString());
       }
 
       return json({ error: "Not found" }, 404);
