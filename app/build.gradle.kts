@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -110,9 +111,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("com.google.android.gms:play-services-ads:25.5.0")
 
-    // Firebase-ready account, premium entitlement and Google Sign-In stack.
-    // The google-services plugin + google-services.json will be added after
-    // the Firebase project is registered.
+    // Firebase account, premium entitlement and Google Sign-In stack.
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
