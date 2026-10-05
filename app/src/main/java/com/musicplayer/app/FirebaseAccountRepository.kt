@@ -9,9 +9,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 data class AccountSnapshot(
@@ -209,33 +207,28 @@ class PremiumRepository(private val context: Context) {
         return true
     }
 
+    /**
+     * Refreshes the read-only entitlement from Firestore.
+     *
+     * The Cloudflare Worker is the only component allowed to write
+     * verified Premium entitlements. The Android client only reads them.
+     */
     suspend fun syncVerifiedToFirebase(): Result<Unit> {
         return runCatching {
-            val user = FirebaseAuth.getInstance().currentUser
-                ?: throw IllegalStateException("No Firebase account is signed in.")
-            val state = loadLocal()
-            if (!state.verified || state.plan == PremiumPlan.NONE) {
-                throw IllegalStateException("No verified Premium entitlement is available to sync.")
+            if (FirebaseApp.getApps(context).isEmpty()) {
+                throw IllegalStateException("Firebase is not configured.")
+            }
+            if (FirebaseAuth.getInstance().currentUser == null) {
+                throw IllegalStateException("No Firebase account is signed in.")
             }
 
-            val payload = hashMapOf<String, Any?>(
-                "plan" to state.plan.name.lowercase(),
-                "verified" to true,
-                "expiresAtMillis" to state.expiresAtMillis,
-                "orderId" to state.orderId,
-                "subscriptionId" to state.subscriptionId,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
+            prefs.edit().putBoolean("cloudSynced", false).apply()
+            syncFromFirebase()
 
-            FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(user.uid)
-                .collection("entitlement")
-                .document("premium")
-                .set(payload, SetOptions.merge())
-                .await()
-
-            prefs.edit().putBoolean("cloudSynced", true).apply()
+            val state = loadLocal()
+            if (!state.cloudSynced) {
+                throw IllegalStateException("Firebase Premium entitlement is not available yet.")
+            }
         }
     }
 
