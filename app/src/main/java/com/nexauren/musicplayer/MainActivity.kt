@@ -2609,7 +2609,7 @@ private fun PremiumScreen(
                         PremiumFeatureTile(I18n.t("Bass Boost"), I18n.t("Premium low-end enhancement inside the equalizer."), Icons.Filled.VolumeUp)
                         PremiumFeatureTile(I18n.t("3D Space"), I18n.t("Premium spatial effect inside the equalizer."), Icons.Filled.Repeat)
                         PremiumFeatureTile(I18n.t("Loudness"), I18n.t("Premium gain enhancement inside the equalizer."), Icons.Filled.VolumeUp)
-                        PremiumFeatureTile(I18n.t("DJ preset library"), I18n.t("Club, Deep Bass, DJ Punch, Hip-Hop, EDM, Bright and Lo-Fi."), Icons.Filled.Star)
+                        PremiumFeatureTile(I18n.t("Professional preset library"), I18n.t("Studio, Deep Bass, Hip-Hop, EDM, Bright and Lo-Fi."), Icons.Filled.Star)
                         PremiumFeatureTile(I18n.t("Verified access"), I18n.t("Your Premium equalizer entitlement is linked to your account."), Icons.Filled.AccountCircle)
                     }
                 }
