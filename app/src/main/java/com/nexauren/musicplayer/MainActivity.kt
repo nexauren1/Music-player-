@@ -501,7 +501,7 @@ private fun MusicPlayerRoot(
                         Column {
                             Text(I18n.t("Music Player"), fontWeight = FontWeight.ExtraBold)
                             Text(
-                                "Local audio • offline-first",
+                                I18n.t("Local audio • offline-first"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -974,12 +974,21 @@ private fun MusicPlayerRoot(
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
                     runCatching {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                android.net.Uri.parse(info.apkUrl)
+                        try {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("market://details?id=" + BuildConfig.APPLICATION_ID)
+                                )
                             )
-                        )
+                        } catch (_: Exception) {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(info.apkUrl)
+                                )
+                            )
+                        }
                         updateInfo = null
                     }.onFailure {
                         updateError = I18n.t("Unable to open the update page.")
@@ -2503,7 +2512,7 @@ private fun PremiumScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(I18n.t("Processing"), fontWeight = FontWeight.ExtraBold)
                                 Text(
-                                    "Checking PayPal status and synchronizing your Premium access.",
+                                    I18n.t("Checking PayPal status and synchronizing your Premium access."),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -2575,12 +2584,12 @@ private fun PremiumScreen(
 
                         if (account != null) {
                             Text(
-                                "Signed in as " + (account.email ?: account.displayName.orEmpty()),
+                                I18n.t("Signed in as ") + (account.email ?: account.displayName.orEmpty()),
                                 color = Color.White.copy(alpha = 0.88f)
                             )
                         } else {
                             Text(
-                                "Sign in to connect purchases to your Music Player account.",
+                                I18n.t("Sign in to connect purchases to your Music Player account."),
                                 color = Color.White.copy(alpha = 0.88f)
                             )
                             Spacer(Modifier.height(10.dp))
@@ -2605,7 +2614,7 @@ private fun PremiumScreen(
             }
             item {
                 Text(
-                    "Advanced Equalizer Premium",
+                    I18n.t("Advanced Equalizer Premium"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2641,7 +2650,7 @@ private fun PremiumScreen(
         } else {
             item {
                 Text(
-                    "Choose your plan",
+                    I18n.t("Choose your plan"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2744,7 +2753,7 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
             premium.expiresAtMillis?.takeIf { it > 0L }?.let {
                 Spacer(Modifier.height(5.dp))
                 Text(
-                    "Next billing: " + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
+                    I18n.t("Next billing: ") + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -3677,7 +3686,7 @@ private fun PremiumHomeBadge() {
             Column {
                 Text(I18n.t("Premium active"), fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "Ad-free playback • unlimited effects",
+                    I18n.t("Ad-free playback • unlimited effects"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
