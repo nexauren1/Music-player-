@@ -29,7 +29,8 @@ data class UpdateInfo(
     val versionName: String,
     val apkUrl: String,
     val changelog: String,
-    val sha256: String = ""
+    val sha256: String = "",
+    val sizeBytes: Long = 0L
 ) {
     fun isNewer(): Boolean {
         if (versionCode > 0L) {
@@ -166,7 +167,8 @@ object UpdateManager {
                         "changelog",
                         "Performance and stability improvements."
                     ),
-                    sha256 = json.optString("sha256", "")
+                    sha256 = json.optString("sha256", ""),
+                    sizeBytes = json.optLong("sizeBytes", 0L)
                 )
 
                 val info = if (
@@ -227,7 +229,8 @@ object UpdateManager {
                         "body",
                         "Performance and stability improvements."
                     ),
-                    sha256 = ""
+                    sha256 = "",
+                    sizeBytes = apk.optLong("size", 0L)
                 )
             }.getOrNull()
         }
@@ -236,7 +239,7 @@ object UpdateManager {
         context: Context,
         info: UpdateInfo,
         onProgress: (Int) -> Unit = {}
-    ) = withContext(Dispatchers.IO) {
+    ): Boolean = withContext(Dispatchers.IO) {
         val target = File(context.cacheDir, "music-player-" + info.versionCode + ".apk")
         target.delete()
         val connection = URL(info.apkUrl).openConnection() as HttpURLConnection
@@ -285,7 +288,7 @@ object UpdateManager {
         }
 
         onProgress(100)
-        ApkInstaller.install(context, target)
+        return@withContext ApkInstaller.install(context, target)
     }
 
     private fun sha256(file: File): String {
@@ -331,7 +334,7 @@ object ApkInstaller {
     private const val PREFS = "update_install"
     private const val PENDING_APK = "pending_apk"
 
-    fun install(context: Context, apk: File) {
+    fun install(context: Context, apk: File): Boolean {
         if (!apk.exists() || apk.length() == 0L) {
             throw IllegalStateException("The downloaded APK is missing or empty.")
         }
@@ -350,7 +353,7 @@ object ApkInstaller {
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
             context.startActivity(settingsIntent)
-            return
+            return false
         }
 
         val installer = context.packageManager.packageInstaller
@@ -417,6 +420,7 @@ object ApkInstaller {
         } finally {
             session.close()
         }
+        return true
     }
 
     fun resumeIfPending(context: Context) {
