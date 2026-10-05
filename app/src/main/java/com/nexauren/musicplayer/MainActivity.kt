@@ -50,6 +50,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
@@ -308,11 +311,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class LibrarySortMode {
+    TITLE,
+    ARTIST,
+    RECENTLY_ADDED
+}
+
 private enum class AppScreen(private val key: String) {
     HOME("Home"),
     LIBRARY("Library"),
     FAVORITES("Favorites"),
     MOST_PLAYED("Most played"),
+    RECENTLY_PLAYED("Recently played"),
     ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
     PREMIUM("Premium"),
@@ -515,6 +525,7 @@ private fun MusicPlayerRoot(
                         AppScreen.LIBRARY to Icons.Filled.LibraryMusic,
                         AppScreen.FAVORITES to Icons.Filled.Favorite,
                         AppScreen.MOST_PLAYED to Icons.Filled.BarChart,
+                        AppScreen.RECENTLY_PLAYED to Icons.Filled.History,
                         AppScreen.ACCOUNT to Icons.Filled.Person,
                         AppScreen.EQUALIZER to Icons.Filled.Tune,
                         AppScreen.PREMIUM to Icons.Filled.Star,
@@ -676,6 +687,14 @@ private fun MusicPlayerRoot(
                         title = I18n.t("Most played"),
                         songs = vm.mostPlayed(),
                         showPlays = true
+                    )
+                    AppScreen.RECENTLY_PLAYED -> SongListScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        title = I18n.t("Recently played"),
+                        songs = vm.recentlyPlayed(),
+                        showPlays = false,
+                        onClearHistory = { vm.clearPlayHistory() }
                     )
                     AppScreen.ACCOUNT -> AccountScreen(
                         modifier = Modifier.padding(padding),
@@ -1127,7 +1146,7 @@ private fun HomeScreen(
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("No songs found. Scan your library from Settings.")) }
         } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
+            itemsIndexed(sortedSongs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays = false)
             }
         }
@@ -1142,6 +1161,15 @@ private fun LibraryScreen(
     query: String,
     onQueryChange: (String) -> Unit
 ) {
+    var sortName by rememberSaveable { mutableStateOf(LibrarySortMode.TITLE.name) }
+    val sortMode = runCatching { LibrarySortMode.valueOf(sortName) }.getOrDefault(LibrarySortMode.TITLE)
+    val sortedSongs = remember(songs, sortMode) {
+        when (sortMode) {
+            LibrarySortMode.TITLE -> songs.sortedBy { it.title.lowercase() }
+            LibrarySortMode.ARTIST -> songs.sortedWith(compareBy<Song> { it.artist.lowercase() }.thenBy { it.title.lowercase() })
+            LibrarySortMode.RECENTLY_ADDED -> songs.sortedByDescending { it.dateAddedMillis }
+        }
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
@@ -1153,6 +1181,31 @@ private fun LibraryScreen(
                 StatCard(I18n.t("Tracks"), songs.size.toString(), Modifier.weight(1f))
                 StatCard(I18n.t("Albums"), songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
                 StatCard(I18n.t("Artists"), songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
+            }
+        }
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    AssistChip(
+                        onClick = {
+                            sortName = when (sortMode) {
+                                LibrarySortMode.TITLE -> LibrarySortMode.ARTIST.name
+                                LibrarySortMode.ARTIST -> LibrarySortMode.RECENTLY_ADDED.name
+                                LibrarySortMode.RECENTLY_ADDED -> LibrarySortMode.TITLE.name
+                            }
+                        },
+                        leadingIcon = { Icon(Icons.Filled.Sort, null) },
+                        label = {
+                            Text(
+                                when (sortMode) {
+                                    LibrarySortMode.TITLE -> I18n.t("Sort: title")
+                                    LibrarySortMode.ARTIST -> I18n.t("Sort: artist")
+                                    LibrarySortMode.RECENTLY_ADDED -> I18n.t("Sort: recently added")
+                                }
+                            )
+                        }
+                    )
+                }
             }
         }
         item { SectionTitle(I18n.t("All music"), I18n.t("Your complete local library")) }
@@ -1380,14 +1433,29 @@ private fun SongListScreen(
     vm: PlayerViewModel,
     title: String,
     songs: List<Song>,
-    showPlays: Boolean
+    showPlays: Boolean,
+    onClearHistory: (() -> Unit)? = null
 ) {
+    val libraryVersion by vm.libraryVersion.collectAsState()
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        item { SectionTitle(title, songs.size.toString() + " tracks") }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionTitle(title, songs.size.toString() + " tracks")
+                if (onClearHistory != null && songs.isNotEmpty()) {
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onClearHistory) {
+                        Icon(Icons.Filled.Refresh, I18n.t("Clear history"))
+                    }
+                }
+            }
+        }
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("Nothing here yet.")) }
         } else {
@@ -1400,6 +1468,7 @@ private fun SongListScreen(
 
 @Composable
 private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
+    val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
 
     Card(
@@ -1432,6 +1501,23 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
+                    TextButton(onClick = { vm.playNext(song); menu = false }) { Text(I18n.t("Play next")) }
+                    TextButton(onClick = { vm.addToQueue(song); menu = false }) { Text(I18n.t("Add to queue")) }
+                    TextButton(onClick = {
+                        menu = false
+                        runCatching {
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "${song.title} — ${song.artist}\n${song.album}"
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(share, I18n.t("Share song")))
+                        }.onFailure {
+                            Toast.makeText(context, I18n.t("Unable to share this track."), Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text(I18n.t("Share song")) }
                     TextButton(onClick = { vm.startSleepTimer(15); menu = false }) { Text(I18n.t("Sleep 15 min")) }
                     TextButton(onClick = { vm.favorite(song); menu = false }) {
                         Text(if (vm.isFavorite(song)) I18n.t("Remove favorite") else I18n.t("Add favorite"))
