@@ -213,25 +213,49 @@ class MainActivity : ComponentActivity() {
         val subscriptionId = data.getQueryParameter("subscriptionId")
 
         lifecycleScope.launch {
-            PayPalVerifier.verify(account.uid, plan, orderId, subscriptionId)
-                .onSuccess {
-                    if (it.verified) {
-                        premiumRepository.setVerifiedFromWorker(
-                            it.plan,
-                            it.expiresAtMillis,
-                            it.orderId,
-                            it.subscriptionId
-                        )
-                        premiumMessage = "Premium activated. All premium features are now unlocked."
-                    } else {
-                        premiumMessage = "Payment returned, but PayPal has not confirmed Premium yet."
-                    }
-                    premiumEvent++
+            premiumMessage = "Verifying your PayPal payment…"
+
+            val pendingResult = PayPalCheckout.verifyPending(
+                this@MainActivity,
+                account.uid,
+                premiumRepository
+            )
+
+            if (pendingResult?.getOrNull() == true) {
+                premiumMessage = "Premium activated. All premium features are now unlocked."
+                premiumEvent++
+                return@launch
+            }
+
+            if (pendingResult != null) {
+                premiumMessage = "PayPal returned successfully, but Premium is still synchronizing."
+                premiumEvent++
+                return@launch
+            }
+
+            PayPalVerifier.verifyWithRetry(
+                account.uid,
+                plan,
+                orderId,
+                subscriptionId
+            ).onSuccess {
+                if (it.verified) {
+                    premiumRepository.setVerifiedFromWorker(
+                        it.plan,
+                        it.expiresAtMillis,
+                        it.orderId,
+                        it.subscriptionId
+                    )
+                    PayPalCheckout.clearPending(this@MainActivity)
+                    premiumMessage = "Premium activated. All premium features are now unlocked."
+                } else {
+                    premiumMessage = "PayPal returned successfully, but Premium is still synchronizing."
                 }
-                .onFailure {
-                    premiumMessage = "Premium verification failed: " + (it.message ?: "Unknown error")
-                    premiumEvent++
-                }
+                premiumEvent++
+            }.onFailure {
+                premiumMessage = "Premium verification failed: " + (it.message ?: "Unknown error")
+                premiumEvent++
+            }
         }
     }
 }
@@ -545,6 +569,29 @@ private fun MusicPlayerRoot(
                         onRefresh = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
+                                    val account = accountRepo.currentAccount()
+                                    val local = premiumRepo.loadLocal()
+
+                                    if (account != null && local.plan != PremiumPlan.NONE) {
+                                        PayPalVerifier.verifyWithRetry(
+                                            uid = account.uid,
+                                            plan = local.plan,
+                                            orderId = local.orderId,
+                                            subscriptionId = local.subscriptionId
+                                        ).onSuccess { result ->
+                                            if (result.verified) {
+                                                premiumRepo.setVerifiedFromWorker(
+                                                    result.plan,
+                                                    result.expiresAtMillis,
+                                                    result.orderId,
+                                                    result.subscriptionId
+                                                )
+                                            } else {
+                                                premiumRepo.clearVerifiedPremium()
+                                            }
+                                        }
+                                    }
+
                                     premiumRepo.syncFromFirebase()
                                     premiumRefresh++
                                 }
@@ -1176,103 +1223,91 @@ private fun MiniPlayer(
     onPlayPause: () -> Unit,
     onNext: () -> Unit
 ) {
-    val progress = if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
-    val transition = rememberInfiniteTransition(label = "mini_player")
-    val glow by transition.animateFloat(
-        0.86f,
-        1f,
-        infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "miniGlow"
-    )
+    val progress = if (duration > 0) {
+        (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 6.dp).clickable(onClick = onOpen),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .clickable(onClick = onOpen),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Box(
-            Modifier.fillMaxWidth().background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.secondaryContainer
-                    )
-                )
-            )
-        ) {
-            if (playing) {
-                Surface(
-                    Modifier.size(150.dp).align(Alignment.TopEnd).alpha(glow * 0.13f),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {}
-            }
-
-            Column(Modifier.fillMaxWidth()) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(4.dp)
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, top = 8.dp, end = 6.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Artwork(
+                    song,
+                    Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(14.dp))
                 )
 
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 13.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(Modifier.width(11.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Artwork(
-                        song,
-                        Modifier.size(70.dp).graphicsLayer {
-                            scaleX = if (playing) glow else 1f
-                            scaleY = if (playing) glow else 1f
-                        }
+                    Text(
+                        song.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Text(
+                        song.artist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            if (playing) "NOW PLAYING" else "PAUSED",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Black
+                IconButton(onClick = onPlayPause) {
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(9.dp)
                         )
-                        Text(
-                            song.title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            song.artist,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    IconButton(onClick = onPlayPause) {
-                        Surface(
-                            Modifier.size(46.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
-                        ) {
-                            Icon(
-                                if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
-                    }
-
-                    IconButton(onClick = onNext) {
-                        Icon(Icons.Filled.SkipNext, "Next", modifier = Modifier.size(28.dp))
                     }
                 }
+
+                IconButton(onClick = onNext) {
+                    Icon(
+                        Icons.Filled.SkipNext,
+                        contentDescription = "Next track",
+                        modifier = Modifier.size(25.dp)
+                    )
+                }
             }
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surface
+            )
         }
     }
 }

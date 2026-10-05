@@ -2,6 +2,7 @@ package com.musicplayer.app
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -17,6 +18,27 @@ data class PayPalVerificationResult(
 )
 
 object PayPalVerifier {
+    suspend fun verifyWithRetry(
+        uid: String,
+        plan: PremiumPlan,
+        orderId: String? = null,
+        subscriptionId: String? = null,
+        maxAttempts: Int = 5
+    ): Result<PayPalVerificationResult> {
+        var last = Result.failure<PayPalVerificationResult>(
+            IllegalStateException("PayPal verification did not run.")
+        )
+        repeat(maxAttempts.coerceAtLeast(1)) { attempt ->
+            last = verify(uid, plan, orderId, subscriptionId)
+            val result = last.getOrNull()
+            if (last.isSuccess && result?.verified == true) return last
+            if (attempt < maxAttempts - 1) {
+                delay(1_000L * (attempt + 1))
+            }
+        }
+        return last
+    }
+
     suspend fun verify(
         uid: String,
         plan: PremiumPlan,
@@ -157,7 +179,7 @@ object PayPalCheckout {
         premiumRepository: PremiumRepository
     ): Result<Boolean>? {
         val pending = loadPending(context) ?: return null
-        return PayPalVerifier.verify(uid, pending.plan, pending.orderId, pending.subscriptionId).map { result ->
+        return PayPalVerifier.verifyWithRetry(uid, pending.plan, pending.orderId, pending.subscriptionId).map { result ->
             if (result.verified) {
                 premiumRepository.setVerifiedFromWorker(
                     result.plan, result.expiresAtMillis, result.orderId, result.subscriptionId
