@@ -1,7 +1,7 @@
 {
-  "versionCode": 12,
-  "versionName": "1.5.4",
+  "versionCode": 13,
+  "versionName": "1.5.5",
   "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
   "sha256": "",
-  "changelog": "Professional Premium screen, cleaner account center, compact player controls, improved DJ equalizer UI, and stronger PayPal return-flow handling."
+  "changelog": "Reliable PayPal app switching and verification processing, plus a safer Android PackageInstaller update flow."
 }
