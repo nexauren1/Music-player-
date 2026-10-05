@@ -70,8 +70,8 @@ object NotificationHelper {
 
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Nexa Music " + info.versionName + " is available")
-            .setContentText("Open Nexa Music to download the update.")
+            .setContentTitle("Music Player " + info.versionName + " is available")
+            .setContentText("Open Music Player to download the update.")
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog))
             .setContentIntent(pending)
             .setAutoCancel(true)
@@ -83,7 +83,7 @@ object NotificationHelper {
     fun showInstallFailure(context: Context, message: String) {
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Nexa Music update failed")
+            .setContentTitle("Music Player update failed")
             .setContentText(message)
             .setAutoCancel(true)
             .build()
