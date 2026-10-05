@@ -602,7 +602,8 @@ private fun MusicPlayerRoot(
                         modifier = Modifier.padding(padding),
                         audioSessionId = vm.audioSessionId(),
                         premiumRepo = premiumRepo,
-                        onBack = { screen = AppScreen.HOME }
+                        onBack = { screen = AppScreen.HOME },
+                        onOpenPremium = { screen = AppScreen.PREMIUM }
                     )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
@@ -1577,7 +1578,8 @@ private fun EqualizerScreen(
     modifier: Modifier,
     audioSessionId: Int,
     premiumRepo: PremiumRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenPremium: () -> Unit
 ) {
     val context = LocalContext.current
     val eq = remember { EqualizerController(context) }
@@ -1634,7 +1636,12 @@ private fun EqualizerScreen(
             message = "$name is a Premium equalizer preset."
             return
         }
-        eq.applyCustomPreset(fitPreset(values, eq.bandCount()))
+        val presetBands = if (premiumActive) {
+            fitPreset(values, eq.bandCount())
+        } else {
+            fitPreset(values, minOf(5, eq.bandCount()))
+        }
+        eq.applyCustomPreset(presetBands)
         levels = eq.normalizedLevels().ifEmpty { levels }
         if (name == "DJ Punch" && premiumActive) {
             eq.setBassBoost(.82f)
@@ -1871,9 +1878,7 @@ private fun EqualizerScreen(
                     if (!premiumActive) {
                         Spacer(Modifier.height(8.dp))
                         Button(
-                            onClick = {
-                                message = "Open Premium from the menu to unlock advanced equalizer controls."
-                            },
+                            onClick = onOpenPremium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Filled.Lock, null)
@@ -1999,13 +2004,13 @@ private fun PremiumScreen(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (premiumActive) "PREMIUM ACTIVE" else "MUSIC PLAYER PREMIUM",
+                                    if (premiumActive) "PREMIUM ACTIVE" else "EQUALIZER PREMIUM",
                                     color = Color.White,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
-                                    if (premiumActive) "Everything is unlocked" else "Your sound. Your space.",
+                                    if (premiumActive) "Advanced equalizer unlocked" else "Unlock advanced equalizer controls",
                                     color = Color.White,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.ExtraBold
@@ -2047,7 +2052,7 @@ private fun PremiumScreen(
             }
             item {
                 Text(
-                    "Everything Premium",
+                    "Advanced Equalizer Premium",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
