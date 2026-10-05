@@ -329,6 +329,7 @@ private fun MusicPlayerRoot(
     var accountDialog by remember { mutableStateOf(false) }
     var accountRefresh by remember { mutableIntStateOf(0) }
     var premiumRefresh by remember { mutableIntStateOf(0) }
+    var premiumSnapshot by remember { mutableStateOf(premiumRepo.loadLocal()) }
     val accountSnapshot = remember(accountRefresh) { accountRepo.currentAccount() }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updating by remember { mutableStateOf(false) }
@@ -388,6 +389,7 @@ private fun MusicPlayerRoot(
         }
 
         premiumRepo.syncFromFirebase()
+        premiumSnapshot = premiumRepo.loadLocal()
         delay(1500)
         if (updateInfo == null) {
             updateInfo = UpdateManager.check(context)
@@ -395,10 +397,18 @@ private fun MusicPlayerRoot(
     }
 
     LaunchedEffect(premiumEvent) {
+        premiumSnapshot = premiumRepo.loadLocal()
         if (premiumEvent > 0) {
             premiumRefresh++
             screen = AppScreen.PREMIUM
             Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()        }
+    }
+
+    LaunchedEffect(screen, accountRefresh) {
+        if (screen == AppScreen.PREMIUM || screen == AppScreen.EQUALIZER) {
+            premiumRepo.syncFromFirebase()
+            premiumSnapshot = premiumRepo.loadLocal()
+        }
     }
 
     BackHandler(enabled = nowPlaying) {
@@ -534,7 +544,10 @@ private fun MusicPlayerRoot(
                                 duration = duration,
                                 onOpen = { nowPlaying = true },
                                 onPlayPause = vm::togglePlayPause,
-                                onNext = vm::next
+                                onNext = vm::next,
+                                onEqualizer = { screen = AppScreen.EQUALIZER },
+                                initialFavorite = vm.isFavorite(song),
+                                onFavorite = { vm.favorite(song) }
                             )
                         }
 
@@ -589,7 +602,7 @@ private fun MusicPlayerRoot(
                     AppScreen.ACCOUNT -> AccountScreen(
                         modifier = Modifier.padding(padding),
                         account = accountSnapshot,
-                        premium = premiumRepo.loadLocal(),
+                        premium = premiumSnapshot,
                         onSignIn = { accountDialog = true },
                         onSignOut = {
                             accountRepo.signOut()
@@ -687,6 +700,7 @@ private fun MusicPlayerRoot(
                                     }
 
                                     premiumRepo.syncFromFirebase()
+                                    premiumSnapshot = premiumRepo.loadLocal()
                                     premiumRefresh++
                                     premiumProcessing = false
                                 }
@@ -817,6 +831,7 @@ private fun MusicPlayerRoot(
                     accountRefresh++
                     activity?.lifecycleScope?.launch {
                         premiumRepo.syncFromFirebase()
+                        premiumSnapshot = premiumRepo.loadLocal()
                         premiumRefresh++
                     }
                 }
@@ -1328,56 +1343,85 @@ private fun MiniPlayer(
     duration: Long,
     onOpen: () -> Unit,
     onPlayPause: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onEqualizer: () -> Unit,
+    initialFavorite: Boolean,
+    onFavorite: () -> Unit
 ) {
     val progress = if (duration > 0) {
         (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
     } else 0f
+    var favorite by rememberSaveable(song.id) { mutableStateOf(initialFavorite) }
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 5.dp,
-        shadowElevation = 4.dp
+        tonalElevation = 6.dp,
+        shadowElevation = 5.dp
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 8.dp, top = 7.dp, end = 4.dp, bottom = 6.dp),
+                    .padding(start = 7.dp, top = 7.dp, end = 3.dp, bottom = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Artwork(song, Modifier.size(48.dp))
+                Artwork(
+                    song,
+                    Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                )
                 Spacer(Modifier.width(10.dp))
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center
-                ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         song.title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.titleSmall
                     )
                     Text(
                         song.artist,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AnimatedBars(playing)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (playing) "Playing" else "Paused",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                IconButton(onClick = {
+                    favorite = !favorite
+                    onFavorite()
+                }) {
+                    Icon(
+                        if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = if (favorite) "Remove favorite" else "Add favorite",
+                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onPlayPause) {
-                    Surface(
-                        modifier = Modifier.size(38.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary
-                    ) {
+                IconButton(onClick = onEqualizer) {
+                    Icon(Icons.Filled.Tune, contentDescription = "Equalizer", tint = MaterialTheme.colorScheme.primary)
+                }
+                Surface(
+                    Modifier.size(39.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    IconButton(onClick = onPlayPause) {
                         Icon(
                             if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (playing) "Pause" else "Play",
