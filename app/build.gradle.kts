@@ -12,8 +12,8 @@ android {
         applicationId = "com.musicplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.6.1"
+        versionCode = 20
+        versionName = "1.6.2"
 
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
@@ -111,7 +111,6 @@ dependencies {
     implementation("androidx.media3:media3-common:1.10.0")
 
     implementation("androidx.work:work-runtime-ktx:2.12.0")
-    implementation("com.google.android.gms:play-services-ads:25.5.0")
 
     // Firebase account, premium entitlement and Google Sign-In stack.
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
