@@ -30,7 +30,9 @@ enum class AppThemeStyle(val label: String) {
     NEON("Neon"),
     FIRE("Fire"),
     CYBER("Cyber"),
-    LAGOON("Lagoon")
+    LAGOON("Lagoon"),
+    ROSE("Rose"),
+    EMERALD("Emerald")
 }
 
 enum class AppBackgroundStyle(val label: String) {
@@ -38,7 +40,9 @@ enum class AppBackgroundStyle(val label: String) {
     GRADIENT("Gradient"),
     AURORA("Aurora"),
     MIDNIGHT("Midnight"),
-    NEON_WAVE("Neon Wave")
+    NEON_WAVE("Neon Wave"),
+    SOFT("Soft"),
+    STUDIO("Studio")
 }
 
 data class AppearanceState(
@@ -129,6 +133,16 @@ fun themeColors(theme: AppThemeStyle, dark: Boolean) =
             secondary = Color(0xFF7EF0CE), secondaryContainer = Color(0xFF124E40),
             tertiary = Color(0xFFCAB3FF), tertiaryContainer = Color(0xFF38265F)
         )
+        AppThemeStyle.ROSE -> darkColorScheme(
+            primary = Color(0xFFFFB3CE), primaryContainer = Color(0xFF6B2845),
+            secondary = Color(0xFFFFD1E2), secondaryContainer = Color(0xFF54253A),
+            tertiary = Color(0xFFBBD3FF), tertiaryContainer = Color(0xFF263B66)
+        )
+        AppThemeStyle.EMERALD -> darkColorScheme(
+            primary = Color(0xFFA2F5C9), primaryContainer = Color(0xFF17543B),
+            secondary = Color(0xFF9DE4FF), secondaryContainer = Color(0xFF17465A),
+            tertiary = Color(0xFFE5C1FF), tertiaryContainer = Color(0xFF432957)
+        )
     } else when (theme) {
         AppThemeStyle.VIOLET -> lightColorScheme(
             primary = Color(0xFF6D42E8), primaryContainer = Color(0xFFE9DEFF),
@@ -170,6 +184,16 @@ fun themeColors(theme: AppThemeStyle, dark: Boolean) =
             secondary = Color(0xFF007E63), secondaryContainer = Color(0xFFB7F0DB),
             tertiary = Color(0xFF6550AC), tertiaryContainer = Color(0xFFE7DEFF)
         )
+        AppThemeStyle.ROSE -> lightColorScheme(
+            primary = Color(0xFFB52E62), primaryContainer = Color(0xFFFFD9E6),
+            secondary = Color(0xFF6B5AA6), secondaryContainer = Color(0xFFEAE1FF),
+            tertiary = Color(0xFF007D94), tertiaryContainer = Color(0xFFC7F3F8)
+        )
+        AppThemeStyle.EMERALD -> lightColorScheme(
+            primary = Color(0xFF0A7651), primaryContainer = Color(0xFFC2F3D9),
+            secondary = Color(0xFF1C698D), secondaryContainer = Color(0xFFCDEBFA),
+            tertiary = Color(0xFF76549A), tertiaryContainer = Color(0xFFE9DDF7)
+        )
     }
 
 fun backgroundBrush(style: AppBackgroundStyle, dark: Boolean, theme: AppThemeStyle): Brush {
@@ -198,6 +222,19 @@ fun backgroundBrush(style: AppBackgroundStyle, dark: Boolean, theme: AppThemeSty
                 accent.primary
             )
         )
+        AppBackgroundStyle.SOFT -> Brush.linearGradient(
+            listOf(
+                base,
+                accent.primaryContainer.copy(alpha = if (dark) .55f else .75f),
+                base
+            )
+        )
+        AppBackgroundStyle.STUDIO -> Brush.verticalGradient(
+            listOf(
+                accent.primaryContainer.copy(alpha = if (dark) .60f else .90f),
+                base
+            )
+        )
     }
 }
 
@@ -208,13 +245,7 @@ fun AppBackdrop(
     theme: AppThemeStyle,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val transition = rememberInfiniteTransition(label = "backdrop")
-    val shift by transition.animateFloat(
-        initialValue = -36f,
-        targetValue = 36f,
-        animationSpec = infiniteRepeatable(tween(6000), RepeatMode.Reverse),
-        label = "shift"
-    )
+    val colors = themeColors(theme, dark)
 
     Box(
         Modifier
@@ -224,19 +255,17 @@ fun AppBackdrop(
         if (style != AppBackgroundStyle.CLEAN) {
             Box(
                 Modifier
-                    .size(220.dp)
-                    .offset(x = shift.dp, y = (-40).dp)
-                    .alpha(0.20f)
-                    .blur(46.dp)
-                    .background(themeColors(theme, dark).primary, androidx.compose.foundation.shape.CircleShape)
+                    .size(190.dp)
+                    .offset(x = (-35).dp, y = (-26).dp)
+                    .alpha(0.10f)
+                    .background(colors.primary, androidx.compose.foundation.shape.CircleShape)
             )
             Box(
                 Modifier
-                    .size(180.dp)
-                    .offset(x = (-30).dp, y = (560 + shift / 2).dp)
-                    .alpha(0.14f)
-                    .blur(42.dp)
-                    .background(themeColors(theme, dark).secondary, androidx.compose.foundation.shape.CircleShape)
+                    .size(150.dp)
+                    .offset(x = 250.dp, y = 520.dp)
+                    .alpha(0.08f)
+                    .background(colors.secondary, androidx.compose.foundation.shape.CircleShape)
             )
         }
         content()
