@@ -912,6 +912,17 @@ private fun MusicPlayerRoot(
             )
         }
 
+        if (drivingModeOpen && currentSong != null) {
+            DrivingModeDialog(
+                song = currentSong!!,
+                playing = playing,
+                onPlayPause = vm::togglePlayPause,
+                onPrevious = vm::previous,
+                onNext = vm::next,
+                onDismiss = { drivingModeOpen = false }
+            )
+        }
+
         if (effectsOpen) {
             EffectsScreen(
                 vm = vm,
@@ -966,7 +977,15 @@ private fun MusicPlayerRoot(
             )
         }
 
-        if (showAppearanceSetup) {
+        if (showTutorial) {
+            FirstRunTutorial(
+                onFinish = {
+                    context.getSharedPreferences("first_run", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("tutorial_done", true).apply()
+                    showTutorial = false
+                }
+            )
+        } else if (showAppearanceSetup) {
             AppearanceSetupDialog(
                 theme = appTheme,
                 background = appBackground,
@@ -3357,6 +3376,97 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheck
         }
         Switch(checked = checked, onCheckedChange = onChecked)
     }
+}
+
+@Composable
+private fun DrivingModeDialog(
+    song: Song,
+    playing: Boolean,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                Modifier.fillMaxSize().padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(I18n.t("Driving mode"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text(I18n.t("Close")) }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Artwork(song, Modifier.size(250.dp))
+                    Spacer(Modifier.height(22.dp))
+                    Text(song.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(72.dp)) {
+                        Icon(Icons.Filled.SkipPrevious, I18n.t("Previous track"), modifier = Modifier.size(42.dp))
+                    }
+                    IconButton(onClick = onPlayPause, modifier = Modifier.size(88.dp)) {
+                        Surface(Modifier.fillMaxSize(), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                            Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(20.dp))
+                        }
+                    }
+                    IconButton(onClick = onNext, modifier = Modifier.size(72.dp)) {
+                        Icon(Icons.Filled.SkipNext, I18n.t("Next track"), modifier = Modifier.size(42.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirstRunTutorial(onFinish: () -> Unit) {
+    var page by rememberSaveable { mutableIntStateOf(0) }
+    val titles = listOf("Welcome to Music Player", "Your music", "Professional audio", "Premium & updates")
+    val details = listOf(
+        "A local-first player designed for fast, private playback.",
+        "Scan your device, search your library and use the mini player from anywhere.",
+        "Use the equalizer, playback effects, driving mode and persistent audio settings.",
+        "Premium unlocks advanced audio processing. PayPal verification and updates are handled securely."
+    )
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(I18n.t(titles[page]), fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(I18n.t(details[page]))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    repeat(titles.size) { index ->
+                        Surface(
+                            Modifier.padding(horizontal = 4.dp).size(if (index == page) 10.dp else 7.dp),
+                            shape = CircleShape,
+                            color = if (index == page) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        ) {}
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (page == titles.lastIndex) onFinish() else page++
+            }) {
+                Text(I18n.t(if (page == titles.lastIndex) "Get started" else "Next"))
+            }
+        }
+    )
 }
 
 @Composable
