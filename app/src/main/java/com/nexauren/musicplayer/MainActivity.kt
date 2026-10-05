@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppScreen(val label: String) {
+private enum class AppScreen(private val key: String) {
     HOME("Home"),
     LIBRARY("Library"),
     FAVORITES("Favorites"),
@@ -295,7 +295,10 @@ private enum class AppScreen(val label: String) {
     ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
     PREMIUM("Premium"),
-    SETTINGS("Settings")
+    SETTINGS("Settings");
+
+    val label: String
+        get() = I18n.t(key)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -324,6 +327,7 @@ private fun MusicPlayerRoot(
     var darkMode by rememberSaveable { mutableStateOf(storedAppearance.darkMode) }
     var themeName by rememberSaveable { mutableStateOf(storedAppearance.theme.name) }
     var backgroundName by rememberSaveable { mutableStateOf(storedAppearance.background.name) }
+    var languageName by rememberSaveable { mutableStateOf(storedAppearance.language.name) }
     var showAppearanceSetup by rememberSaveable { mutableStateOf(!storedAppearance.configured) }
     var nowPlaying by rememberSaveable { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
@@ -340,6 +344,8 @@ private fun MusicPlayerRoot(
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
+    val appLanguage = runCatching { AppLanguage.valueOf(languageName) }.getOrDefault(AppLanguage.ENGLISH)
+    LaunchedEffect(appLanguage) { I18n.language = appLanguage }
 
     var notificationsAllowed by remember {
         mutableStateOf(NotificationHelper.areNotificationsEnabled(context))
@@ -456,7 +462,7 @@ private fun MusicPlayerRoot(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Music Player", fontWeight = FontWeight.ExtraBold)
+                            Text(I18n.t("Music Player"), fontWeight = FontWeight.ExtraBold)
                             Text(
                                 "Local audio • offline-first",
                                 style = MaterialTheme.typography.bodySmall,
@@ -711,7 +717,7 @@ private fun MusicPlayerRoot(
                             if (account == null) {
                                 accountDialog = true
                             } else if (plan == PremiumPlan.NONE) {
-                                Toast.makeText(context, "Choose a Premium plan.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, I18n.t("Choose a Premium plan."), Toast.LENGTH_SHORT).show()
                             } else {
                                 activity?.lifecycleScope?.launch {
                                     premiumProcessing = true
@@ -724,18 +730,14 @@ private fun MusicPlayerRoot(
                                                     Intent(Intent.ACTION_VIEW, android.net.Uri.parse(approvalUrl))
                                                 )
                                             }.onFailure {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Unable to open PayPal checkout.",
+                                                Toast.makeText(context, I18n.t("Unable to open PayPal checkout."),
                                                     Toast.LENGTH_LONG
                                                 ).show()
                                             }
                                         }
                                         .onFailure {
                                             premiumProcessing = false
-                                            Toast.makeText(
-                                                context,
-                                                "PayPal checkout failed: " + (it.message ?: "Unknown error"),
+                                            Toast.makeText(context, I18n.t("PayPal checkout failed: ") + (it.message ?: "Unknown error"),
                                                 Toast.LENGTH_LONG
                                             ).show()
                                         }
@@ -756,17 +758,22 @@ private fun MusicPlayerRoot(
                         darkMode = darkMode,
                         onDarkMode = {
                             darkMode = it
-                            AppearanceStore.save(context, appTheme, appBackground, it)
+                            AppearanceStore.save(context, appTheme, appBackground, it, appLanguage)
                         },
                         themeName = themeName,
                         backgroundName = backgroundName,
+                        languageName = languageName,
                         onThemeChange = {
                             themeName = it.name
-                            AppearanceStore.save(context, it, appBackground, darkMode)
+                            AppearanceStore.save(context, it, appBackground, darkMode, appLanguage)
                         },
                         onBackgroundChange = {
                             backgroundName = it.name
-                            AppearanceStore.save(context, appTheme, it, darkMode)
+                            AppearanceStore.save(context, appTheme, it, darkMode, appLanguage)
+                        },
+                        onLanguageChange = {
+                            languageName = it.name
+                            AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
                         onAccount = { accountDialog = true },
@@ -793,9 +800,7 @@ private fun MusicPlayerRoot(
                                     updateInfo = found
                                     checkingUpdate = false
                                     if (found == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "Music Player is up to date.",
+                                        Toast.makeText(context, I18n.t("Music Player is up to date."),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -803,859 +808,7 @@ private fun MusicPlayerRoot(
                             }
                         }
                     )
-                }
-            }
-        }
-
-        if (nowPlaying && currentSong != null) {
-            NowPlayingSheet(
-                song = currentSong!!,
-                vm = vm,                playing = playing,
-                position = position,
-                duration = duration,
-                onDismiss = { nowPlaying = false },
-                onEqualizer = {
-                    nowPlaying = false
-                    screen = AppScreen.EQUALIZER
-                }
-            )
-        }
-
-        if (accountDialog) {
-            AccountDialog(
-                activity = activity,
-                repo = accountRepo,
-                onDismiss = { accountDialog = false },
-                onSigned = {
-                    accountDialog = false
-                    accountRefresh++
-                    activity?.lifecycleScope?.launch {
-                        premiumRepo.syncFromFirebase()
-                        premiumSnapshot = premiumRepo.loadLocal()
-                        premiumRefresh++
-                    }
-                }
-            )
-        }
-
-        updateInfo?.let { info ->
-            UpdateDialog(
-                info = info,
-                progress = updateProgress,
-                updating = updating,
-                error = updateError,
-                onDismiss = { if (!updating) updateInfo = null },
-                onInstall = {
-                    updating = true
-                    updateError = ""
-                    activity?.let { host ->
-                        host.lifecycleScope.launch {
-                            runCatching {
-                                UpdateManager.downloadAndInstall(context, info) {
-                                    updateProgress = it
-                                }
-                            }.onFailure {
-                                updateError = it.message ?: "The update could not be installed."
-                            }
-                            updating = false
-                            if (updateError.isBlank()) {
-                                updateInfo = null
-                            }
-                        }
-                    }
-                }
-            )
-        }
-
-        if (showAppearanceSetup) {
-            AppearanceSetupDialog(
-                theme = appTheme,
-                background = appBackground,
-                darkMode = darkMode,
-                onThemeChange = { themeName = it.name },
-                onBackgroundChange = { backgroundName = it.name },
-                onDarkModeChange = { darkMode = it },
-                onSave = {
-                    AppearanceStore.save(context, appTheme, appBackground, darkMode)
-                    showAppearanceSetup = false
-                }
-            )
-        }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen(
-    modifier: Modifier,
-    vm: PlayerViewModel,
-    songs: List<Song>,
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
-    val current by vm.currentSong.collectAsState()
-    val playing by vm.isPlaying.collectAsState()
-    val recent = remember(songs) { songs.sortedByDescending { it.dateAddedMillis }.take(8) }
-    val mostPlayed = remember(songs) { vm.mostPlayed().take(8) }
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 154.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        item {
-            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text(
-                    "YOUR MUSIC",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    "Music Player",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    if (songs.isEmpty()) "Add music to your library and start listening."
-                    else "${songs.size} tracks ready to play",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        item { SearchBar(query, onQueryChange) }
-        item { SectionTitle("Now playing", "Live status • view only") }
-        item { NowPlayingInfoCard(current, playing) }
-        item { SectionTitle("Recently added", "Newest music on your device • view only") }
-
-        item {
-            if (recent.isEmpty()) {
-                EmptyCard("No recently added music yet.")
-            } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(end = 8.dp)
-                ) {
-                    items(recent, key = { it.id }) { song ->
-                        RecentAddedCard(song)
-                    }
-                }
-            }
-        }
-
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SectionTitle("Most played", "Your listening history")
-                Text("${mostPlayed.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
-            }
-        }
-
-        item {
-            if (mostPlayed.isEmpty()) {
-                EmptyCard("Your most played songs will appear here.")
-            } else {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(end = 8.dp)
-                ) {
-                    items(mostPlayed, key = { it.id }) { song ->
-                        MostPlayedCard(song, vm.playCount(song))
-                    }
-                }
-            }
-        }
-
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SectionTitle("All songs", "Your complete playable library")
-                Text("${songs.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
-            }
-        }
-
-        if (songs.isEmpty()) {
-            item { EmptyCard("No songs found. Scan your library from Settings.") }
-        } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
-                SongRow(song, vm, showPlays = false)
-            }
-        }
-
-    }
-}
-@Composable
-private fun LibraryScreen(
-    modifier: Modifier,
-    vm: PlayerViewModel,
-    songs: List<Song>,
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item { SearchBar(query, onQueryChange) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard("Tracks", songs.size.toString(), Modifier.weight(1f))
-                StatCard("Albums", songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
-                StatCard("Artists", songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
-            }
-        }
-        item { SectionTitle("All music", "Your complete local library") }
-        if (songs.isEmpty()) {
-            item { EmptyCard("No songs found.") }
-        } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
-                SongRow(song, vm, showPlays = false)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Search title, artist or album") },
-        leadingIcon = { Icon(Icons.Filled.Search, null) },
-        singleLine = true,
-        shape = RoundedCornerShape(20.dp)
-    )
-}
-
-@Composable
-private fun SectionTitle(title: String, subtitle: String) {
-    Column {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
-    val transition = rememberInfiniteTransition(label = "home_now_playing")
-    val pulse by transition.animateFloat(
-        0.97f,
-        1.015f,
-        infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-        label = "heroPulse"
-    )
-
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(34.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
-    ) {
-        Box(
-            Modifier.fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary,
-                            MaterialTheme.colorScheme.tertiary
-                        )
-                    ),
-                    RoundedCornerShape(34.dp)
-                )
-                .padding(18.dp)
-        ) {
-            Column(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "NOW PLAYING",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.82f),
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            "Your sound. Your space.",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color.White.copy(alpha = 0.16f)
-                    ) {
-                        Text(
-                            if (playing) "PLAYING" else "PAUSED",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                if (song != null) {
-                    Box(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            Modifier.size(286.dp)
-                                .graphicsLayer {
-                                    scaleX = if (playing) pulse else 1f
-                                    scaleY = if (playing) pulse else 1f
-                                }
-                                .clip(RoundedCornerShape(30.dp))
-                        ) {
-                            Artwork(song, Modifier.fillMaxSize())
-                            Box(
-                                Modifier.fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
-                                        )
-                                    )
-                            )
-                            Column(
-                                Modifier.align(Alignment.BottomStart).padding(16.dp)
-                            ) {
-                                Text(
-                                    song.title,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Black,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    song.artist,
-                                    color = Color.White.copy(alpha = 0.86f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (playing) "Listening now" else "Playback paused",
-                            color = Color.White.copy(alpha = 0.86f),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                        AnimatedBars(playing)
-                    }
-                } else {
-                    Box(
-                        Modifier.fillMaxWidth().height(220.dp)
-                            .clip(RoundedCornerShape(30.dp))
-                            .background(Color.White.copy(alpha = 0.13f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Filled.LibraryMusic,
-                                null,
-                                tint = Color.White.copy(alpha = 0.9f),
-                                modifier = Modifier.size(54.dp)
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            Text("Nothing playing yet", color = Color.White, fontWeight = FontWeight.ExtraBold)
-                            Text(
-                                "Choose a track from All songs",
-                                color = Color.White.copy(alpha = 0.75f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun RecentAddedCard(song: Song) {
-    Card(
-        Modifier.width(172.dp),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(Modifier.padding(10.dp)) {
-            Box {
-                Artwork(song, Modifier.fillMaxWidth().height(152.dp))
-                Surface(
-                    Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                ) {
-                    Icon(
-                        Icons.Filled.LibraryMusic,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary,                        modifier = Modifier.padding(8.dp).size(18.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-            Text(
-                song.artist,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Recently added",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-        }
-    }
-}
-@Composable
-private fun SongListScreen(
-    modifier: Modifier,
-    vm: PlayerViewModel,
-    title: String,
-    songs: List<Song>,
-    showPlays: Boolean
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        item { SectionTitle(title, songs.size.toString() + " tracks") }
-        if (songs.isEmpty()) {
-            item { EmptyCard("Nothing here yet.") }
-        } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
-                SongRow(song, vm, showPlays)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
-    var menu by rememberSaveable(song.id) { mutableStateOf(false) }
-
-    Card(
-        Modifier.fillMaxWidth().clickable { vm.play(song) },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(Modifier.padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
-            Artwork(song, Modifier.size(58.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
-                Text(
-                    if (showPlays) song.artist + " • " + vm.playCount(song) + " plays"
-                    else song.artist + " • " + song.album,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = { vm.favorite(song) }) {
-                Icon(
-                    if (vm.isFavorite(song)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    "Favorite"
-                )
-            }
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, "More")
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    TextButton(onClick = { vm.play(song); menu = false }) { Text("Play now") }
-                    TextButton(onClick = { vm.startSleepTimer(15); menu = false }) { Text("Sleep 15 min") }
-                    TextButton(onClick = { vm.favorite(song); menu = false }) {
-                        Text(if (vm.isFavorite(song)) "Remove favorite" else "Add favorite")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MostPlayedCard(song: Song, plays: Int) {
-    Card(
-        Modifier.width(186.dp),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(Modifier.padding(10.dp)) {
-            Box {
-                Artwork(song, Modifier.fillMaxWidth().height(158.dp))
-                Surface(
-                    Modifier.align(Alignment.BottomStart).padding(8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        "${plays} plays",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-            Text(
-                song.artist,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-@Composable
-private fun MiniPlayer(
-    song: Song,
-    playing: Boolean,
-    position: Long,
-    duration: Long,
-    onOpen: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onEqualizer: () -> Unit,
-    initialFavorite: Boolean,
-    onFavorite: () -> Unit
-) {
-    val progress = if (duration > 0) {
-        (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-    } else 0f
-    var favorite by rememberSaveable(song.id) { mutableStateOf(initialFavorite) }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 5.dp)
-            .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 6.dp,
-        shadowElevation = 5.dp
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 7.dp, top = 7.dp, end = 3.dp, bottom = 5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Artwork(
-                    song,
-                    Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(15.dp))
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        song.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.ExtraBold,
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        song.artist,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AnimatedBars(playing)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (playing) "Playing" else "Paused",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                IconButton(onClick = {
-                    favorite = !favorite
-                    onFavorite()
-                }) {
-                    Icon(
-                        if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (favorite) "Remove favorite" else "Add favorite",
-                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onEqualizer) {
-                    Icon(Icons.Filled.Tune, contentDescription = "Equalizer", tint = MaterialTheme.colorScheme.primary)
-                }
-                Surface(
-                    Modifier.size(39.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    IconButton(onClick = onPlayPause) {
-                        Icon(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (playing) "Pause" else "Play",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                }
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Filled.SkipNext, "Next track", modifier = Modifier.size(24.dp))
-                }
-            }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(3.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private @OptIn(ExperimentalMaterial3Api::class)
-fun NowPlayingSheet(
-    song: Song,
-    vm: PlayerViewModel,
-    playing: Boolean,
-    position: Long,
-    duration: Long,
-    onDismiss: () -> Unit,
-    onEqualizer: () -> Unit
-) {
-    val volume by vm.volume.collectAsState()
-    val context = LocalContext.current
-    val transition = rememberInfiniteTransition(label = "now_playing_effects")
-    val pulse by transition.animateFloat(
-        0.94f,
-        1.02f,
-        infiniteRepeatable(tween(950), RepeatMode.Reverse),
-        label = "artPulse"
-    )
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
-    ) {
-        LazyColumn(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                ) {
-                    Box(
-                        Modifier.fillMaxWidth()
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.secondaryContainer,
-                                        MaterialTheme.colorScheme.tertiaryContainer
-                                    )
-                                ),
-                                RoundedCornerShape(32.dp)
-                            )
-                            .padding(18.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "NOW PLAYING",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(
-                                        "Your sound. Your space.",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-                                IconButton(onClick = onEqualizer) {
-                                    Icon(Icons.Filled.Tune, "Equalizer")
-                                }
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Box(
-                                Modifier.fillMaxWidth().height(270.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    Modifier.size(250.dp).alpha(if (playing) 0.26f else 0.16f),
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary
-                                ) {}
-                                Artwork(
-                                    song,
-                                    Modifier.fillMaxWidth().height(292.dp).graphicsLayer {
-                                        scaleX = if (playing) pulse else 1f
-                                        scaleY = if (playing) pulse else 1f
-                                    }
-                                )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        song.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                AnimatedBars(playing)
-                            }
-                            Slider(
-                                value = if (duration > 0) position.toFloat().coerceIn(0f, duration.toFloat()) else 0f,
-                                onValueChange = { vm.seekTo(it.toLong()) },
-                                valueRange = 0f..duration.coerceAtLeast(1L).toFloat()
-                            )
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(formatDuration(position), style = MaterialTheme.typography.labelSmall)
-                                Text(formatDuration(duration), style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
-            item {
-                Card(shape = RoundedCornerShape(24.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { vm.setVolume(0f) }) { Icon(Icons.Filled.VolumeDown, "Mute") }
-                            Slider(value = volume, onValueChange = vm::setVolume, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { vm.setVolume(1f) }) { Icon(Icons.Filled.VolumeUp, "Max volume") }
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, "Shuffle") }
-                            IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, null, Modifier.size(32.dp)) }
-                            Surface(Modifier.size(72.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
-                                IconButton(onClick = vm::togglePlayPause) {
-                                    Icon(
-                                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(38.dp)
-                                    )
-                                }
-                            }
-                            IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, null, Modifier.size(32.dp)) }
-                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, "Repeat") }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(horizontal = 2.dp)
-                        ) {
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(15) },
-                                    label = { Text("15 min") }
-                                )
-                            }
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(30) },
-                                    label = { Text("30 min") }
-                                )
-                            }
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(60) },
-                                    label = { Text("60 min") }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EqualizerScreen(
-    modifier: Modifier,
-    eq: EqualizerController,
-    premium: PremiumSnapshot,
-    onBack: () -> Unit,
-    onOpenPremium: () -> Unit
-) {
-    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
-        PremiumPlan.LIFETIME -> true
-        PremiumPlan.QUARTERLY ->
-            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
-        PremiumPlan.NONE -> false
-    }
-
-    var levels by remember { mutableStateOf(eq.normalizedLevels().ifEmpty { List(eq.bandCount()) { .5f } }) }
-    var effects by remember { mutableStateOf(eq.effectState()) }
-    var attached by remember { mutableStateOf(eq.bandCount() > 0) }
-    var message by remember { mutableStateOf("Play music to activate the live audio engine.") }
-
-    val presets = remember {
-        listOf(
-            "Flat" to listOf(.50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f),
-            "Rock" to listOf(.78f, .66f, .52f, .46f, .56f, .72f, .84f, .78f, .68f, .60f),
-            "Vocal" to listOf(.40f, .44f, .52f, .66f, .78f, .82f, .72f, .62f, .56f, .52f),
-            "Jazz" to listOf(.58f, .56f, .52f, .58f, .70f, .76f, .70f, .60f, .56f, .52f),
-            "Club" to listOf(.72f, .62f, .54f, .56f, .66f, .76f, .72f, .64f, .60f, .64f),
-            "Deep Bass" to listOf(.96f, .88f, .76f, .62f, .54f, .50f, .50f, .52f, .56f, .60f),
-            "DJ Punch" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
-            "Hip-Hop" to listOf(.90f, .78f, .60f, .50f, .58f, .72f, .84f, .76f, .66f, .60f),
-            "EDM" to listOf(.88f, .74f, .58f, .56f, .66f, .84f, .92f, .84f, .72f, .66f),
-            "Bright" to listOf(.44f, .46f, .52f, .62f, .72f, .80f, .86f, .90f, .86f, .80f),
-            "Lo-Fi" to listOf(.78f, .70f, .58f, .50f, .48f, .46f, .50f, .56f, .66f, .72f),
-            "Acoustic" to listOf(.40f, .48f, .64f, .76f, .82f, .76f, .68f, .60f, .54f, .50f)
-        )
-    }
-    val freePresets = remember { setOf("Flat", "Rock", "Vocal", "Jazz") }
-
-    fun fitPreset(values: List<Float>, count: Int): List<Float> {
+t> {
         if (count <= 1) return listOf(values.first())
         return List(count) { index ->
             val source = (index.toFloat() / (count - 1)) * (values.size - 1)
@@ -1770,7 +923,7 @@ private fun EqualizerScreen(
                 Column(Modifier.padding(horizontal = 10.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("LIVE EQ", color = Color.White, fontWeight = FontWeight.Black)
+                            Text(I18n.t("LIVE EQ"), color = Color.White, fontWeight = FontWeight.Black)
                             Text(
                                 if (premiumActive) "10-band studio control" else "5-band free control",
                                 color = Color.White.copy(alpha = .65f),
@@ -1801,7 +954,7 @@ private fun EqualizerScreen(
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Spacer(Modifier.height(8.dp))
-                                Text("Play a track first", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(I18n.t("Play a track first"), color = Color.White, fontWeight = FontWeight.Bold)
                                 Text(
                                     "Your settings stay active after leaving this page.",
                                     color = Color.White.copy(alpha = .65f),
@@ -1950,7 +1103,7 @@ private fun EqualizerScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Bass Boost", fontWeight = FontWeight.Bold)
+                    Text(I18n.t("Bass Boost"), fontWeight = FontWeight.Bold)
                     Slider(
                         value = effects.bassBoost,
                         enabled = attached && premiumActive,
@@ -1960,7 +1113,7 @@ private fun EqualizerScreen(
                         }
                     )
 
-                    Text("3D Space", fontWeight = FontWeight.Bold)
+                    Text(I18n.t("3D Space"), fontWeight = FontWeight.Bold)
                     Slider(
                         value = effects.surround,
                         enabled = attached && premiumActive,
@@ -1970,7 +1123,7 @@ private fun EqualizerScreen(
                         }
                     )
 
-                    Text("Loudness", fontWeight = FontWeight.Bold)
+                    Text(I18n.t("Loudness"), fontWeight = FontWeight.Bold)
                     Slider(
                         value = effects.loudness,
                         enabled = attached && premiumActive,
@@ -1980,7 +1133,7 @@ private fun EqualizerScreen(
                         }
                     )
 
-                    Text("Reverb", fontWeight = FontWeight.Bold)
+                    Text(I18n.t("Reverb"), fontWeight = FontWeight.Bold)
                     Slider(
                         value = effects.reverb,
                         enabled = attached && premiumActive,
@@ -1998,7 +1151,7 @@ private fun EqualizerScreen(
                         ) {
                             Icon(Icons.Filled.Star, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Unlock Premium Equalizer")
+                            Text(I18n.t("Unlock Premium Equalizer"))
                         }
                     } else {
                         Spacer(Modifier.height(4.dp))
@@ -2076,7 +1229,7 @@ private fun PremiumScreen(
                             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("Processing", fontWeight = FontWeight.ExtraBold)
+                                Text(I18n.t("Processing"), fontWeight = FontWeight.ExtraBold)
                                 Text(
                                     "Checking PayPal status and synchronizing your Premium access.",
                                     style = MaterialTheme.typography.bodySmall,
@@ -2132,13 +1285,13 @@ private fun PremiumScreen(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (premiumActive) "PREMIUM ACTIVE" else "EQUALIZER PREMIUM",
+                                    if (premiumActive) I18n.t("PREMIUM ACTIVE") else I18n.t("EQUALIZER PREMIUM"),
                                     color = Color.White,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
-                                    if (premiumActive) "Advanced equalizer unlocked" else "Unlock advanced equalizer controls",
+                                    if (premiumActive) I18n.t("Advanced equalizer unlocked") else I18n.t("Unlock advanced equalizer controls"),
                                     color = Color.White,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.ExtraBold
@@ -2166,7 +1319,7 @@ private fun PremiumScreen(
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Text("Sign in / create account", fontWeight = FontWeight.Bold)
+                                Text(I18n.t("Sign in / create account"), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -2207,8 +1360,8 @@ private fun PremiumScreen(
                         Icon(Icons.Filled.Refresh, null)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Verify Premium again", fontWeight = FontWeight.ExtraBold)
-                            Text("Refresh your PayPal entitlement now.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(I18n.t("Verify Premium again"), fontWeight = FontWeight.ExtraBold)
+                            Text(I18n.t("Refresh your PayPal entitlement now."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -2269,7 +1422,7 @@ private fun PremiumScreen(
                             ) {
                                 Icon(Icons.Filled.Refresh, null)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Verify Premium payment")
+                                Text(I18n.t("Verify Premium payment"))
                             }
                         }
                     }
@@ -2300,7 +1453,7 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("VERIFIED PURCHASE", style = MaterialTheme.typography.labelMedium, color = accent, fontWeight = FontWeight.ExtraBold)
+                    Text(I18n.t("VERIFIED PURCHASE"), style = MaterialTheme.typography.labelMedium, color = accent, fontWeight = FontWeight.ExtraBold)
                     Text(
                         if (premium.plan == PremiumPlan.LIFETIME) "Lifetime Premium" else "Quarterly Premium",
                         style = MaterialTheme.typography.titleLarge,
@@ -2540,7 +1693,7 @@ private fun AccountScreen(
             item {
                 Card(shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Private & local-first", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text(I18n.t("Private & local-first"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Your local music library stays on the device. An account is only needed for Premium purchases and cloud entitlement.",
@@ -2550,7 +1703,7 @@ private fun AccountScreen(
                         Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Filled.Person, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Sign in / create account")
+                            Text(I18n.t("Sign in / create account"))
                         }
                     }
                 }
@@ -2559,7 +1712,7 @@ private fun AccountScreen(
             item {
                 Card(shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Account status", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text(I18n.t("Account status"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
@@ -2599,7 +1752,7 @@ private fun AccountScreen(
             item {
                 Card(shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Premium control center", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text(I18n.t("Premium control center"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(5.dp))
                         Text(
                             "Manage advanced equalizer controls and your verified PayPal entitlement.",
@@ -2618,7 +1771,7 @@ private fun AccountScreen(
             item {
                 Card(shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Security", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text(I18n.t("Security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(5.dp))
                         Text(
                             if (premiumActive)
@@ -2628,7 +1781,7 @@ private fun AccountScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onSignOut) { Text("Sign out") }
+                        TextButton(onClick = onSignOut) { Text(I18n.t("Sign out")) }
                     }
                 }
             }
@@ -2658,13 +1811,13 @@ private fun AccountDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (current != null) {
                     Text(current.email ?: current.displayName ?: current.uid)
-                    Text("Account is used to sync premium entitlement.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(I18n.t("Account is used to sync premium entitlement."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    Text("Music Player works without an account. Sign in only when you need premium purchases and cloud entitlement.")
+                    Text(I18n.t("Music Player works without an account. Sign in only when you need premium purchases and cloud entitlement."))
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email") },
+                        label = { Text(I18n.t("Email")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = configured && !busy
@@ -2672,7 +1825,7 @@ private fun AccountDialog(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password") },
+                        label = { Text(I18n.t("Password")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = configured && !busy
@@ -2689,7 +1842,7 @@ private fun AccountDialog(
                         },
                         enabled = configured && !busy && email.isNotBlank() && password.length >= 6,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Sign in") }
+                    ) { Text(I18n.t("Sign in")) }
 
                     TextButton(
                         onClick = {
@@ -2703,7 +1856,7 @@ private fun AccountDialog(
                         },
                         enabled = configured && !busy && email.isNotBlank() && password.length >= 6,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Create account") }
+                    ) { Text(I18n.t("Create account")) }
 
                     TextButton(
                         onClick = {
@@ -2722,7 +1875,7 @@ private fun AccountDialog(
                         },
                         enabled = configured && !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Continue with Google") }
+                    ) { Text(I18n.t("Continue with Google")) }
 
                     if (!configured) {
                         Text(
@@ -2740,9 +1893,9 @@ private fun AccountDialog(
         },
         confirmButton = {
             if (current != null) {
-                TextButton(onClick = { repo.signOut(); onDismiss() }) { Text("Sign out") }
+                TextButton(onClick = { repo.signOut(); onDismiss() }) { Text(I18n.t("Sign out")) }
             } else {
-                TextButton(onClick = onDismiss) { Text("Continue without account") }
+                TextButton(onClick = onDismiss) { Text(I18n.t("Continue without account")) }
             }
         }
     )
@@ -2779,7 +1932,7 @@ private fun SettingsScreen(
                 Button(onClick = onAccount, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Person, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Manage account")
+                    Text(I18n.t("Manage account"))
                 }
             }
         }
@@ -2788,7 +1941,7 @@ private fun SettingsScreen(
                 Button(onClick = onOpenPremium, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Star, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Open Premium")
+                    Text(I18n.t("Open Premium"))
                 }
             }
         }
@@ -2802,17 +1955,17 @@ private fun SettingsScreen(
                 Button(onClick = vm::scan, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Refresh, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Scan library now")
+                    Text(I18n.t("Scan library now"))
                 }
             }
         }
         item {
             SettingsSection("Appearance", "Choose the visual identity, background and light/dark mode.") {
-                Text("Theme", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(I18n.t("Theme"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(7.dp))
                 ThemeChoices(selectedTheme, onThemeChange)
                 Spacer(Modifier.height(13.dp))
-                Text("Background", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(I18n.t("Background"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(7.dp))
                 BackgroundChoices(selectedBackground, onBackgroundChange)
                 Spacer(Modifier.height(5.dp))
@@ -2827,14 +1980,14 @@ private fun SettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (notificationsAllowed) "Notifications enabled" else "Notifications disabled",
+                            if (notificationsAllowed) I18n.t("Notifications enabled") else I18n.t("Notifications disabled"),
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             if (notificationsAllowed)
-                                "Music Player can automatically report updates and playback status."
+                                I18n.t("Music Player can automatically report updates and playback status.")
                             else
-                                "Allow notifications so automatic update checks can alert you."
+                                I18n.t("Allow notifications so automatic update checks can alert you.")
                         )
                     }
                     Surface(
@@ -2856,7 +2009,7 @@ private fun SettingsScreen(
                     onClick = onRequestNotifications,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (notificationsAllowed) "Open notification settings" else "Enable notifications")
+                    Text(if (notificationsAllowed) I18n.t("Open notification settings") else I18n.t("Enable notifications"))
                 }
             }
         }
@@ -2870,19 +2023,19 @@ private fun SettingsScreen(
                     if (checkingUpdate) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text("Checking for updates…")
+                        Text(I18n.t("Checking for updates…"))
                     } else {
                         Icon(Icons.Filled.Update, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Check for updates")
+                        Text(I18n.t("Check for updates"))
                     }
                 }
             }
         }
         item {
             SettingsSection("About", "Music Player is a local-first Android audio player.") {
-                Text("Music Player " + BuildConfig.VERSION_NAME, fontWeight = FontWeight.Bold)
-                Text("Offline-first playback powered by AndroidX Media3.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(I18n.t("Music Player ") + BuildConfig.VERSION_NAME, fontWeight = FontWeight.Bold)
+                Text(I18n.t("Offline-first playback powered by AndroidX Media3."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -2955,18 +2108,18 @@ private fun AppearanceSetupDialog(
 ) {
     AlertDialog(
         onDismissRequest = {},
-        title = { Text("Make Music Player yours", fontWeight = FontWeight.ExtraBold) },
+        title = { Text(I18n.t("Make Music Player yours"), fontWeight = FontWeight.ExtraBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Choose your theme and background before you start.")
-                Text("Theme", fontWeight = FontWeight.Bold)
+                Text(I18n.t("Choose your theme and background before you start."))
+                Text(I18n.t("Theme"), fontWeight = FontWeight.Bold)
                 ThemeChoices(theme, onThemeChange)
-                Text("Background", fontWeight = FontWeight.Bold)
+                Text(I18n.t("Background"), fontWeight = FontWeight.Bold)
                 BackgroundChoices(background, onBackgroundChange)
                 SwitchRow("Dark mode", "You can change this later in Settings.", darkMode, onDarkModeChange)
             }
         },
-        confirmButton = { Button(onClick = onSave) { Text("Continue") } }
+        confirmButton = { Button(onClick = onSave) { Text(I18n.t("Continue")) } }
     )
 }
 
@@ -3061,7 +2214,7 @@ private fun PremiumHomeBadge() {
             }
             Spacer(Modifier.width(11.dp))
             Column {
-                Text("Premium active", fontWeight = FontWeight.ExtraBold)
+                Text(I18n.t("Premium active"), fontWeight = FontWeight.ExtraBold)
                 Text(
                     "Ad-free playback • unlimited effects",
                     style = MaterialTheme.typography.bodySmall,
@@ -3131,16 +2284,16 @@ private fun UpdateDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Update available") },
+        title = { Text(I18n.t("Update available")) },
         text = {
             Column {
-                Text("Music Player " + info.versionName)
+                Text(I18n.t("Music Player ") + info.versionName)
                 Spacer(Modifier.height(7.dp))
                 Text(info.changelog, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (updating) {
                     Spacer(Modifier.height(14.dp))
                     LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
-                    Text("$progress%", modifier = Modifier.padding(top = 6.dp))
+                    Text(I18n.t("$progress%"), modifier = Modifier.padding(top = 6.dp))
                 }
                 if (error.isNotBlank()) {
                     Spacer(Modifier.height(10.dp))
@@ -3148,8 +2301,8 @@ private fun UpdateDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text("Download & install") } },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !updating) { Text("Later") } }
+        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Download & install")) } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !updating) { Text(I18n.t("Later")) } }
     )
 }
 
