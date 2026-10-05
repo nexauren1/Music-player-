@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -214,6 +215,29 @@ object UpdateManager {
     }
 }
 
+class ApkInstallReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val status = intent.getIntExtra(
+            PackageInstaller.EXTRA_STATUS,
+            PackageInstaller.STATUS_FAILURE
+        )
+        val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
+
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            NotificationHelper.showInstallFailure(
+                context,
+                "Update installed successfully. Reopen Music Player if needed."
+            )
+        } else {
+            val detail = message.ifBlank { "Android installer error code $status." }
+            NotificationHelper.showInstallFailure(
+                context,
+                "Update installation failed: $detail"
+            )
+        }
+    }
+}
+
 object ApkInstaller {
     private const val PREFS = "update_install"
     private const val PENDING_APK = "pending_apk"
@@ -240,31 +264,69 @@ object ApkInstaller {
             return
         }
 
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            context.packageName + ".fileprovider",
-            apk
-        )
+        val installer = context.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setSize(apk.length())
+            if (Build.VERSION.SDK_INT >= 21) {
+                setInstallLocation(android.content.pm.PackageInfo.INSTALL_LOCATION_AUTO)
+            }
+        }
 
-        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            data = uri
-            type = "application/vnd.android.package-archive"
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-            putExtra(Intent.EXTRA_RETURN_RESULT, false)
+        val sessionId = try {
+            installer.createSession(params)
+        } catch (error: Exception) {
+            throw IllegalStateException(
+                "Android could not prepare the installer: " +
+                    (error.message ?: "unknown error")
+            )
+        }
+
+        val session = try {
+            installer.openSession(sessionId)
+        } catch (error: Exception) {
+            runCatching { installer.abandonSession(sessionId) }
+            throw IllegalStateException(
+                "Android could not open the installer: " +
+                    (error.message ?: "unknown error")
+            )
         }
 
         try {
-            context.startActivity(installIntent)
+            apk.inputStream().use { input ->
+                session.openWrite("base.apk", 0, apk.length()).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                    }
+                    output.flush()
+                    session.fsync(output)
+                }
+            }
+
+            val callback = Intent(context, ApkInstallReceiver::class.java)
+            val pending = PendingIntent.getBroadcast(
+                context,
+                sessionId,
+                callback,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            session.commit(pending.intentSender)
+
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
                 .remove(PENDING_APK)
                 .apply()
         } catch (error: Exception) {
+            runCatching { session.abandon() }
             throw IllegalStateException(
-                "Android could not start the APK installer: " + (error.message ?: "unknown error")
+                "Android could not start APK installation: " +
+                    (error.message ?: "unknown error")
             )
+        } finally {
+            session.close()
         }
     }
 
@@ -284,7 +346,6 @@ object ApkInstaller {
         }
     }
 }
-
 class UpdateWorker(
     context: Context,
     params: WorkerParameters
