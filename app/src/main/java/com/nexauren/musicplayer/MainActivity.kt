@@ -1996,7 +1996,8 @@ private fun PremiumScreen(
                                     modifier = Modifier.padding(14.dp)
                                 )
                             }
-                            Spacer(Modifier.width(14.dp))                            Column(Modifier.weight(1f)) {
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
                                 Text(
                                     if (premiumActive) "PREMIUM ACTIVE" else "MUSIC PLAYER PREMIUM",
                                     color = Color.White,
