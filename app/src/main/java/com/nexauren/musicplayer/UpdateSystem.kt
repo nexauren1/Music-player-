@@ -34,6 +34,9 @@ data class UpdateInfo(
 object NotificationHelper {
     const val UPDATE_CHANNEL = "updates"
     const val PLAYBACK_CHANNEL = "playback"
+
+    fun areNotificationsEnabled(context: Context): Boolean =
+        androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     private const val UPDATE_NOTIFICATION_ID = 2001
     private const val INSTALL_NOTIFICATION_ID = 2002
 
@@ -276,7 +279,7 @@ class UpdateWorker(
 
         fun schedule(context: Context) {
             val request =
-                PeriodicWorkRequestBuilder<UpdateWorker>(12, TimeUnit.HOURS).build()
+                PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 NAME,
