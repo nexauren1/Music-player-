@@ -80,6 +80,7 @@ object NotificationHelper {
     }
 
     fun showUpdateAvailable(context: Context, info: UpdateInfo) {
+        I18n.language = AppearanceStore.load(context).language
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(
             context,
@@ -90,8 +91,8 @@ object NotificationHelper {
 
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Music Player " + info.versionName + " is available")
-            .setContentText("Open Music Player to download the update.")
+            .setContentTitle(I18n.t("Music Player ") + info.versionName + " " + I18n.t("is available"))
+            .setContentText(I18n.t("Open Music Player to download the update."))
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog))
             .setContentIntent(pending)
             .setAutoCancel(true)
@@ -101,9 +102,10 @@ object NotificationHelper {
     }
 
     fun showInstallSuccess(context: Context, message: String) {
+        I18n.language = AppearanceStore.load(context).language
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Music Player update installed")
+            .setContentTitle(I18n.t("Music Player update installed"))
             .setContentText(message)
             .setAutoCancel(true)
             .build()
@@ -112,9 +114,10 @@ object NotificationHelper {
     }
 
     fun showInstallFailure(context: Context, message: String) {
+        I18n.language = AppearanceStore.load(context).language
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle("Music Player update failed")
+            .setContentTitle(I18n.t("Music Player update failed"))
             .setContentText(message)
             .setAutoCancel(true)
             .build()
