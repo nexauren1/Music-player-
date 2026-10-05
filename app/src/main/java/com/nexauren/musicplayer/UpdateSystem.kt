@@ -219,11 +219,10 @@ object ApkInstaller {
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
 
-        session.use {
-            FileInputStream(apk).use { input ->
-                session.openWrite("base.apk", 0, apk.length()).use { output ->
+        session.use { packageSession ->
+            FileInputStream(apk).use { input: FileInputStream ->
+                packageSession.openWrite("base.apk", 0, apk.length()).use { output: java.io.OutputStream ->
                     input.copyTo(output)
-                    output.fsync()
                 }
             }
 
@@ -235,7 +234,7 @@ object ApkInstaller {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            session.commit(pending.intentSender)
+            packageSession.commit(pending.intentSender)
         }
     }
 }
