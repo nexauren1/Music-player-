@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "1.6.2",
+  "versionCode": 21,
+  "versionName": "1.6.3",
   "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
-  "sha256": "3cbc85518c260b32198bfa80b1571f76f309660a4b9c6320121d52ae11b8a6a9",
+  "sha256": "9deda2b9188e7d42cb917b9c200f10511613c13a46d81be05cbbd0cfca1cb56b",
   "changelog": "Production release: polished mini player, persistent equalizer, Premium effects, multilingual interface and stability improvements."
 }
