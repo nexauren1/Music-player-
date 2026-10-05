@@ -9,7 +9,9 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 data class AccountSnapshot(
@@ -127,20 +129,33 @@ data class PremiumSnapshot(
     val expiresAtMillis: Long? = null,
     val verified: Boolean = false,
     val orderId: String? = null,
-    val subscriptionId: String? = null
+    val subscriptionId: String? = null,
+    val cloudSynced: Boolean = false
 )
 
 class PremiumRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("premium_state", Context.MODE_PRIVATE)
 
+    private fun currentUid(): String? {
+        if (FirebaseApp.getApps(context).isEmpty()) return null
+        return FirebaseAuth.getInstance().currentUser?.uid
+    }
+
     fun loadLocal(): PremiumSnapshot {
+        val ownerUid = prefs.getString("ownerUid", null)
+        val uid = currentUid()
+        if (ownerUid.isNullOrBlank() || uid.isNullOrBlank() || ownerUid != uid) {
+            return PremiumSnapshot()
+        }
+
         val rawPlan = prefs.getString("plan", PremiumPlan.NONE.name) ?: PremiumPlan.NONE.name
         val plan = runCatching { PremiumPlan.valueOf(rawPlan) }.getOrDefault(PremiumPlan.NONE)
         val expires = prefs.getLong("expiresAt", 0L).takeIf { it > 0L }
         val verified = prefs.getBoolean("verified", false)
         val orderId = prefs.getString("orderId", null)
         val subscriptionId = prefs.getString("subscriptionId", null)
-        return PremiumSnapshot(plan, expires, verified, orderId, subscriptionId)
+        val cloudSynced = prefs.getBoolean("cloudSynced", false)
+        return PremiumSnapshot(plan, expires, verified, orderId, subscriptionId, cloudSynced)
     }
 
     fun isPremium(): Boolean {
@@ -160,12 +175,15 @@ class PremiumRepository(private val context: Context) {
         orderId: String?,
         subscriptionId: String?
     ) {
+        val uid = currentUid() ?: throw IllegalStateException("No Firebase account is signed in.")
         prefs.edit()
+            .putString("ownerUid", uid)
             .putString("plan", plan.name)
             .putLong("expiresAt", expiresAtMillis ?: 0L)
             .putBoolean("verified", true)
             .putString("orderId", orderId)
             .putString("subscriptionId", subscriptionId)
+            .putBoolean("cloudSynced", false)
             .apply()
     }
 
@@ -174,6 +192,8 @@ class PremiumRepository(private val context: Context) {
             .putString("plan", PremiumPlan.NONE.name)
             .putLong("expiresAt", 0L)
             .putBoolean("verified", false)
+            .putBoolean("cloudSynced", false)
+            .remove("ownerUid")
             .remove("orderId")
             .remove("subscriptionId")
             .apply()
@@ -189,10 +209,39 @@ class PremiumRepository(private val context: Context) {
         return true
     }
 
+    suspend fun syncVerifiedToFirebase(): Result<Unit> {
+        return runCatching {
+            val user = FirebaseAuth.getInstance().currentUser
+                ?: throw IllegalStateException("No Firebase account is signed in.")
+            val state = loadLocal()
+            if (!state.verified || state.plan == PremiumPlan.NONE) {
+                throw IllegalStateException("No verified Premium entitlement is available to sync.")
+            }
+
+            val payload = hashMapOf<String, Any?>(
+                "plan" to state.plan.name.lowercase(),
+                "verified" to true,
+                "expiresAtMillis" to state.expiresAtMillis,
+                "orderId" to state.orderId,
+                "subscriptionId" to state.subscriptionId,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(user.uid)
+                .collection("entitlement")
+                .document("premium")
+                .set(payload, SetOptions.merge())
+                .await()
+
+            prefs.edit().putBoolean("cloudSynced", true).apply()
+        }
+    }
+
     suspend fun syncFromFirebase() {
         if (FirebaseApp.getApps(context).isEmpty()) return
-        val auth = FirebaseAuth.getInstance()
-        val user = auth.currentUser ?: return
+        val user = FirebaseAuth.getInstance().currentUser ?: return
 
         runCatching {
             val doc = FirebaseFirestore.getInstance()
@@ -203,6 +252,19 @@ class PremiumRepository(private val context: Context) {
                 .get()
                 .await()
 
+            if (!doc.exists()) {
+                prefs.edit()
+                    .putString("ownerUid", user.uid)
+                    .putString("plan", PremiumPlan.NONE.name)
+                    .putLong("expiresAt", 0L)
+                    .putBoolean("verified", false)
+                    .putBoolean("cloudSynced", false)
+                    .remove("orderId")
+                    .remove("subscriptionId")
+                    .apply()
+                return@runCatching
+            }
+
             val plan = when (doc.getString("plan")) {
                 "quarterly" -> PremiumPlan.QUARTERLY
                 "lifetime" -> PremiumPlan.LIFETIME
@@ -210,14 +272,18 @@ class PremiumRepository(private val context: Context) {
             }
             val expires = doc.getLong("expiresAtMillis")
             val verified = doc.getBoolean("verified") ?: false
+            val orderId = doc.getString("orderId")
+            val subscriptionId = doc.getString("subscriptionId")
 
-            if (verified || plan != PremiumPlan.NONE || !isPremium()) {
-                prefs.edit()
-                    .putString("plan", plan.name)
-                    .putLong("expiresAt", expires ?: 0L)
-                    .putBoolean("verified", verified)
-                    .apply()
-            }
+            prefs.edit()
+                .putString("ownerUid", user.uid)
+                .putString("plan", plan.name)
+                .putLong("expiresAt", expires ?: 0L)
+                .putBoolean("verified", verified)
+                .putString("orderId", orderId)
+                .putString("subscriptionId", subscriptionId)
+                .putBoolean("cloudSynced", true)
+                .apply()
         }
     }
 
