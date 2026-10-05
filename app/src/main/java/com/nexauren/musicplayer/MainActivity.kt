@@ -101,7 +101,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.clip
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -141,7 +141,7 @@ private enum class AppScreen(val label: String) {
 @Composable
 private fun MusicPlayerRoot(vm: PlayerViewModel) {
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = context as? ComponentActivity
     val songs by vm.songs.collectAsState()
     val currentSong by vm.currentSong.collectAsState()
     val playing by vm.isPlaying.collectAsState()
@@ -460,9 +460,11 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                 repo = accountRepo,
                 onDismiss = { accountDialog = false },
                 onSigned = {
-                    premiumRepo.syncFromFirebase()
-                    premiumRefresh++
                     accountDialog = false
+                    activity?.lifecycleScope?.launch {
+                        premiumRepo.syncFromFirebase()
+                        premiumRefresh++
+                    }
                 }
             )
         }
