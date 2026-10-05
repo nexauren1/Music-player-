@@ -130,3 +130,5 @@ jobs:
 # Before public production distribution, add a persistent signing key and
 # switch this workflow to build a signed release APK.
 
+
+# Music Player 1.4.0 final release trigger
