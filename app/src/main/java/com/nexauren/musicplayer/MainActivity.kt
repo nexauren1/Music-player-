@@ -1231,6 +1231,7 @@ private fun EqualizerScreen(
     var attached by remember { mutableStateOf(false) }
     var levels by remember { mutableStateOf(List(5) { .5f }) }
     var message by remember { mutableStateOf("Effects are saved when you leave the page.") }
+    val premiumActive = premiumRepo.isPremium()
 
     DisposableEffect(audioSessionId) {
         eq.attach(audioSessionId)
@@ -1266,17 +1267,18 @@ private fun EqualizerScreen(
                             AssistChip(
                                 onClick = {
                                     if (!attached) return@AssistChip
-                                    if (premiumRepo.isPremium() || premiumRepo.consumePreviewUse()) {
+                                    val freePreset = label == "Flat"
+                                    if (freePreset || premiumActive || premiumRepo.consumePreviewUse()) {
                                         val index = listOf("Flat", "Bass", "Treble", "Vocal", "Rock").indexOf(label)
                                         eq.setPreset(index.toShort())
                                         levels = eq.normalizedLevels().ifEmpty { List(5) { .5f } }
-                                        message = if (premiumRepo.isPremium()) {
-                                            "Premium preset applied."
+                                        message = if (premiumActive || freePreset) {
+                                            "Preset applied."
                                         } else {
-                                            "Premium preview used. ${premiumRepo.remainingPreviewUses()} preview(s) left."
+                                            "Premium preview used. " + premiumRepo.remainingPreviewUses() + " preview(s) left."
                                         }
                                     } else {
-                                        message = "Premium preview limit reached. Choose a plan in Premium."
+                                        message = "The 3 free premium previews are finished. Unlock Premium for unlimited effects."
                                     }
                                 },
                                 label = { Text(label) },
@@ -1292,14 +1294,18 @@ private fun EqualizerScreen(
         item {
             Card(shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Bands", fontWeight = FontWeight.Bold)
+                    Text("Bands" + if (premiumActive) "" else " • Premium", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     levels.forEachIndexed { index, value ->
                         Text("Band ${index + 1}", style = MaterialTheme.typography.labelLarge)
                         Slider(
                             value = value,
+                            enabled = attached && premiumActive,
                             onValueChange = {
-                                if (!attached) return@Slider
+                                if (!attached || !premiumActive) {
+                                    message = "Band controls are Premium. Use the free presets to preview effects."
+                                    return@Slider
+                                }
                                 levels = levels.toMutableList().also { list -> list[index] = it }
                                 val range = (eq.upperBound() - eq.lowerBound()).coerceAtLeast(1)
                                 val level = eq.lowerBound() + (range * it).toInt()
