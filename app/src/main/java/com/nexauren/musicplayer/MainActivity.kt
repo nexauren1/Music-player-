@@ -76,6 +76,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -119,6 +120,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import kotlinx.coroutines.delay
@@ -146,6 +149,16 @@ class MainActivity : ComponentActivity() {
         // Process deep links after Compose is attached so launch-from-browser is safe.
         runCatching { handlePayPalIntent(intent) }
             .onFailure { premiumMessage = "Music Player could not process the return link." }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppAnalytics.onActivityStart()
+    }
+
+    override fun onStop() {
+        AppAnalytics.onActivityStop()
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -357,6 +370,7 @@ private fun MusicPlayerRoot(
     var updateError by remember { mutableStateOf("") }
     var premiumProcessing by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
+    var effectsOpen by rememberSaveable { mutableStateOf(false) }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
@@ -424,6 +438,14 @@ private fun MusicPlayerRoot(
             premiumRefresh++
             screen = AppScreen.PREMIUM
             Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()        }
+    }
+
+    LaunchedEffect(screen) {
+        AppAnalytics.screenView(screen.name.lowercase())
+    }
+
+    LaunchedEffect(nowPlaying) {
+        if (nowPlaying) AppAnalytics.log("now_playing_open")
     }
 
     LaunchedEffect(screen, accountRefresh) {
@@ -567,8 +589,6 @@ private fun MusicPlayerRoot(
                                 onOpen = { nowPlaying = true },
                                 onPlayPause = vm::togglePlayPause,
                                 onNext = vm::next,
-                                onEqualizer = { screen = AppScreen.EQUALIZER },
-                                initialFavorite = vm.isFavorite(song),
                                 onFavorite = { vm.favorite(song) }
                             )
                         }
@@ -827,14 +847,25 @@ private fun MusicPlayerRoot(
         if (nowPlaying && currentSong != null) {
             NowPlayingSheet(
                 song = currentSong!!,
-                vm = vm,                playing = playing,
+                vm = vm,
+                premium = premiumSnapshot,
+                playing = playing,
                 position = position,
                 duration = duration,
                 onDismiss = { nowPlaying = false },
+                onOpenEffects = { effectsOpen = true },
                 onEqualizer = {
                     nowPlaying = false
                     screen = AppScreen.EQUALIZER
                 }
+            )
+        }
+
+        if (effectsOpen) {
+            EffectsScreen(
+                vm = vm,
+                premium = premiumSnapshot,
+                onDismiss = { effectsOpen = false }
             )
         }
 
