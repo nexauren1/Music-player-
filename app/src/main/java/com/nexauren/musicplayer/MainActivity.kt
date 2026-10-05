@@ -1329,7 +1329,8 @@ private fun MiniPlayer(
     }
 }
 @Composable
-private fun NowPlayingSheet(
+private @OptIn(ExperimentalMaterial3Api::class)
+fun NowPlayingSheet(
     song: Song,
     vm: PlayerViewModel,
     playing: Boolean,
