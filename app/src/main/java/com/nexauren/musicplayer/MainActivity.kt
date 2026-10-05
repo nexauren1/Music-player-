@@ -621,7 +621,7 @@ private fun MusicPlayerRoot(
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
                         account = accountSnapshot,
-                        premium = premiumRepo.loadLocal(),
+                        premium = premiumSnapshot,
                         onAccount = { screen = AppScreen.ACCOUNT },
                         processing = premiumProcessing,
                         onRefresh = {
@@ -2037,7 +2037,7 @@ private fun PremiumScreen(
     lifetimeCheckoutReady: Boolean,
     refreshToken: Int
 ) {
-    val premiumActive = premium.verified && when (premium.plan) {
+    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
         PremiumPlan.LIFETIME -> true
         PremiumPlan.QUARTERLY ->
             premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
@@ -2463,7 +2463,7 @@ private fun AccountScreen(
 ) {
     LaunchedEffect(refreshToken) { }
 
-    val premiumActive = premium.verified && when (premium.plan) {
+    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
         PremiumPlan.LIFETIME -> true
         PremiumPlan.QUARTERLY ->
             premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
