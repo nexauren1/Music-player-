@@ -59,7 +59,7 @@ jobs:
           gradle :app:assembleDebug \
             -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
             -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
-      -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
+            -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
             -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
 
       - name: Upload debug APK artifact
