@@ -49,6 +49,7 @@ data class AppearanceState(
     val theme: AppThemeStyle = AppThemeStyle.VIOLET,
     val background: AppBackgroundStyle = AppBackgroundStyle.GRADIENT,
     val darkMode: Boolean = false,
+    val language: AppLanguage = AppLanguage.ENGLISH,
     val configured: Boolean = false
 )
 
@@ -68,10 +69,17 @@ object AppearanceStore {
                     ?: AppBackgroundStyle.GRADIENT.name
             )
         }.getOrDefault(AppBackgroundStyle.GRADIENT)
+        val language = runCatching {
+            AppLanguage.valueOf(
+                p.getString("language", AppLanguage.ENGLISH.name) ?: AppLanguage.ENGLISH.name
+            )
+        }.getOrDefault(AppLanguage.ENGLISH)
+
         return AppearanceState(
             theme,
             background,
             p.getBoolean("dark", false),
+            language,
             p.getBoolean("configured", false)
         )
     }
@@ -80,12 +88,14 @@ object AppearanceStore {
         context: android.content.Context,
         theme: AppThemeStyle,
         background: AppBackgroundStyle,
-        darkMode: Boolean
+        darkMode: Boolean,
+        language: AppLanguage = AppLanguage.ENGLISH
     ) {
         context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit()
             .putString("theme", theme.name)
             .putString("background", background.name)
-            .putBoolean("dark", darkMode)
+.putBoolean("dark", darkMode)
+            .putString("language", language.name)
             .putBoolean("configured", true)
             .apply()
     }
