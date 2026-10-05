@@ -7,6 +7,9 @@
  * Expected Cloudflare Worker secrets:
  *   PAYPAL_CLIENT_ID
  *   PAYPAL_CLIENT_SECRET
+ *   FIREBASE_PROJECT_ID
+ *   FIREBASE_CLIENT_EMAIL
+ *   FIREBASE_PRIVATE_KEY
  *
  * Optional variables:
  *   PAYPAL_ENV = "sandbox" | "live" (default: sandbox)
@@ -379,6 +382,167 @@ function unixMillis(value) {
   return Number.isFinite(time) ? time : null;
 }
 
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let i = 0; i < view.length; i += 1) {
+    binary += String.fromCharCode(view[i]);
+  }
+  return btoa(binary)
+    .replace(/\\+/g, "-")
+    .replace(/\\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function textToBase64Url(value) {
+  return bytesToBase64Url(new TextEncoder().encode(value));
+}
+
+function pemToArrayBuffer(pem) {
+  const normalized = String(pem || "")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\\s+/g, "");
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function firebaseAccessToken(env) {
+  if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_PROJECT_ID) {
+    throw new Error(
+      "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY are required."
+    );
+  }
+
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const header = textToBase64Url(JSON.stringify({
+    alg: "RS256",
+    typ: "JWT",
+  }));
+  const claims = textToBase64Url(JSON.stringify({
+    iss: env.FIREBASE_CLIENT_EMAIL,
+    scope: "https://www.googleapis.com/auth/datastore",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: issuedAt,
+    exp: issuedAt + 3600,
+  }));
+  const unsigned = header + "." + claims;
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(env.FIREBASE_PRIVATE_KEY),
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(unsigned)
+  );
+
+  const assertion = unsigned + "." + bytesToBase64Url(signature);
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body:
+      "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" +
+      encodeURIComponent(assertion),
+  });
+
+  const body = await safeJson(response);
+  if (!response.ok || !body?.access_token) {
+    throw new Error(
+      "Firebase service-account OAuth failed (" +
+        response.status +
+        "): " +
+        JSON.stringify(body)
+    );
+  }
+
+  return body.access_token;
+}
+
+function firestoreValue(value) {
+  if (value === null || value === undefined) {
+    return { nullValue: "NULL_VALUE" };
+  }
+  if (typeof value === "boolean") {
+    return { booleanValue: value };
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value)
+      ? { integerValue: String(value) }
+      : { doubleValue: value };
+  }
+  return { stringValue: String(value) };
+}
+
+async function writeFirebaseEntitlement(env, {
+  uid,
+  plan,
+  expiresAtMillis,
+  orderId,
+  subscriptionId,
+}) {
+  if (!uid) throw new Error("uid is required for Firebase entitlement.");
+  const token = await firebaseAccessToken(env);
+  const projectId = String(env.FIREBASE_PROJECT_ID);
+  const path =
+    "users/" +
+    encodeURIComponent(uid) +
+    "/entitlement/premium";
+  const endpoint =
+    "https://firestore.googleapis.com/v1/projects/" +
+    encodeURIComponent(projectId) +
+    "/databases/(default)/documents/" +
+    path;
+
+  const fields = {
+    plan: firestoreValue(plan),
+    verified: firestoreValue(true),
+    expiresAtMillis: firestoreValue(expiresAtMillis),
+    orderId: firestoreValue(orderId),
+    subscriptionId: firestoreValue(subscriptionId),
+    updatedAt: {
+      timestampValue: new Date().toISOString(),
+    },
+  };
+
+  const response = await fetch(endpoint, {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ fields }),
+  });
+
+  const body = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(
+      "Firestore entitlement write failed (" +
+        response.status +
+        "): " +
+        JSON.stringify(body)
+    );
+  }
+
+  return true;
+}
+
 async function getOrder(env, token, orderId) {
   return paypalRequest(
     env,
@@ -428,13 +592,34 @@ async function verifyPurchase(env, { plan, uid, orderId, subscriptionId }) {
       amount?.currency_code === LIFETIME.currency &&
       String(amount?.value) === LIFETIME.amount;
 
+    if (!completed) {
+      return {
+        verified: false,
+        plan: "none",
+        expiresAtMillis: null,
+        orderId,
+        subscriptionId: null,
+        paypalStatus: order?.status || null,
+        cloudSynced: false,
+      };
+    }
+
+    await writeFirebaseEntitlement(env, {
+      uid,
+      plan: "lifetime",
+      expiresAtMillis: null,
+      orderId,
+      subscriptionId: null,
+    });
+
     return {
-      verified: completed,
-      plan: completed ? "lifetime" : "none",
+      verified: true,
+      plan: "lifetime",
       expiresAtMillis: null,
       orderId,
       subscriptionId: null,
       paypalStatus: order?.status || null,
+      cloudSynced: true,
     };
   }
 
@@ -452,13 +637,34 @@ async function verifyPurchase(env, { plan, uid, orderId, subscriptionId }) {
     const verified = customId === uid && status === "ACTIVE";
     const expiresAtMillis = unixMillis(subscription?.billing_info?.next_billing_time);
 
+    if (!verified) {
+      return {
+        verified: false,
+        plan: "none",
+        expiresAtMillis,
+        orderId: null,
+        subscriptionId,
+        paypalStatus: status || null,
+        cloudSynced: false,
+      };
+    }
+
+    await writeFirebaseEntitlement(env, {
+      uid,
+      plan: "quarterly",
+      expiresAtMillis,
+      orderId: null,
+      subscriptionId,
+    });
+
     return {
-      verified,
-      plan: verified ? "quarterly" : "none",
+      verified: true,
+      plan: "quarterly",
       expiresAtMillis,
       orderId: null,
       subscriptionId,
       paypalStatus: status || null,
+      cloudSynced: true,
     };
   }
 
