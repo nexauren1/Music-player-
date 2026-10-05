@@ -15,7 +15,6 @@ android {
         versionCode = 15
         versionName = "1.5.7"
 
-        val paypalClientId = providers.gradleProperty("PAYPAL_CLIENT_ID").orElse("").get()
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
             .trim()
@@ -30,7 +29,6 @@ android {
             .trim()
             .ifBlank { "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json" }
 
-        buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
         buildConfigField("String", "PAYPAL_QUARTERLY_URL", "\"$paypalQuarterlyUrl\"")
         buildConfigField("String", "PAYPAL_LIFETIME_URL", "\"$paypalLifetimeUrl\"")
         buildConfigField("String", "PAYPAL_WORKER_URL", "\"$paypalWorkerUrl\"")
