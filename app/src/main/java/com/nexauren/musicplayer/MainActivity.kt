@@ -1464,6 +1464,7 @@ private fun MiniPlayer(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun NowPlayingSheet(
     song: Song,
     vm: PlayerViewModel,
@@ -1674,6 +1675,7 @@ private fun NowPlayingSheet(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun EffectsScreen(
     vm: PlayerViewModel,
     premium: PremiumSnapshot,
