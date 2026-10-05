@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
+import android.content.Context
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +45,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private var controller: MediaController? = null
     private val audioEffects = EqualizerController(application)
+    private val playbackPrefs = application.getSharedPreferences("playback_effects", Context.MODE_PRIVATE)
+    private val _speed = MutableStateFlow(playbackPrefs.getFloat("speed", 1f).coerceIn(.5f, 2f))
+    val speed = _speed.asStateFlow()
+    private val _pitch = MutableStateFlow(playbackPrefs.getFloat("pitch", 1f).coerceIn(.5f, 1.5f))
+    val pitch = _pitch.asStateFlow()
     private var positionJob: Job? = null
     private var sleepJob: Job? = null
 
@@ -91,6 +98,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 })
 
                 audioEffects.attach(connected.audioSessionId)
+                applyPlaybackParameters()
                 withContext(Dispatchers.Main) {
                     syncCurrent(connected.currentMediaItem)
                     syncPosition()
@@ -120,20 +128,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         c.prepare()
         c.play()
         audioEffects.attach(c.audioSessionId)
+        applyPlaybackParameters()
+        AppAnalytics.log("play_start", "song_id" to song.id.toString())
     }
 
     fun togglePlayPause() {
-        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+        controller?.let {
+            if (it.isPlaying) {
+                it.pause()
+                AppAnalytics.log("play_pause", "state" to "paused")
+            } else {
+                it.play()
+                AppAnalytics.log("play_pause", "state" to "playing")
+            }
+        }
     }
 
     fun next() {
         controller?.seekToNextMediaItem()
         controller?.play()
+        AppAnalytics.log("next_track")
     }
 
     fun previous() {
         controller?.seekToPreviousMediaItem()
         controller?.play()
+        AppAnalytics.log("previous_track")
     }
 
     fun seekTo(position: Long) {
@@ -169,9 +189,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun equalizerController(): EqualizerController = audioEffects
 
+    fun setSpeed(value: Float) {
+        val v = value.coerceIn(.5f, 2f)
+        _speed.value = v
+        playbackPrefs.edit().putFloat("speed", v).apply()
+        applyPlaybackParameters()
+        AppAnalytics.log("playback_speed_change", "speed" to v.toString())
+    }
+
+    fun setPitch(value: Float) {
+        val v = value.coerceIn(.5f, 1.5f)
+        _pitch.value = v
+        playbackPrefs.edit().putFloat("pitch", v).apply()
+        applyPlaybackParameters()
+        AppAnalytics.log("pitch_change", "pitch" to v.toString())
+    }
+
+    fun resetEffects() {
+        setSpeed(1f)
+        setPitch(1f)
+        audioEffects.resetAll()
+        AppAnalytics.log("effects_reset")
+    }
+
+    fun effectState(): DjEffectState = audioEffects.effectState()
+
+    private fun applyPlaybackParameters() {
+        controller?.playbackParameters = PlaybackParameters(_speed.value, _pitch.value)
+    }
+
     fun favorite(song: Song) {
         repository.toggleFavorite(song.id)
         _libraryVersion.value += 1
+        AppAnalytics.log("favorite_toggle", "song_id" to song.id.toString())
     }
 
     fun isFavorite(song: Song): Boolean = repository.isFavorite(song.id)
