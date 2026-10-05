@@ -79,7 +79,7 @@ class EqualizerController(context: Context) {
         val high = upperBound().toFloat()
         val range = (high - low).coerceAtLeast(1f)
 
-        normalizedBands.take(eq.numberOfBands).forEachIndexed { index, value ->
+        normalizedBands.take(eq.numberOfBands.toInt()).forEachIndexed { index, value ->
             val level = (low + range * value.coerceIn(0f, 1f)).toInt()
             runCatching { eq.setBandLevel(index.toShort(), level.toShort()) }
             prefs.edit().putInt("band_$index", level).putInt("preset", -1).apply()
