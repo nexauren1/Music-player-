@@ -593,24 +593,30 @@ private fun MusicPlayerRoot(
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
                                     val account = accountRepo.currentAccount()
-                                    val local = premiumRepo.loadLocal()
 
-                                    if (account != null && local.plan != PremiumPlan.NONE) {
-                                        PayPalVerifier.verifyWithRetry(
-                                            uid = account.uid,
-                                            plan = local.plan,
-                                            orderId = local.orderId,
-                                            subscriptionId = local.subscriptionId
-                                        ).onSuccess { result ->
-                                            if (result.verified) {
-                                                premiumRepo.setVerifiedFromWorker(
-                                                    result.plan,
-                                                    result.expiresAtMillis,
-                                                    result.orderId,
-                                                    result.subscriptionId
-                                                )
-                                            } else {
-                                                premiumRepo.clearVerifiedPremium()
+                                    if (account != null) {
+                                        PayPalCheckout.verifyPending(
+                                            context,
+                                            account.uid,
+                                            premiumRepo
+                                        )
+
+                                        val local = premiumRepo.loadLocal()
+                                        if (local.plan != PremiumPlan.NONE) {
+                                            PayPalVerifier.verifyWithRetry(
+                                                uid = account.uid,
+                                                plan = local.plan,
+                                                orderId = local.orderId,
+                                                subscriptionId = local.subscriptionId
+                                            ).onSuccess { result ->
+                                                if (result.verified) {
+                                                    premiumRepo.setVerifiedFromWorker(
+                                                        result.plan,
+                                                        result.expiresAtMillis,
+                                                        result.orderId,
+                                                        result.subscriptionId
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1822,6 +1828,10 @@ private fun PremiumScreen(
             premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
         PremiumPlan.NONE -> false
     }
+    val context = LocalContext.current
+    val hasPendingPurchase = remember(refreshToken) {
+        PayPalCheckout.loadPending(context) != null
+    }
 
     val pulse = rememberInfiniteTransition(label = "premium_page").animateFloat(
         initialValue = 0.94f,
@@ -1987,6 +1997,39 @@ private fun PremiumScreen(
                     lifetimeCheckoutReady
                 ) { onPurchase(PremiumPlan.LIFETIME) }
             }
+            if (hasPendingPurchase) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(26.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(18.dp)) {
+                            Text(
+                                "Payment waiting for verification",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(Modifier.height(5.dp))
+                            Text(
+                                "Your PayPal checkout was started. Verify it here if the browser did not return to the app.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = onRefresh,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Filled.Refresh, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Verify Premium payment")
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Card(shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(18.dp)) {
