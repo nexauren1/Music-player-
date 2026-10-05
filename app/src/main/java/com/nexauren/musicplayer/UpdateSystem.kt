@@ -2,11 +2,8 @@ package com.musicplayer.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -16,7 +13,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.io.File
-import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -136,12 +132,14 @@ object UpdateManager {
         info: UpdateInfo,
         onProgress: (Int) -> Unit = {}
     ) = withContext(Dispatchers.IO) {
-        val target = File(context.cacheDir, "nexa-music-" + info.versionCode + ".apk")
+        val target = File(context.cacheDir, "music-player-" + info.versionCode + ".apk")
+        target.delete()
         val connection = URL(info.apkUrl).openConnection() as HttpURLConnection
 
         connection.connectTimeout = 15_000
         connection.readTimeout = 30_000
         connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = true
         connection.connect()
 
         if (connection.responseCode !in 200..299) {
@@ -196,10 +194,22 @@ object UpdateManager {
 }
 
 object ApkInstaller {
+    private const val PREFS = "update_install"
+    private const val PENDING_APK = "pending_apk"
+
     fun install(context: Context, apk: File) {
+        if (!apk.exists() || apk.length() == 0L) {
+            throw IllegalStateException("The downloaded APK is missing or empty.")
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(PENDING_APK, apk.absolutePath)
+                .apply()
+
             val settingsIntent = Intent(
                 android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:" + context.packageName)
@@ -209,50 +219,44 @@ object ApkInstaller {
             return
         }
 
-        val installer = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(
-            PackageInstaller.SessionParams.MODE_FULL_INSTALL
-        ).apply {
-            setAppPackageName(context.packageName)
-        }
-
-        val sessionId = installer.createSession(params)
-        val session = installer.openSession(sessionId)
-
-        session.use { packageSession ->
-            FileInputStream(apk).use { input: FileInputStream ->
-                packageSession.openWrite("base.apk", 0, apk.length()).use { output: java.io.OutputStream ->
-                    input.copyTo(output)
-                }
-            }
-
-            val intent = Intent(context, InstallResultReceiver::class.java)
-            val pending = PendingIntent.getBroadcast(
-                context,
-                sessionId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            packageSession.commit(pending.intentSender)
-        }
-    }
-}
-
-class InstallResultReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val status = intent.getIntExtra(
-            PackageInstaller.EXTRA_STATUS,
-            PackageInstaller.STATUS_FAILURE
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            apk
         )
 
-        if (status != PackageInstaller.STATUS_SUCCESS) {
-            val message =
-                intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-                    ?: "Installation failed."
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
 
-            NotificationHelper.createChannels(context)
-            NotificationHelper.showInstallFailure(context, message)
+        try {
+            context.startActivity(installIntent)
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(PENDING_APK)
+                .apply()
+        } catch (error: Exception) {
+            throw IllegalStateException(
+                "Android could not start the APK installer: " + (error.message ?: "unknown error")
+            )
+        }
+    }
+
+    fun resumeIfPending(context: Context) {
+        val path = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(PENDING_APK, null)
+            ?: return
+
+        val apk = File(path)
+        if (apk.exists()) {
+            install(context, apk)
+        } else {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(PENDING_APK)
+                .apply()
         }
     }
 }
