@@ -1,7 +1,7 @@
 {
-  "versionCode": 13,
-  "versionName": "1.5.5",
+  "versionCode": 15,
+  "versionName": "1.5.7",
   "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
-  "sha256": "e504da8ebd24650cc373a18cdbb4151116e74a1ad262ce4af0ac51c045d380de",
-  "changelog": "Reliable PayPal app switching and verification processing, plus a safer Android PackageInstaller update flow."
+  "sha256": "",
+  "changelog": "Refreshed compact mini player, persistent equalizer engine, clearer Free/Premium states, new Premium Reverb, more equalizer presets, richer themes and lighter background rendering."
 }
