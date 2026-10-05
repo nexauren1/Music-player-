@@ -2869,6 +2869,8 @@ private fun AccountScreen(
     premium: PremiumSnapshot,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    onRename: (String) -> Unit,
+    onDeleteAccount: () -> Unit,
     onPremium: () -> Unit,
     refreshToken: Int
 ) {
@@ -3003,6 +3005,33 @@ private fun AccountScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            item {
+                Card(shape = RoundedCornerShape(26.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text(I18n.t("Account controls"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = { onRename("") },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(I18n.t("Change display name"))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(
+                            onClick = onDeleteAccount,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(I18n.t("Delete account"), color = MaterialTheme.colorScheme.error)
+                        }
+                        Text(
+                            I18n.t("Deleting an account may require a recent sign-in for security."),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
