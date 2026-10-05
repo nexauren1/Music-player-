@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.musicplayer.app
 
 import android.app.Application
 import android.content.ComponentName
@@ -112,6 +112,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         val index = list.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
         repository.recordPlay(song.id)
+        repository.recordPlay(song.id)
         val items = list.map { it.toMediaItem() }
         c.setMediaItems(items, index, 0L)
         c.prepare()
@@ -189,6 +190,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             controller?.pause()
         }
     }
+
+    fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
 
     fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
 
