@@ -542,6 +542,33 @@ private fun MusicPlayerRoot(
                         )
                     }
 
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        I18n.t("Language"),
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    LanguageChoices(
+                        selected = appLanguage,
+                        onSelected = {
+                            languageName = it.name
+                            AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
+                        }
+                    )
+                    NavigationDrawerItem(
+                        label = { Text(I18n.t("Driving mode")) },
+                        icon = { Icon(Icons.Filled.DirectionsCar, null) },
+                        selected = drivingMode,
+                        onClick = {
+                            drivingMode = !drivingMode
+                            context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean("driving_mode", drivingMode).apply()
+                            drawerOpen = false
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                    )
+
                     Spacer(Modifier.height(18.dp))
                     Text(
                         "v" + BuildConfig.VERSION_NAME,
