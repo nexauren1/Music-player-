@@ -1913,9 +1913,12 @@ private fun PremiumScreen(
                 Card(shape = RoundedCornerShape(28.dp)) {
                     Column(Modifier.padding(18.dp)) {
                         PremiumFeatureTile("No ads", "A clean player with no advertising.", Icons.Filled.CheckCircle)
-                        PremiumFeatureTile("Unlimited equalizer", "All presets and band controls are unlocked.", Icons.Filled.Tune)
+                        PremiumFeatureTile("DJ equalizer", "Live frequency control with club, studio and performance presets.", Icons.Filled.Tune)
+                        PremiumFeatureTile("Bass Boost", "Deep low-end enhancement for headphones and speakers.", Icons.Filled.VolumeUp)
+                        PremiumFeatureTile("3D Space", "Virtualized stereo space for a wider DJ-style sound.", Icons.Filled.Repeat)
+                        PremiumFeatureTile("Loudness", "Premium gain enhancement for stronger playback.", Icons.Filled.VolumeUp)
+                        PremiumFeatureTile("DJ preset library", "Club, EDM, Hip-Hop, Rock, Vocal, Bright, Lo-Fi and more.", Icons.Filled.Star)
                         PremiumFeatureTile("Advanced sleep timer", "15, 30 and 60 minute timers are available.", Icons.Filled.CheckCircle)
-                        PremiumFeatureTile("Premium visual effects", "More color, animation and playback effects.", Icons.Filled.Star)
                         PremiumFeatureTile("Account protection", "Your verified Premium state is linked to your account.", Icons.Filled.AccountCircle)
                     }
                 }
