@@ -28,7 +28,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Validate PayPal Sandbox credentials
+      - name: Validate PayPal Live credentials
         env:
           PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
@@ -46,7 +46,7 @@ jobs:
           fi
 
           response="$(curl -fsS -X POST \
-            "https://api-m.sandbox.paypal.com/v1/oauth2/token" \
+            "https://api-m.paypal.com/v1/oauth2/token" \
             -u "$PAYPAL_CLIENT_ID:$PAYPAL_CLIENT_SECRET" \
             -H "Accept: application/json" \
             -H "Accept-Language: en_US" \
@@ -54,7 +54,7 @@ jobs:
             -d "grant_type=client_credentials")"
 
           echo "$response" | jq -e '.access_token and .token_type == "Bearer"' >/dev/null
-          echo "PayPal Sandbox credentials validated successfully."
+          echo "PayPal Live credentials validated successfully."
 
       - name: Prepare release signing
         env:
@@ -93,19 +93,42 @@ jobs:
             KEY_ALIAS="$KEY_ALIAS" \
             KEY_PASSWORD="$KEY_PASSWORD" \
             gradle :app:assembleRelease \
-              -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
               -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
               -PUPDATE_MANIFEST_URL="https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
           else
             gradle :app:assembleRelease \
-              -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
               -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
               -PUPDATE_MANIFEST_URL="https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
           fi
+
+      - name: Publish update manifest
+        if: contains(github.event.head_commit.message, '[release]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(awk -F'"' '/versionName =/{print $2}' app/build.gradle.kts | head -1)"
+          VERSION_CODE="$(awk -F' = ' '/versionCode =/{print $2}' app/build.gradle.kts | head -1 | tr -d '\r')"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          cat > update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION}",
+            "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
+            "sha256": "${SHA256}",
+            "changelog": "Production release: polished mini player, persistent equalizer, Premium effects, multilingual interface and stability improvements."
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          git commit -m "Update release manifest for ${VERSION}" || true
+          git push
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -134,8 +157,6 @@ jobs:
 
 # PAYPAL_CLIENT_SECRET is intentionally not passed into the Android build.
 # Client secrets must stay server-side and must never be embedded in an APK.
-# Before public production distribution, add a persistent signing key and
-# switch this workflow to build a signed release APK.
 
 
 # Music Player release trigger [release]
