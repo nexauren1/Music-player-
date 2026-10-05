@@ -716,17 +716,21 @@ export default {
           if (result.orderId) deepLink.searchParams.set("orderId", result.orderId);
           if (result.subscriptionId) deepLink.searchParams.set("subscriptionId", result.subscriptionId);
           const appLink = deepLink.toString();
+          const intentLink =
+            "intent://paypal/success" +
+            deepLink.search +
+            "#Intent;scheme=musicplayer;package=com.musicplayer.app;end";
           const safeLink = appLink.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-          return new Response(
-            "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"1;url=" +
-              safeLink +
-              "\"><title>Premium activated</title><style>body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#5b21b6,#0891b2);color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}main{text-align:center;max-width:520px;margin:24px;padding:32px;border-radius:30px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px)}a{display:inline-block;margin-top:16px;padding:14px 22px;border-radius:999px;background:#fff;color:#4c1d95;text-decoration:none;font-weight:800}</style></head><body><main><div style=\"font-size:54px\">✓</div><h1>Premium activated</h1><p>Payment verified successfully. Returning to Music Player…</p><a href=\"" +
-              safeLink +
-              "\">Open Music Player</a><script>setTimeout(function(){window.location.replace(" +
-              JSON.stringify(appLink) +
-              ")},250);</script></main></body></html>",
-            { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
-          );
+          const safeIntent = intentLink.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+          const page =
+            "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Premium activated</title>" +
+            "<style>body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#5b21b6,#0891b2);color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}main{text-align:center;max-width:520px;margin:24px;padding:32px;border-radius:30px;background:rgba(255,255,255,.14);backdrop-filter:blur(20px)}a{display:inline-block;margin-top:16px;padding:14px 22px;border-radius:999px;background:#fff;color:#4c1d95;text-decoration:none;font-weight:800}.secondary{margin-left:8px;background:rgba(255,255,255,.18);color:#fff}</style></head><body><main><div style=\"font-size:54px\">✓</div><h1>Premium activated</h1><p>Payment verified successfully. Returning to Music Player…</p>" +
+            "<a href=\"" + safeLink + "\">Open Music Player</a><a class=\"secondary\" href=\"" + safeIntent + "\">Open app</a>" +
+            "<script>(function(){var app=" + JSON.stringify(appLink) + ";var intent=" + JSON.stringify(intentLink) + ";try{window.location.replace(app)}catch(e){}setTimeout(function(){try{window.location.href=intent}catch(e){}},900)})();</script></main></body></html>";
+          return new Response(page, {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+          });
         } catch (error) {
           return html(
             "Payment verification failed",
