@@ -441,12 +441,15 @@ private fun MusicPlayerRoot(
             Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()        }
     }
 
-    LaunchedEffect(screen) {
-        AppAnalytics.screenView(screen.name.lowercase())
-    }
-
-    LaunchedEffect(nowPlaying) {
-        if (nowPlaying) AppAnalytics.log("now_playing_open")
+    LaunchedEffect(screen, nowPlaying, effectsOpen) {
+        val page = when {
+            effectsOpen -> "effects"
+            nowPlaying -> "now_playing"
+            else -> screen.name.lowercase()
+        }
+        AppAnalytics.screenView(page)
+        if (nowPlaying && !effectsOpen) AppAnalytics.log("now_playing_open")
+        if (effectsOpen) AppAnalytics.log("effects_open")
     }
 
     LaunchedEffect(screen, accountRefresh) {
