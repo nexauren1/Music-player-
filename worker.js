@@ -499,6 +499,30 @@ async function createQuarterlyCheckout(request, env, uid, options = {}) {
       body: JSON.stringify({
         plan_id: quarterlyPlan.id,
         custom_id: uid,
+        app_switch_context: options.appSwitchContext
+          ? {
+              native_app: {
+                return_app_url:
+                  options.appSwitchContext?.nativeApp?.returnAppUrl ||
+                  options.appSwitchContext?.native_app?.return_app_url ||
+                  options.returnUrl ||
+                  `musicplayer://paypal/success`,
+                cancel_app_url:
+                  options.appSwitchContext?.nativeApp?.cancelAppUrl ||
+                  options.appSwitchContext?.native_app?.cancel_app_url ||
+                  options.cancelUrl ||
+                  `musicplayer://paypal/cancel`,
+                os_type:
+                  options.appSwitchContext?.nativeApp?.osType ||
+                  options.appSwitchContext?.native_app?.os_type ||
+                  "ANDROID",
+                os_version:
+                  options.appSwitchContext?.nativeApp?.osVersion ||
+                  options.appSwitchContext?.native_app?.os_version ||
+                  "unknown",
+              },
+            }
+          : undefined,
         application_context: {
           brand_name: "Music Player",
           user_action: "SUBSCRIBE_NOW",
@@ -560,6 +584,28 @@ async function createLifetimeCheckout(request, env, uid, options = {}) {
             },
           },
         ],
+        app_switch_context: {
+          native_app: {
+            return_app_url:
+              options.appSwitchContext?.nativeApp?.returnAppUrl ||
+              options.appSwitchContext?.native_app?.return_app_url ||
+              options.returnUrl ||
+              `musicplayer://paypal/success`,
+            cancel_app_url:
+              options.appSwitchContext?.nativeApp?.cancelAppUrl ||
+              options.appSwitchContext?.native_app?.cancel_app_url ||
+              options.cancelUrl ||
+              `musicplayer://paypal/cancel`,
+            os_type:
+              options.appSwitchContext?.nativeApp?.osType ||
+              options.appSwitchContext?.native_app?.os_type ||
+              "ANDROID",
+            os_version:
+              options.appSwitchContext?.nativeApp?.osVersion ||
+              options.appSwitchContext?.native_app?.os_version ||
+              "unknown",
+          },
+        },
         application_context: {
           brand_name: "Music Player",
           user_action: "PAY_NOW",
@@ -618,7 +664,11 @@ export default {
         }
         if (request.method === "POST") {
           const body = await safeJson(request);
-          return await createQuarterlyCheckout(request, env, body?.uid, { returnUrl: body?.returnUrl || body?.appSwitchContext?.nativeApp?.returnAppUrl || "", cancelUrl: body?.cancelUrl || body?.appSwitchContext?.nativeApp?.cancelAppUrl || "" });
+          return await createQuarterlyCheckout(request, env, body?.uid, {
+  returnUrl: body?.returnUrl || body?.appSwitchContext?.nativeApp?.returnAppUrl || "",
+  cancelUrl: body?.cancelUrl || body?.appSwitchContext?.nativeApp?.cancelAppUrl || "",
+  appSwitchContext: body?.appSwitchContext || null,
+});
         }
       }
 
