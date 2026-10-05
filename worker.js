@@ -465,7 +465,7 @@ async function verifyPurchase(env, { plan, uid, orderId, subscriptionId }) {
   throw new Error("Unknown premium plan.");
 }
 
-async function createQuarterlyCheckout(request, env, uid) {
+async function createQuarterlyCheckout(request, env, uid, options = {}) {
   if (!uid) {
     return json(
       { error: "uid is required for a premium checkout." },
@@ -502,8 +502,8 @@ async function createQuarterlyCheckout(request, env, uid) {
         application_context: {
           brand_name: "Music Player",
           user_action: "SUBSCRIBE_NOW",
-          return_url: `${base}/paypal/success?plan=quarterly&uid=${encodeURIComponent(uid)}`,
-          cancel_url: `${base}/paypal/cancel?plan=quarterly&uid=${encodeURIComponent(uid)}`,
+          return_url: options.returnUrl || `${base}/paypal/success?plan=quarterly&uid=${encodeURIComponent(uid)}`,
+          cancel_url: options.cancelUrl || `${base}/paypal/cancel?plan=quarterly&uid=${encodeURIComponent(uid)}`,
         },
       }),
     }
@@ -521,7 +521,7 @@ async function createQuarterlyCheckout(request, env, uid) {
   });
 }
 
-async function createLifetimeCheckout(request, env, uid) {
+async function createLifetimeCheckout(request, env, uid, options = {}) {
   if (!uid) {
     return json(
       { error: "uid is required for a premium checkout." },
@@ -563,8 +563,8 @@ async function createLifetimeCheckout(request, env, uid) {
         application_context: {
           brand_name: "Music Player",
           user_action: "PAY_NOW",
-          return_url: `${base}/paypal/success?plan=lifetime&uid=${encodeURIComponent(uid)}`,
-          cancel_url: `${base}/paypal/cancel?plan=lifetime&uid=${encodeURIComponent(uid)}`,
+          return_url: options.returnUrl || `${base}/paypal/success?plan=lifetime&uid=${encodeURIComponent(uid)}`,
+          cancel_url: options.cancelUrl || `${base}/paypal/cancel?plan=lifetime&uid=${encodeURIComponent(uid)}`,
         },
       }),
     }
@@ -611,28 +611,28 @@ export default {
       if (url.pathname === "/paypal/checkout/quarterly") {
         if (request.method === "GET") {
           const uid = url.searchParams.get("uid");
-          const response = await createQuarterlyCheckout(request, env, uid);
+          const response = await createQuarterlyCheckout(request, env, uid, { returnUrl: url.searchParams.get("returnUrl") || "", cancelUrl: url.searchParams.get("cancelUrl") || "" });
           const data = await response.clone().json();
           if (data?.approveUrl) return Response.redirect(data.approveUrl, 302);
           return response;
         }
         if (request.method === "POST") {
           const body = await safeJson(request);
-          return await createQuarterlyCheckout(request, env, body?.uid);
+          return await createQuarterlyCheckout(request, env, body?.uid, { returnUrl: body?.returnUrl || body?.appSwitchContext?.nativeApp?.returnAppUrl || "", cancelUrl: body?.cancelUrl || body?.appSwitchContext?.nativeApp?.cancelAppUrl || "" });
         }
       }
 
       if (url.pathname === "/paypal/checkout/lifetime") {
         if (request.method === "GET") {
           const uid = url.searchParams.get("uid");
-          const response = await createLifetimeCheckout(request, env, uid);
+          const response = await createLifetimeCheckout(request, env, uid, { returnUrl: url.searchParams.get("returnUrl") || "", cancelUrl: url.searchParams.get("cancelUrl") || "" });
           const data = await response.clone().json();
           if (data?.approveUrl) return Response.redirect(data.approveUrl, 302);
           return response;
         }
         if (request.method === "POST") {
           const body = await safeJson(request);
-          return await createLifetimeCheckout(request, env, body?.uid);
+          return await createLifetimeCheckout(request, env, body?.uid, { returnUrl: body?.returnUrl || body?.appSwitchContext?.nativeApp?.returnAppUrl || "", cancelUrl: body?.cancelUrl || body?.appSwitchContext?.nativeApp?.cancelAppUrl || "", appSwitchContext: body?.appSwitchContext || null });
         }
       }
 
