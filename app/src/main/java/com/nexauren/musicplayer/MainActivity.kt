@@ -854,6 +854,12 @@ private fun MusicPlayerRoot(
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
                         onAccount = { accountDialog = true },
+                        drivingMode = drivingMode,
+                        onDrivingMode = {
+                            drivingMode = it
+                            context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean("driving_mode", it).apply()
+                        },
                         notificationsAllowed = notificationsAllowed,
                         onRequestNotifications = {
                             if (Build.VERSION.SDK_INT >= 33) {
@@ -3229,6 +3235,8 @@ private fun SettingsScreen(
     onLanguageChange: (AppLanguage) -> Unit,
     onOpenPremium: () -> Unit,
     onAccount: () -> Unit,
+    drivingMode: Boolean,
+    onDrivingMode: (Boolean) -> Unit,
     notificationsAllowed: Boolean,
     onRequestNotifications: () -> Unit,
     checkingUpdate: Boolean,
@@ -3295,6 +3303,16 @@ private fun SettingsScreen(
                 LanguageChoices(
                     selected = runCatching { AppLanguage.valueOf(languageName) }.getOrDefault(AppLanguage.ENGLISH),
                     onSelected = onLanguageChange
+                )
+            }
+        }
+        item {
+            SettingsSection(I18n.t("Driving mode"), I18n.t("Large playback controls for safer hands-free interaction.")) {
+                SwitchRow(
+                    I18n.t("Driving mode"),
+                    I18n.t("Use the dedicated large-control player."),
+                    drivingMode,
+                    onDrivingMode
                 )
             }
         }
