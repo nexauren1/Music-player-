@@ -127,3 +127,5 @@ jobs:
 # Client secrets must stay server-side and must never be embedded in an APK.
 # Before public production distribution, add a persistent signing key and
 # switch this workflow to build a signed release APK.
+
+# Music Player 1.3.1 test build trigger
