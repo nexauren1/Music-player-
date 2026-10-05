@@ -3,7 +3,7 @@
 Music Player is a polished offline-first Android music player built with Kotlin, Jetpack Compose and AndroidX Media3.
 
 ## Latest
-- 1.3.0 visual refresh
+- 1.3.0 visual refresh (build corrected)
 - Selectable themes and backgrounds
 - Redesigned mini player and animated Now Playing
 
