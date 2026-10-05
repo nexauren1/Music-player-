@@ -33,8 +33,8 @@ data class UpdateInfo(
 ) {
     fun isNewer(): Boolean {
         if (versionCode > 0L) {
-            return versionCode > BuildConfig.VERSION_CODE ||
-                (versionCode == BuildConfig.VERSION_CODE && versionName != BuildConfig.VERSION_NAME)
+            return versionCode > BuildConfig.VERSION_CODE.toLong() ||
+                (versionCode == BuildConfig.VERSION_CODE.toLong() && versionName != BuildConfig.VERSION_NAME)
         }
 
         fun parse(value: String) = value
@@ -44,7 +44,11 @@ data class UpdateInfo(
 
         val remote = parse(versionName)
         val local = parse(BuildConfig.VERSION_NAME)
-        return remote > local
+        return when {
+            remote[0] != local[0] -> remote[0] > local[0]
+            remote[1] != local[1] -> remote[1] > local[1]
+            else -> remote[2] > local[2]
+        }
     }
 }
 
