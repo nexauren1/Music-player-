@@ -21,9 +21,9 @@ android {
         val updateManifestUrl = providers.gradleProperty("UPDATE_MANIFEST_URL")
             .orElse("https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json").get()
 
-        buildConfigField("String", "PAYPAL_CLIENT_ID", ""$paypalClientId"")
-        buildConfigField("String", "PAYPAL_CHECKOUT_URL", ""$paypalCheckoutUrl"")
-        buildConfigField("String", "UPDATE_MANIFEST_URL", ""$updateManifestUrl"")
+        buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
+        buildConfigField("String", "PAYPAL_CHECKOUT_URL", "\"$paypalCheckoutUrl\"")
+        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
     }
 
     buildTypes {
@@ -48,9 +48,11 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+}
 
-    kotlinOptions {
-        jvmTarget = "17"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
