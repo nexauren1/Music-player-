@@ -487,14 +487,32 @@ export default {
         return json(await provision(env));
       }
 
-      if (url.pathname === "/paypal/checkout/quarterly" && request.method === "POST") {
-        const body = await safeJson(request);
-        return await createQuarterlyCheckout(request, env, body?.uid);
+      if (url.pathname === "/paypal/checkout/quarterly") {
+        if (request.method === "GET") {
+          const uid = url.searchParams.get("uid");
+          const response = await createQuarterlyCheckout(request, env, uid);
+          const data = await response.clone().json();
+          if (data?.approveUrl) return Response.redirect(data.approveUrl, 302);
+          return response;
+        }
+        if (request.method === "POST") {
+          const body = await safeJson(request);
+          return await createQuarterlyCheckout(request, env, body?.uid);
+        }
       }
 
-      if (url.pathname === "/paypal/checkout/lifetime" && request.method === "POST") {
-        const body = await safeJson(request);
-        return await createLifetimeCheckout(request, env, body?.uid);
+      if (url.pathname === "/paypal/checkout/lifetime") {
+        if (request.method === "GET") {
+          const uid = url.searchParams.get("uid");
+          const response = await createLifetimeCheckout(request, env, uid);
+          const data = await response.clone().json();
+          if (data?.approveUrl) return Response.redirect(data.approveUrl, 302);
+          return response;
+        }
+        if (request.method === "POST") {
+          const body = await safeJson(request);
+          return await createLifetimeCheckout(request, env, body?.uid);
+        }
       }
 
       if (url.pathname === "/paypal/success") {
