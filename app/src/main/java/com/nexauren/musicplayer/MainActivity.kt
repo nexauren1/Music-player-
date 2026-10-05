@@ -899,6 +899,12 @@ private fun MusicPlayerRoot(
                 duration = duration,
                 onDismiss = { nowPlaying = false },
                 onOpenEffects = { effectsOpen = true },
+                onDrivingMode = {
+                    drivingMode = true
+                    drivingModeOpen = true
+                    context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("driving_mode", true).apply()
+                },
                 onEqualizer = {
                     nowPlaying = false
                     screen = AppScreen.EQUALIZER
@@ -1547,7 +1553,8 @@ private fun NowPlayingSheet(
     duration: Long,
     onDismiss: () -> Unit,
     onOpenEffects: () -> Unit,
-    onEqualizer: () -> Unit
+    onEqualizer: () -> Unit,
+    onDrivingMode: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
     var menuOpen by remember { mutableStateOf(false) }
@@ -1607,6 +1614,11 @@ private fun NowPlayingSheet(
                                     onEqualizer()
                                 },
                                 leadingIcon = { Icon(Icons.Filled.Tune, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(I18n.t("Driving mode")) },
+                                onClick = { menuOpen = false; onDrivingMode() },
+                                leadingIcon = { Icon(Icons.Filled.DirectionsCar, null) }
                             )
                             DropdownMenuItem(
                                 text = { Text(I18n.t("Reset effects")) },
