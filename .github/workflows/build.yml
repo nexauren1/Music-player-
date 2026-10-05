@@ -98,12 +98,14 @@ jobs:
           VERSION_CODE="$(awk -F' = ' '/versionCode =/{print $2}' app/build.gradle.kts | head -1 | tr -d '\r')"
           APK="app/build/outputs/apk/release/app-release.apk"
           SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          SIZE_BYTES="$(stat -c%s "$APK")"
           cat > update.json <<EOF
           {
             "versionCode": ${VERSION_CODE},
             "versionName": "${VERSION}",
             "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
             "sha256": "${SHA256}",
+            "sizeBytes": ${SIZE_BYTES},
             "changelog": "Production release: polished mini player, persistent equalizer, Premium effects, multilingual interface and stability improvements."
           }
           EOF
