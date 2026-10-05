@@ -400,6 +400,7 @@ function textToBase64Url(value) {
 
 function pemToArrayBuffer(pem) {
   const normalized = String(pem || "")
+    .replace(/\\n/g, "\n")
     .replace(/-----BEGIN PRIVATE KEY-----/g, "")
     .replace(/-----END PRIVATE KEY-----/g, "")
     .replace(/\s+/g, "");
