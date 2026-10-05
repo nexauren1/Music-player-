@@ -193,8 +193,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
 
-    fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
-
     private fun syncCurrent(mediaItem: MediaItem?) {
         val id = mediaItem?.mediaId?.toLongOrNull()
         _currentSong.value = id?.let { songId ->
