@@ -89,6 +89,7 @@ jobs:
               -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
+              -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
               -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
           else
             gradle :app:assembleDebug \
@@ -128,4 +129,3 @@ jobs:
 # Before public production distribution, add a persistent signing key and
 # switch this workflow to build a signed release APK.
 
-# Music Player 1.3.1 test build trigger
