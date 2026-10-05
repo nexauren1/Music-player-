@@ -24,7 +24,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.3.1'
 
       - name: Build debug APK
         run: |
@@ -47,14 +47,15 @@ jobs:
           VERSION="$(awk -F'"' '/versionName =/{print $2}' app/build.gradle.kts | head -1)"
           TAG="v${VERSION}"
           APK="app/build/outputs/apk/debug/app-debug.apk"
+          cp "${APK}" "app-release.apk"
           gh release delete "${TAG}" --yes 2>/dev/null || true
           git push --delete origin "${TAG}" 2>/dev/null || true
-          gh release create "${TAG}" "${APK}" \
+          gh release create "${TAG}" "app-release.apk" \
             --title "Nexa Music ${VERSION}" \
-            --notes "Nexa Music ${VERSION} build." \
+            --notes "Nexa Music ${VERSION} test release." \
             --prerelease
 
-# PAYPAL_CLIENT_SECRET is intentionally not passed to the Android build.
+# PAYPAL_CLIENT_SECRET is intentionally not passed into the Android build.
 # Client secrets must stay server-side and must never be embedded in an APK.
-# Before public production distribution, add a persistent signing key as a
-# GitHub Secret and change the workflow to build a signed release APK.
+# Before public production distribution, add a persistent signing key and
+# switch this workflow to build a signed release APK.
