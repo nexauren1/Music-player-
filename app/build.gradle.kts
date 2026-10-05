@@ -16,9 +16,13 @@ android {
 
         val paypalClientId = providers.gradleProperty("PAYPAL_CLIENT_ID").orElse("").get()
         val paypalCheckoutUrl = providers.gradleProperty("PAYPAL_CHECKOUT_URL")
-            .orElse("https://example.com/paypal-checkout").get()
+            .getOrElse("")
+            .trim()
+            .ifBlank { "https://example.com/paypal-checkout" }
         val updateManifestUrl = providers.gradleProperty("UPDATE_MANIFEST_URL")
-            .orElse("https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json").get()
+            .getOrElse("")
+            .trim()
+            .ifBlank { "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json" }
 
         buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
         buildConfigField("String", "PAYPAL_CHECKOUT_URL", "\"$paypalCheckoutUrl\"")
