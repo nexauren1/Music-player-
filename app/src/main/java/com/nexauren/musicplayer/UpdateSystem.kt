@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.musicplayer.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
