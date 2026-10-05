@@ -408,36 +408,57 @@ private fun MusicPlayerRoot(vm: PlayerViewModel) {
                             }
                         },
                         onPurchase = { plan ->
-                            if (accountRepo.currentAccount() == null) {
+                            val account = accountRepo.currentAccount()
+                            if (account == null) {
                                 accountDialog = true
                             } else {
-                                val url = when (plan) {
-                                PremiumPlan.QUARTERLY -> BuildConfig.PAYPAL_QUARTERLY_URL
-                                PremiumPlan.LIFETIME -> BuildConfig.PAYPAL_LIFETIME_URL
-                                PremiumPlan.NONE -> ""
-                            }
-                                if (url.isBlank() || url.startsWith("https://example.com")) {
+                                val workerBase = BuildConfig.PAYPAL_WORKER_URL.trim().trimEnd('/')
+                                val fallbackUrl = when (plan) {
+                                    PremiumPlan.QUARTERLY -> BuildConfig.PAYPAL_QUARTERLY_URL
+                                    PremiumPlan.LIFETIME -> BuildConfig.PAYPAL_LIFETIME_URL
+                                    PremiumPlan.NONE -> ""
+                                }
+                                val checkoutUrl = when (plan) {
+                                    PremiumPlan.QUARTERLY ->
+                                        if (workerBase.isNotBlank()) {
+                                            workerBase + "/paypal/checkout/quarterly?uid=" +
+                                                android.net.Uri.encode(account.uid)
+                                        } else fallbackUrl
+                                    PremiumPlan.LIFETIME ->
+                                        if (workerBase.isNotBlank()) {
+                                            workerBase + "/paypal/checkout/lifetime?uid=" +
+                                                android.net.Uri.encode(account.uid)
+                                        } else fallbackUrl
+                                    PremiumPlan.NONE -> ""
+                                }
+
+                                if (checkoutUrl.isBlank() || checkoutUrl.startsWith("https://example.com")) {
                                     Toast.makeText(
                                         context,
-                                        "PayPal payment link is not configured for this plan.",
+                                        "PayPal checkout is not configured yet.",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else {
                                     runCatching {
                                         context.startActivity(
-                                            Intent(
-                                                Intent.ACTION_VIEW,
-                                                android.net.Uri.parse(url)
-                                            )
+                                            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(checkoutUrl))
                                         )
+                                    }.onFailure {
+                                        Toast.makeText(
+                                            context,
+                                            "Unable to open PayPal checkout.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                 }
                             }
                         },
-                        quarterlyCheckoutReady = BuildConfig.PAYPAL_QUARTERLY_URL.isNotBlank() &&
-                            !BuildConfig.PAYPAL_QUARTERLY_URL.startsWith("https://example.com"),
-                        lifetimeCheckoutReady = BuildConfig.PAYPAL_LIFETIME_URL.isNotBlank() &&
-                            !BuildConfig.PAYPAL_LIFETIME_URL.startsWith("https://example.com"),
+                        quarterlyCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank() ||
+                            (BuildConfig.PAYPAL_QUARTERLY_URL.isNotBlank() &&
+                                !BuildConfig.PAYPAL_QUARTERLY_URL.startsWith("https://example.com")),
+                        lifetimeCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank() ||
+                            (BuildConfig.PAYPAL_LIFETIME_URL.isNotBlank() &&
+                                !BuildConfig.PAYPAL_LIFETIME_URL.startsWith("https://example.com")),
                         refreshToken = premiumRefresh
                     )
                     AppScreen.SETTINGS -> SettingsScreen(

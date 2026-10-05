@@ -12,8 +12,8 @@ android {
         applicationId = "com.musicplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.3.1"
 
         val paypalClientId = providers.gradleProperty("PAYPAL_CLIENT_ID").orElse("").get()
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
@@ -21,6 +21,9 @@ android {
             .trim()
         val paypalLifetimeUrl = providers.gradleProperty("PAYPAL_LIFETIME_URL")
             .getOrElse("")
+            .trim()
+        val paypalWorkerUrl = providers.gradleProperty("PAYPAL_WORKER_URL")
+            .getOrElse("https://icy-bread-c703.nexaurenstore.workers.dev")
             .trim()
         val updateManifestUrl = providers.gradleProperty("UPDATE_MANIFEST_URL")
             .getOrElse("")
@@ -30,7 +33,8 @@ android {
         buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
         buildConfigField("String", "PAYPAL_QUARTERLY_URL", "\"$paypalQuarterlyUrl\"")
         buildConfigField("String", "PAYPAL_LIFETIME_URL", "\"$paypalLifetimeUrl\"")
-        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
+        buildConfigField("String", "PAYPAL_WORKER_URL", "\"$paypalWorkerUrl\"")
+        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"" )
     }
 
     val releaseStoreFile = System.getenv("KEYSTORE_PATH")
