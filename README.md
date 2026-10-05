@@ -1,6 +1,6 @@
-# Nexa Music
+# Music Player
 
-Nexa Music is a polished offline-first Android music player built with Kotlin, Jetpack Compose and AndroidX Media3.
+Music Player is a polished offline-first Android music player built with Kotlin, Jetpack Compose and AndroidX Media3.
 
 ## Core
 - Local music library scanning
