@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
@@ -1146,7 +1145,7 @@ private fun HomeScreen(
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("No songs found. Scan your library from Settings.")) }
         } else {
-            itemsIndexed(sortedSongs, key = { _, song -> song.id }) { _, song ->
+            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays = false)
             }
         }
@@ -1212,7 +1211,7 @@ private fun LibraryScreen(
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("No songs found.")) }
         } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { _, song ->
+            itemsIndexed(sortedSongs, key = { _, song -> song.id }) { _, song ->
                 SongRow(song, vm, showPlays = false)
             }
         }
