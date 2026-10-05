@@ -1943,12 +1943,7 @@ private fun ThemeChoices(selected: AppThemeStyle, onSelected: (AppThemeStyle) ->
                     Surface(
                         Modifier.size(16.dp),
                         shape = CircleShape,
-                        color = when (theme) {
-                            AppThemeStyle.VIOLET -> Color(0xFF6D42E8)
-                            AppThemeStyle.OCEAN -> Color(0xFF006B94)
-                            AppThemeStyle.SUNSET -> Color(0xFFC54836)
-                            AppThemeStyle.MINT -> Color(0xFF087A58)
-                        }
+                        color = themeColors(theme, false).primary
                     ) {}
                 }
             )
@@ -2055,6 +2050,52 @@ private fun StatCard(label: String, value: String, modifier: Modifier) {
         Column(Modifier.padding(13.dp)) {
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun PremiumHomeBadge() {
+    val transition = rememberInfiniteTransition(label = "premium_home_badge")
+    val alpha by transition.animateFloat(
+        0.55f,
+        1f,
+        infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+        label = "premiumBadgeAlpha"
+    )
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                Modifier.size(42.dp).alpha(alpha),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Filled.Star,
+                    null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("Premium active", fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "Ad-free playback • unlimited effects",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
