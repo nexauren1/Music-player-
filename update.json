@@ -1,7 +1,7 @@
 {
-  "versionCode": 11,
-  "versionName": "1.5.3",
+  "versionCode": 12,
+  "versionName": "1.5.4",
   "apkUrl": "https://github.com/nexauren1/Music-player-/releases/latest/download/app-release.apk",
   "sha256": "",
-  "changelog": "Professional account center, upgraded DJ Premium equalizer, stronger premium audio effects, reliable update downloads, and Android package installer support."
+  "changelog": "Professional Premium screen, cleaner account center, compact player controls, improved DJ equalizer UI, and stronger PayPal return-flow handling."
 }
