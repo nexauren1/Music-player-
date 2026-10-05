@@ -125,7 +125,9 @@ enum class PremiumPlan {
 data class PremiumSnapshot(
     val plan: PremiumPlan = PremiumPlan.NONE,
     val expiresAtMillis: Long? = null,
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    val orderId: String? = null,
+    val subscriptionId: String? = null
 )
 
 class PremiumRepository(private val context: Context) {
@@ -136,7 +138,9 @@ class PremiumRepository(private val context: Context) {
         val plan = runCatching { PremiumPlan.valueOf(rawPlan) }.getOrDefault(PremiumPlan.NONE)
         val expires = prefs.getLong("expiresAt", 0L).takeIf { it > 0L }
         val verified = prefs.getBoolean("verified", false)
-        return PremiumSnapshot(plan, expires, verified)
+        val orderId = prefs.getString("orderId", null)
+        val subscriptionId = prefs.getString("subscriptionId", null)
+        return PremiumSnapshot(plan, expires, verified, orderId, subscriptionId)
     }
 
     fun isPremium(): Boolean {
@@ -147,6 +151,32 @@ class PremiumRepository(private val context: Context) {
                 (state.expiresAtMillis == null || state.expiresAtMillis > System.currentTimeMillis())
             PremiumPlan.NONE -> false
         }
+    }
+
+
+    fun setVerifiedFromWorker(
+        plan: PremiumPlan,
+        expiresAtMillis: Long?,
+        orderId: String?,
+        subscriptionId: String?
+    ) {
+        prefs.edit()
+            .putString("plan", plan.name)
+            .putLong("expiresAt", expiresAtMillis ?: 0L)
+            .putBoolean("verified", true)
+            .putString("orderId", orderId)
+            .putString("subscriptionId", subscriptionId)
+            .apply()
+    }
+
+    fun clearVerifiedPremium() {
+        prefs.edit()
+            .putString("plan", PremiumPlan.NONE.name)
+            .putLong("expiresAt", 0L)
+            .putBoolean("verified", false)
+            .remove("orderId")
+            .remove("subscriptionId")
+            .apply()
     }
 
     fun remainingPreviewUses(): Int =
@@ -181,11 +211,13 @@ class PremiumRepository(private val context: Context) {
             val expires = doc.getLong("expiresAtMillis")
             val verified = doc.getBoolean("verified") ?: false
 
-            prefs.edit()
-                .putString("plan", plan.name)
-                .putLong("expiresAt", expires ?: 0L)
-                .putBoolean("verified", verified)
-                .apply()
+            if (verified || plan != PremiumPlan.NONE || !isPremium()) {
+                prefs.edit()
+                    .putString("plan", plan.name)
+                    .putLong("expiresAt", expires ?: 0L)
+                    .putBoolean("verified", verified)
+                    .apply()
+            }
         }
     }
 
