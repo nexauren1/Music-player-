@@ -613,8 +613,8 @@ private fun MusicPlayerRoot(
                     )
                     AppScreen.EQUALIZER -> EqualizerScreen(
                         modifier = Modifier.padding(padding),
-                        audioSessionId = vm.audioSessionId(),
-                        premiumRepo = premiumRepo,
+                        eq = vm.equalizerController(),
+                        premium = premiumSnapshot,
                         onBack = { screen = AppScreen.HOME },
                         onOpenPremium = { screen = AppScreen.PREMIUM }
                     )
@@ -1620,48 +1620,40 @@ fun NowPlayingSheet(
 @Composable
 private fun EqualizerScreen(
     modifier: Modifier,
-    audioSessionId: Int,
-    premiumRepo: PremiumRepository,
+    eq: EqualizerController,
+    premium: PremiumSnapshot,
     onBack: () -> Unit,
     onOpenPremium: () -> Unit
 ) {
-    val context = LocalContext.current
-    val eq = remember { EqualizerController(context) }
-    var attached by remember { mutableStateOf(false) }
-    var levels by remember { mutableStateOf(List(5) { .5f }) }
-    var effects by remember { mutableStateOf(DjEffectState()) }
-    var message by remember { mutableStateOf("Play a track to connect the equalizer.") }
-    val premiumActive = premiumRepo.isPremium()
+    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY ->
+            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
+    var levels by remember { mutableStateOf(eq.normalizedLevels().ifEmpty { List(eq.bandCount()) { .5f } }) }
+    var effects by remember { mutableStateOf(eq.effectState()) }
+    var attached by remember { mutableStateOf(eq.bandCount() > 0) }
+    var message by remember { mutableStateOf("Play music to activate the live audio engine.") }
 
     val presets = remember {
         listOf(
             "Flat" to listOf(.50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f, .50f),
             "Rock" to listOf(.78f, .66f, .52f, .46f, .56f, .72f, .84f, .78f, .68f, .60f),
             "Vocal" to listOf(.40f, .44f, .52f, .66f, .78f, .82f, .72f, .62f, .56f, .52f),
+            "Jazz" to listOf(.58f, .56f, .52f, .58f, .70f, .76f, .70f, .60f, .56f, .52f),
             "Club" to listOf(.72f, .62f, .54f, .56f, .66f, .76f, .72f, .64f, .60f, .64f),
             "Deep Bass" to listOf(.96f, .88f, .76f, .62f, .54f, .50f, .50f, .52f, .56f, .60f),
             "DJ Punch" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
             "Hip-Hop" to listOf(.90f, .78f, .60f, .50f, .58f, .72f, .84f, .76f, .66f, .60f),
             "EDM" to listOf(.88f, .74f, .58f, .56f, .66f, .84f, .92f, .84f, .72f, .66f),
             "Bright" to listOf(.44f, .46f, .52f, .62f, .72f, .80f, .86f, .90f, .86f, .80f),
-            "Lo-Fi" to listOf(.78f, .70f, .58f, .50f, .48f, .46f, .50f, .56f, .66f, .72f)
+            "Lo-Fi" to listOf(.78f, .70f, .58f, .50f, .48f, .46f, .50f, .56f, .66f, .72f),
+            "Acoustic" to listOf(.40f, .48f, .64f, .76f, .82f, .76f, .68f, .60f, .54f, .50f)
         )
     }
-    val freePresets = remember { setOf("Flat", "Rock", "Vocal") }
-
-    DisposableEffect(audioSessionId) {
-        eq.attach(audioSessionId)
-        attached = audioSessionId > 0
-        if (attached) {
-            levels = eq.normalizedLevels().ifEmpty { List(eq.bandCount()) { .5f } }
-            effects = eq.effectState()
-            message = "Equalizer connected. Basic controls are free."
-        }
-        onDispose {
-            eq.release()
-            attached = false
-        }
-    }
+    val freePresets = remember { setOf("Flat", "Rock", "Vocal", "Jazz") }
 
     fun fitPreset(values: List<Float>, count: Int): List<Float> {
         if (count <= 1) return listOf(values.first())
@@ -1671,61 +1663,88 @@ private fun EqualizerScreen(
         }
     }
 
+    fun refreshFromEngine() {
+        attached = eq.bandCount() > 0
+        if (attached) {
+            levels = eq.normalizedLevels().ifEmpty { levels }
+            effects = eq.effectState()
+        }
+    }
+
+    fun resetAll() {
+        eq.applyCustomPreset(fitPreset(List(10) { .5f }, eq.bandCount()))
+        eq.setBassBoost(0f)
+        eq.setSurround(0f)
+        eq.setLoudness(0f)
+        eq.setReverb(0f)
+        refreshFromEngine()
+        message = "Equalizer reset."
+    }
+
     fun applyPreset(name: String, values: List<Float>) {
         if (!attached) {
-            message = "Play a song first to enable the equalizer."
+            message = "Start playback to activate the equalizer."
             return
         }
-        if (!premiumActive && name !in freePresets) {
-            message = "$name is a Premium equalizer preset."
+        val free = name in freePresets
+        if (!premiumActive && !free) {
+            message = name + " is available with Premium."
             return
         }
-        val presetBands = if (premiumActive) {
-            fitPreset(values, eq.bandCount())
-        } else {
-            fitPreset(values, minOf(5, eq.bandCount()))
-        }
-        eq.applyCustomPreset(presetBands)
-        levels = eq.normalizedLevels().ifEmpty { levels }
+        val count = if (premiumActive) eq.bandCount() else minOf(5, eq.bandCount())
+        eq.applyCustomPreset(fitPreset(values, count))
         if (name == "DJ Punch" && premiumActive) {
             eq.setBassBoost(.82f)
             eq.setSurround(.66f)
             eq.setLoudness(.42f)
-            effects = eq.effectState()
+            eq.setReverb(.18f)
         }
-        message = "$name preset loaded."
+        refreshFromEngine()
+        message = if (premiumActive) name + " loaded." else name + " loaded in Free mode."
+    }
+
+    LaunchedEffect(Unit) {
+        refreshFromEngine()
+        message = if (attached) "Equalizer ready. Audio effects stay active while you browse."
+        else "Play music to activate the equalizer."
     }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 145.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 150.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Card(
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Column(Modifier.padding(17.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Filled.ArrowBack, "Back")
+                            Icon(Icons.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onPrimary)
                         }
                         Column(Modifier.weight(1f)) {
-                            Text("Equalizer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                             Text(
-                                if (attached) "Live audio control" else "Play a song to connect",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                "Equalizer",
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                if (attached) "Live engine connected" else "Start playback to connect",
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .78f),
+                                style = MaterialTheme.typography.bodySmall
                             )
                         }
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (premiumActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                            color = Color.White.copy(alpha = .18f)
                         ) {
                             Text(
                                 if (premiumActive) "PREMIUM" else "FREE",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                color = if (premiumActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                                color = Color.White,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Black
                             )
@@ -1733,9 +1752,11 @@ private fun EqualizerScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Free basic EQ. Premium unlocks advanced bands, DJ presets and effects.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        if (premiumActive)
+                            "All advanced bands and effects are unlocked for this account."
+                        else
+                            "5-band EQ is free. Premium unlocks the full mixer and effects.",
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .86f)
                     )
                 }
             }
@@ -1744,47 +1765,74 @@ private fun EqualizerScreen(
         item {
             Card(
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF101116))
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1015))
             ) {
-                Column(Modifier.padding(14.dp)) {
+                Column(Modifier.padding(horizontal = 10.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("LIVE SPECTRUM", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black)
+                            Text("LIVE EQ", color = Color.White, fontWeight = FontWeight.Black)
                             Text(
-                                if (premiumActive) "Full-band control" else "Basic control • first 5 bands",
-                                color = Color.White.copy(alpha = .68f),
+                                if (premiumActive) "10-band studio control" else "5-band free control",
+                                color = Color.White.copy(alpha = .65f),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        if (!premiumActive) {
-                            Surface(shape = RoundedCornerShape(10.dp), color = Color.White.copy(alpha = .10f)) {
+                        Text(
+                            "RESET",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { resetAll() }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (!attached) {
+                        Box(
+                            Modifier.fillMaxWidth().height(260.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Filled.Tune,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text("Play a track first", color = Color.White, fontWeight = FontWeight.Bold)
                                 Text(
-                                    "Premium: advanced bands",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    color = Color.White.copy(alpha = .8f),
-                                    style = MaterialTheme.typography.labelSmall
+                                    "Your settings stay active after leaving this page.",
+                                    color = Color.White.copy(alpha = .65f),
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    if (!attached) {
-                        Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-                            Text("Start playback to edit the live spectrum.", color = Color.White.copy(alpha = .7f))
-                        }
                     } else {
-                        val visibleCount = if (premiumActive) levels.size else minOf(5, levels.size)
+                        val visibleCount = if (premiumActive) minOf(levels.size, 10) else minOf(levels.size, 5)
                         Row(
-                            Modifier.fillMaxWidth().height(245.dp),
+                            Modifier.fillMaxWidth().height(286.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             repeat(visibleCount) { index ->
                                 val frequency = eq.bandFrequencyHz(index)
-                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+                                Column(
+                                    Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth().height(218.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .width(4.dp)
+                                                .height(192.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF252832))
+                                        )
                                         Slider(
                                             value = levels[index],
                                             onValueChange = {
@@ -1793,31 +1841,27 @@ private fun EqualizerScreen(
                                                 val level = eq.lowerBound() + (range * it).toInt()
                                                 eq.setBand(index, level)
                                             },
-                                            enabled = premiumActive || index < 5,
                                             modifier = Modifier
-                                                .width(165.dp)
-                                                .height(38.dp)
+                                                .width(205.dp)
+                                                .height(36.dp)
                                                 .graphicsLayer { rotationZ = 270f },
                                             colors = androidx.compose.material3.SliderDefaults.colors(
                                                 thumbColor = MaterialTheme.colorScheme.primary,
                                                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                                                inactiveTrackColor = Color(0xFF383A43),
-                                                disabledThumbColor = Color(0xFF555862),
-                                                disabledActiveTrackColor = Color(0xFF555862),
-                                                disabledInactiveTrackColor = Color(0xFF2B2D34)
+                                                inactiveTrackColor = Color.Transparent
                                             )
                                         )
                                     }
                                     Text(
-                                        if (frequency > 1000) "${frequency / 1000}k" else "${frequency}",
-                                        color = Color.White.copy(alpha = .65f),
+                                        if (frequency >= 1000) (frequency / 1000).toString() + "k" else frequency.toString(),
+                                        color = Color.White.copy(alpha = .58f),
                                         style = MaterialTheme.typography.labelSmall
                                     )
                                     Text(
-                                        String.format("%.1f", (levels[index] * 2f - 1f)),
+                                        "%+.1f".format((levels[index] * 2f - 1f) * 12f),
                                         color = MaterialTheme.colorScheme.primary,
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
                             }
@@ -1828,17 +1872,18 @@ private fun EqualizerScreen(
         }
 
         item {
-            Text("PRESETS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-        }
-
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
                 items(presets) { (name, values) ->
                     val free = name in freePresets
                     AssistChip(
                         onClick = { applyPreset(name, values) },
-                        label = { Text(if (free) name else "$name • Premium") },
-                        leadingIcon = if (!free) {
+                        label = {
+                            Text(if (premiumActive || free) name else name + " • Premium")
+                        },
+                        leadingIcon = if (!free && !premiumActive) {
                             { Icon(Icons.Filled.Lock, null, modifier = Modifier.size(15.dp)) }
                         } else null
                     )
@@ -1848,12 +1893,16 @@ private fun EqualizerScreen(
 
         item {
             Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.padding(17.dp)) {
-                    Text("BASIC EQ • FREE", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(5.dp))
+                Column(Modifier.padding(16.dp)) {
                     Text(
-                        "Playback, Flat, Rock, Vocal and the basic live band controls are free for everyone.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "FREE",
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "Playback, Flat, Rock, Vocal and Jazz presets plus 5 live bands are free.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -1863,14 +1912,21 @@ private fun EqualizerScreen(
             Card(
                 shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (premiumActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = if (premiumActive)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceContainerHigh
                 )
             ) {
-                Column(Modifier.padding(17.dp)) {
+                Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(Modifier.size(42.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                        Surface(
+                            Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
                             Icon(
-                                if (premiumActive) Icons.Filled.Tune else Icons.Filled.Lock,
+                                if (premiumActive) Icons.Filled.CheckCircle else Icons.Filled.Lock,
                                 null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(10.dp)
@@ -1878,16 +1934,21 @@ private fun EqualizerScreen(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("ADVANCED DJ FX", fontWeight = FontWeight.Black)
                             Text(
-                                if (premiumActive) "Premium controls are active."
-                                else "Premium unlocks Bass Boost, 3D Space, Loudness and advanced presets.",
+                                if (premiumActive) "PREMIUM MIXER UNLOCKED" else "PREMIUM MIXER",
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                if (premiumActive)
+                                    "Advanced processing is ready."
+                                else
+                                    "Unlock advanced processing, 10-band control and premium presets.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     Text("Bass Boost", fontWeight = FontWeight.Bold)
                     Slider(
@@ -1919,23 +1980,46 @@ private fun EqualizerScreen(
                         }
                     )
 
+                    Text("Reverb", fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = effects.reverb,
+                        enabled = attached && premiumActive,
+                        onValueChange = {
+                            effects = effects.copy(reverb = it)
+                            eq.setReverb(it)
+                        }
+                    )
+
                     if (!premiumActive) {
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = onOpenPremium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Filled.Lock, null)
+                            Icon(Icons.Filled.Star, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Premium equalizer controls")
+                            Text("Unlock Premium Equalizer")
                         }
+                    } else {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Bass Boost • 3D Space • Loudness • Reverb • 10-band mixer",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
 
         item {
-            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 4.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 }
