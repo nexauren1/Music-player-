@@ -172,16 +172,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        runCatching {
-            ApkInstaller.resumeIfPending(this)
-        }.onFailure {
-            // Never let a broken/stale pending APK prevent the app from launching.
-            getSharedPreferences("update_install", MODE_PRIVATE)
-                .edit()
-                .remove("pending_apk")
-                .apply()
-        }
-
         lifecycleScope.launch {
             runCatching {
                 val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
@@ -511,7 +501,7 @@ private fun MusicPlayerRoot(
                         Column {
                             Text(I18n.t("Music Player"), fontWeight = FontWeight.ExtraBold)
                             Text(
-                                "Local audio • offline-first",
+                                I18n.t("Local audio • offline-first"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -553,6 +543,7 @@ private fun MusicPlayerRoot(
                         selected = appLanguage,
                         onSelected = {
                             languageName = it.name
+                            I18n.language = it
                             AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
                         }
                     )
@@ -869,6 +860,7 @@ private fun MusicPlayerRoot(
                         },
                         onLanguageChange = {
                             languageName = it.name
+                            I18n.language = it
                             AppearanceStore.save(context, appTheme, appBackground, darkMode, it)
                         },
                         onOpenPremium = { screen = AppScreen.PREMIUM },
@@ -981,22 +973,25 @@ private fun MusicPlayerRoot(
                 error = updateError,
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
-                    updating = true
-                    updateError = ""
-                    activity?.let { host ->
-                        host.lifecycleScope.launch {
-                            runCatching {
-                                UpdateManager.downloadAndInstall(context, info) {
-                                    updateProgress = it
-                                }
-                            }.onFailure {
-                                updateError = it.message ?: "The update could not be installed."
-                            }
-                            updating = false
-                            if (updateError.isBlank()) {
-                                updateInfo = null
-                            }
+                    runCatching {
+                        try {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("market://details?id=" + BuildConfig.APPLICATION_ID)
+                                )
+                            )
+                        } catch (_: Exception) {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(info.apkUrl)
+                                )
+                            )
                         }
+                        updateInfo = null
+                    }.onFailure {
+                        updateError = I18n.t("Unable to open the update page.")
                     }
                 }
             )
@@ -1019,7 +1014,10 @@ private fun MusicPlayerRoot(
                 onThemeChange = { themeName = it.name },
                 onBackgroundChange = { backgroundName = it.name },
                 onDarkModeChange = { darkMode = it },
-                onLanguageChange = { languageName = it.name },
+                onLanguageChange = {
+                    languageName = it.name
+                    I18n.language = it
+                },
                 onSave = {
                     AppearanceStore.save(context, appTheme, appBackground, darkMode, appLanguage)
                     showAppearanceSetup = false
@@ -2081,7 +2079,7 @@ private fun EqualizerScreen(
             "Jazz" to listOf(.58f, .56f, .52f, .58f, .70f, .76f, .70f, .60f, .56f, .52f),
             "Club" to listOf(.72f, .62f, .54f, .56f, .66f, .76f, .72f, .64f, .60f, .64f),
             "Deep Bass" to listOf(.96f, .88f, .76f, .62f, .54f, .50f, .50f, .52f, .56f, .60f),
-            "DJ Punch" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
+            "Bass Impact" to listOf(.90f, .74f, .60f, .52f, .68f, .86f, .76f, .64f, .58f, .62f),
             "Hip-Hop" to listOf(.90f, .78f, .60f, .50f, .58f, .72f, .84f, .76f, .66f, .60f),
             "EDM" to listOf(.88f, .74f, .58f, .56f, .66f, .84f, .92f, .84f, .72f, .66f),
             "Bright" to listOf(.44f, .46f, .52f, .62f, .72f, .80f, .86f, .90f, .86f, .80f),
@@ -2129,7 +2127,7 @@ private fun EqualizerScreen(
         }
         val count = if (premiumActive) eq.bandCount() else minOf(5, eq.bandCount())
         eq.applyCustomPreset(fitPreset(values, count))
-        if (name == "DJ Punch" && premiumActive) {
+        if (name == "Bass Impact" && premiumActive) {
             eq.setBassBoost(.82f)
             eq.setSurround(.66f)
             eq.setLoudness(.42f)
@@ -2514,7 +2512,7 @@ private fun PremiumScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(I18n.t("Processing"), fontWeight = FontWeight.ExtraBold)
                                 Text(
-                                    "Checking PayPal status and synchronizing your Premium access.",
+                                    I18n.t("Checking PayPal status and synchronizing your Premium access."),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -2586,12 +2584,12 @@ private fun PremiumScreen(
 
                         if (account != null) {
                             Text(
-                                "Signed in as " + (account.email ?: account.displayName.orEmpty()),
+                                I18n.t("Signed in as ") + (account.email ?: account.displayName.orEmpty()),
                                 color = Color.White.copy(alpha = 0.88f)
                             )
                         } else {
                             Text(
-                                "Sign in to connect purchases to your Music Player account.",
+                                I18n.t("Sign in to connect purchases to your Music Player account."),
                                 color = Color.White.copy(alpha = 0.88f)
                             )
                             Spacer(Modifier.height(10.dp))
@@ -2616,7 +2614,7 @@ private fun PremiumScreen(
             }
             item {
                 Text(
-                    "Advanced Equalizer Premium",
+                    I18n.t("Advanced Equalizer Premium"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2652,7 +2650,7 @@ private fun PremiumScreen(
         } else {
             item {
                 Text(
-                    "Choose your plan",
+                    I18n.t("Choose your plan"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2755,7 +2753,7 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
             premium.expiresAtMillis?.takeIf { it > 0L }?.let {
                 Spacer(Modifier.height(5.dp))
                 Text(
-                    "Next billing: " + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
+                    I18n.t("Next billing: ") + java.text.DateFormat.getDateInstance().format(java.util.Date(it)),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -3688,7 +3686,7 @@ private fun PremiumHomeBadge() {
             Column {
                 Text(I18n.t("Premium active"), fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "Ad-free playback • unlimited effects",
+                    I18n.t("Ad-free playback • unlimited effects"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -3758,7 +3756,7 @@ private fun UpdateDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Download & install")) } },
+        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Open update page")) } },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !updating) { Text(I18n.t("Later")) } }
     )
 }

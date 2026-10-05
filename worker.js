@@ -634,8 +634,16 @@ async function verifyPurchase(env, { plan, uid, orderId, subscriptionId }) {
 
     const customId = subscription?.custom_id;
     const status = subscription?.status;
-    const verified = customId === uid && status === "ACTIVE";
     const expiresAtMillis = unixMillis(subscription?.billing_info?.next_billing_time);
+
+    // ACTIVE subscriptions are fully renewable. CANCELLED subscriptions remain
+    // valid only until the end of the already-paid billing period.
+    const verified =
+      customId === uid &&
+      (
+        status === "ACTIVE" ||
+        (status === "CANCELLED" && !!expiresAtMillis && expiresAtMillis > Date.now())
+      );
 
     if (!verified) {
       return {
@@ -845,13 +853,58 @@ async function manageQuarterlySubscription(env, input) {
   const subscription = await paypalRequest(env, token, path, { method: "GET" });
   if (subscription?.custom_id !== uid) throw new Error("Subscription does not belong to this account.");
   if (action === "cancel") {
-    await paypalRequest(env, token, path + "/cancel", { method: "POST", headers: { "PayPal-Request-Id": "music-player-cancel-" + subscriptionId }, body: JSON.stringify({ reason: "Customer requested cancellation." }) });
-    return { ok: true, action: "cancel", status: "CANCELLED", expiresAtMillis: unixMillis(subscription?.billing_info?.next_billing_time) };
+    const expiresAtMillis = unixMillis(subscription?.billing_info?.next_billing_time);
+    await paypalRequest(env, token, path + "/cancel", {
+      method: "POST",
+      headers: { "PayPal-Request-Id": "music-player-cancel-" + subscriptionId },
+      body: JSON.stringify({ reason: "Customer requested cancellation." })
+    });
+
+    if (!expiresAtMillis || expiresAtMillis <= Date.now()) {
+      throw new Error("PayPal did not return a valid remaining billing period.");
+    }
+
+    // Cancellation stops renewal but Premium remains valid until the paid period ends.
+    await writeFirebaseEntitlement(env, {
+      uid,
+      plan: "quarterly",
+      expiresAtMillis,
+      orderId: null,
+      subscriptionId,
+    });
+
+    return {
+      ok: true,
+      action: "cancel",
+      status: "CANCELLED",
+      expiresAtMillis,
+    };
   }
   if (action === "resume") {
-    if (subscription?.status !== "SUSPENDED") throw new Error("This subscription cannot be resumed. A new checkout may be required.");
-    await paypalRequest(env, token, path + "/activate", { method: "POST", headers: { "PayPal-Request-Id": "music-player-resume-" + subscriptionId }, body: JSON.stringify({ reason: "Customer resumed the subscription." }) });
-    return { ok: true, action: "resume", status: "ACTIVE" };
+    if (subscription?.status !== "SUSPENDED") {
+      throw new Error("This subscription cannot be resumed. A new checkout may be required.");
+    }
+
+    const activated = await paypalRequest(env, token, path + "/activate", {
+      method: "POST",
+      headers: { "PayPal-Request-Id": "music-player-resume-" + subscriptionId },
+      body: JSON.stringify({ reason: "Customer resumed the subscription." })
+    });
+    const expiresAtMillis = unixMillis(activated?.billing_info?.next_billing_time);
+
+    if (!expiresAtMillis || expiresAtMillis <= Date.now()) {
+      throw new Error("PayPal did not return a valid next billing time.");
+    }
+
+    await writeFirebaseEntitlement(env, {
+      uid,
+      plan: "quarterly",
+      expiresAtMillis,
+      orderId: null,
+      subscriptionId,
+    });
+
+    return { ok: true, action: "resume", status: "ACTIVE", expiresAtMillis };
   }
   throw new Error("Unknown subscription action.");
 }
