@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
@@ -372,6 +373,9 @@ private fun MusicPlayerRoot(
     var premiumProcessing by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var effectsOpen by rememberSaveable { mutableStateOf(false) }
+    var drivingModeOpen by rememberSaveable { mutableStateOf(false) }
+    var drivingMode by rememberSaveable { mutableStateOf(context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE).getBoolean("driving_mode", false)) }
+    var showTutorial by rememberSaveable { mutableStateOf(!context.getSharedPreferences("first_run", android.content.Context.MODE_PRIVATE).getBoolean("tutorial_done", false)) }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
@@ -441,8 +445,9 @@ private fun MusicPlayerRoot(
             Toast.makeText(context, premiumMessage, Toast.LENGTH_LONG).show()        }
     }
 
-    LaunchedEffect(screen, nowPlaying, effectsOpen) {
+    LaunchedEffect(screen, nowPlaying, effectsOpen, drivingModeOpen) {
         val page = when {
+            drivingModeOpen -> "driving_mode"
             effectsOpen -> "effects"
             nowPlaying -> "now_playing"
             else -> screen.name.lowercase()
