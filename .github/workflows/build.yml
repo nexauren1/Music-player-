@@ -96,6 +96,7 @@ jobs:
               -PPAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
               -PPAYPAL_QUARTERLY_URL="${{ vars.PAYPAL_QUARTERLY_URL }}" \
               -PPAYPAL_LIFETIME_URL="${{ vars.PAYPAL_LIFETIME_URL }}" \
+              -PPAYPAL_WORKER_URL="https://icy-bread-c703.nexaurenstore.workers.dev" \
               -PUPDATE_MANIFEST_URL="${{ vars.UPDATE_MANIFEST_URL }}"
           fi
 
