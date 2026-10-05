@@ -113,12 +113,41 @@ class MusicRepository(private val context: Context) {
     fun recordPlay(id: Long) {
         val counts = playCounts().toMutableMap()
         counts[id] = (counts[id] ?: 0) + 1
-        prefs.edit().putString(
-            "plays",
-            counts.entries.joinToString(";") {
-                it.key.toString() + ":" + it.value.toString()
-            }
-        ).apply()
+
+        val recent = lastPlayedTimes().toMutableMap()
+        recent[id] = System.currentTimeMillis()
+
+        prefs.edit()
+            .putString(
+                "plays",
+                counts.entries.joinToString(";") {
+                    it.key.toString() + ":" + it.value.toString()
+                }
+            )
+            .putString(
+                "last_played",
+                recent.entries.joinToString(";") {
+                    it.key.toString() + ":" + it.value.toString()
+                }
+            )
+            .apply()
+    }
+
+    fun lastPlayedTimes(): Map<Long, Long> {
+        val raw = prefs.getString("last_played", "").orEmpty()
+        if (raw.isBlank()) return emptyMap()
+
+        return raw.split(";").mapNotNull { entry ->
+            val parts = entry.split(":")
+            if (parts.size != 2) return@mapNotNull null
+            val id = parts[0].toLongOrNull() ?: return@mapNotNull null
+            val timestamp = parts[1].toLongOrNull() ?: return@mapNotNull null
+            id to timestamp
+        }.toMap()
+    }
+
+    fun clearPlayHistory() {
+        prefs.edit().remove("last_played").apply()
     }
 
     suspend fun loadArtwork(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {

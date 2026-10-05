@@ -218,6 +218,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         controller?.playbackParameters = PlaybackParameters(_speed.value, _pitch.value)
     }
 
+    fun playNext(song: Song) {
+        val c = controller ?: return
+        val item = song.toMediaItem()
+        if (c.mediaItemCount == 0) {
+            play(song)
+            return
+        }
+        val currentIndex = c.currentMediaItemIndex.takeIf { it >= 0 } ?: -1
+        val insertIndex = (currentIndex + 1).coerceIn(0, c.mediaItemCount)
+        c.addMediaItem(insertIndex, item)
+        AppAnalytics.log("play_next", "song_id" to song.id.toString())
+    }
+
+    fun addToQueue(song: Song) {
+        val c = controller ?: return
+        val item = song.toMediaItem()
+        if (c.mediaItemCount == 0) {
+            c.setMediaItem(item)
+            c.prepare()
+        } else {
+            c.addMediaItem(c.mediaItemCount, item)
+        }
+        AppAnalytics.log("queue_add", "song_id" to song.id.toString())
+    }
+
     fun favorite(song: Song) {
         repository.toggleFavorite(song.id)
         _libraryVersion.value += 1
@@ -234,6 +259,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         return _songs.value
             .sortedByDescending { counts[it.id] ?: 0 }
             .filter { (counts[it.id] ?: 0) > 0 }
+    }
+
+    fun recentlyPlayed(): List<Song> {
+        val recent = repository.lastPlayedTimes()
+        return _songs.value
+            .filter { (recent[it.id] ?: 0L) > 0L }
+            .sortedByDescending { recent[it.id] ?: 0L }
+    }
+
+    fun clearPlayHistory() {
+        repository.clearPlayHistory()
+        _libraryVersion.value += 1
+        AppAnalytics.log("play_history_clear")
     }
 
     fun playCount(song: Song): Int = repository.playCounts()[song.id] ?: 0
