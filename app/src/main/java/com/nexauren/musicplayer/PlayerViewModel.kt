@@ -196,8 +196,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
 
     private fun syncCurrent(mediaItem: MediaItem?) {
-        val id = mediaItem?.mediaId?.toLongOrNull() ?: return
-        _currentSong.value = _songs.value.firstOrNull { it.id == id }
+        val id = mediaItem?.mediaId?.toLongOrNull()
+        _currentSong.value = id?.let { songId ->
+            _songs.value.firstOrNull { it.id == songId }
+        }
     }
 
     private fun syncPosition() {
