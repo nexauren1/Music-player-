@@ -695,6 +695,25 @@ private fun MusicPlayerRoot(
                             accountRepo.signOut()
                             accountRefresh++
                         },
+                        onRename = { newName ->
+                            activity?.lifecycleScope?.launch {
+                                accountRepo.updateDisplayName(newName).onSuccess { accountRefresh++ }
+                                    .onFailure {
+                                        Toast.makeText(context, it.message ?: I18n.t("Could not update account name."), Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        },
+                        onDeleteAccount = {
+                            activity?.lifecycleScope?.launch {
+                                accountRepo.deleteAccount().onSuccess {
+                                    premiumRepo.clearVerifiedPremium()
+                                    accountRefresh++
+                                    Toast.makeText(context, I18n.t("Account deleted."), Toast.LENGTH_LONG).show()
+                                }.onFailure {
+                                    Toast.makeText(context, it.message ?: I18n.t("Account deletion requires a recent sign-in."), Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
                         onPremium = { screen = AppScreen.PREMIUM },
                         refreshToken = accountRefresh
                     )
