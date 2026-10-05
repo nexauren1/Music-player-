@@ -12,8 +12,8 @@ android {
         applicationId = "com.musicplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.6.3"
+        versionCode = 22
+        versionName = "1.6.4"
 
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
