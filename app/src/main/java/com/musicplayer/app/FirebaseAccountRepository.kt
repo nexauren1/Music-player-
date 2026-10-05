@@ -158,10 +158,12 @@ class PremiumRepository(private val context: Context) {
 
     fun isPremium(): Boolean {
         val state = loadLocal()
+        if (!state.cloudSynced || !state.verified) return false
+
         return when (state.plan) {
-            PremiumPlan.LIFETIME -> state.verified
-            PremiumPlan.QUARTERLY -> state.verified &&
-                (state.expiresAtMillis == null || state.expiresAtMillis > System.currentTimeMillis())
+            PremiumPlan.LIFETIME -> true
+            PremiumPlan.QUARTERLY ->
+                state.expiresAtMillis == null || state.expiresAtMillis > System.currentTimeMillis()
             PremiumPlan.NONE -> false
         }
     }
