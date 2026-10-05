@@ -94,7 +94,7 @@ object AppearanceStore {
         context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit()
             .putString("theme", theme.name)
             .putString("background", background.name)
-.putBoolean("dark", darkMode)
+            .putBoolean("dark", darkMode)
             .putString("language", language.name)
             .putBoolean("configured", true)
             .apply()
