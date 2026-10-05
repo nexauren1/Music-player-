@@ -119,6 +119,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         c.setMediaItems(items, index, 0L)
         c.prepare()
         c.play()
+        audioEffects.attach(c.audioSessionId)
     }
 
     fun togglePlayPause() {
