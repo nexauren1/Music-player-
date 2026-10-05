@@ -1114,7 +1114,7 @@ private fun EqualizerScreen(
                                         message = if (premiumRepo.isPremium()) {
                                             "Premium preset applied."
                                         } else {
-                                            "Premium preview used. §{premiumRepo.remainingPreviewUses()} preview(s) left."
+                                            "Premium preview used. ${premiumRepo.remainingPreviewUses()} preview(s) left."
                                         }
                                     } else {
                                         message = "Premium preview limit reached. Choose a plan in Premium."
@@ -1136,7 +1136,7 @@ private fun EqualizerScreen(
                     Text("Bands", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     levels.forEachIndexed { index, value ->
-                        Text("Band §{index + 1}", style = MaterialTheme.typography.labelLarge)
+                        Text("Band ${index + 1}", style = MaterialTheme.typography.labelLarge)
                         Slider(
                             value = value,
                             onValueChange = {
