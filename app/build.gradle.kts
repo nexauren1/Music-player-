@@ -4,28 +4,31 @@ plugins {
 }
 
 android {
-    namespace = "com.nexauren.musicplayer"
+    namespace = "com.musicplayer.app"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.nexauren.musicplayer"
+        applicationId = "com.musicplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
 
         val paypalClientId = providers.gradleProperty("PAYPAL_CLIENT_ID").orElse("").get()
-        val paypalCheckoutUrl = providers.gradleProperty("PAYPAL_CHECKOUT_URL")
+        val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
             .trim()
-            .ifBlank { "https://example.com/paypal-checkout" }
+        val paypalLifetimeUrl = providers.gradleProperty("PAYPAL_LIFETIME_URL")
+            .getOrElse("")
+            .trim()
         val updateManifestUrl = providers.gradleProperty("UPDATE_MANIFEST_URL")
             .getOrElse("")
             .trim()
             .ifBlank { "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json" }
 
         buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
-        buildConfigField("String", "PAYPAL_CHECKOUT_URL", "\"$paypalCheckoutUrl\"")
+        buildConfigField("String", "PAYPAL_QUARTERLY_URL", "\"$paypalQuarterlyUrl\"")
+        buildConfigField("String", "PAYPAL_LIFETIME_URL", "\"$paypalLifetimeUrl\"")
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"")
     }
 
@@ -83,4 +86,15 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("com.google.android.gms:play-services-ads:25.5.0")
+
+    // Firebase-ready account, premium entitlement and Google Sign-In stack.
+    // The google-services plugin + google-services.json will be added after
+    // the Firebase project is registered.
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 }
