@@ -3,13 +3,15 @@ package com.musicplayer.app
 import android.content.Context
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.EnvironmentalReverb
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 
 data class DjEffectState(
     val bassBoost: Float = 0f,
     val surround: Float = 0f,
-    val loudness: Float = 0f
+    val loudness: Float = 0f,
+    val reverb: Float = 0f
 )
 
 class EqualizerController(context: Context) {
@@ -19,11 +21,14 @@ class EqualizerController(context: Context) {
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var environmentalReverb: EnvironmentalReverb? = null
+    private var attachedSessionId: Int = 0
 
     fun attach(audioSessionId: Int) {
-        if (audioSessionId <= 0) return
+        if (audioSessionId <= 0 || audioSessionId == attachedSessionId && equalizer != null) return
         runCatching {
             release()
+            attachedSessionId = audioSessionId
             equalizer = Equalizer(0, audioSessionId).apply { enabled = true }
 
             bassBoost = runCatching {
@@ -36,6 +41,10 @@ class EqualizerController(context: Context) {
 
             loudnessEnhancer = runCatching {
                 LoudnessEnhancer(audioSessionId).apply { enabled = true }
+            }.getOrNull()
+
+            environmentalReverb = runCatching {
+                EnvironmentalReverb(0, audioSessionId).apply { enabled = true }
             }.getOrNull()
 
             restore()
@@ -104,7 +113,8 @@ class EqualizerController(context: Context) {
         DjEffectState(
             bassBoost = prefs.getInt("bass", 0) / 1000f,
             surround = prefs.getInt("surround", 0) / 1000f,
-            loudness = prefs.getInt("loudness", 0) / 10000f
+            loudness = prefs.getInt("loudness", 0) / 10000f,
+            reverb = prefs.getInt("reverb", 0) / 1000f
         )
 
     fun setBassBoost(normalized: Float) {
@@ -125,15 +135,27 @@ class EqualizerController(context: Context) {
         prefs.edit().putInt("loudness", value).apply()
     }
 
+    fun setReverb(normalized: Float) {
+        val value = (normalized.coerceIn(0f, 1f) * 1000f).toInt()
+        val roomLevel = (-9000 + (9000 * normalized.coerceIn(0f, 1f))).toInt().toShort()
+        val reverbLevel = (-9000 + (9000 * normalized.coerceIn(0f, 1f))).toInt().toShort()
+        runCatching { environmentalReverb?.setRoomLevel(roomLevel) }
+        runCatching { environmentalReverb?.setReverbLevel(reverbLevel) }
+        prefs.edit().putInt("reverb", value).apply()
+    }
+
     fun release() {
         runCatching { equalizer?.release() }
         runCatching { bassBoost?.release() }
         runCatching { virtualizer?.release() }
         runCatching { loudnessEnhancer?.release() }
+        runCatching { environmentalReverb?.release() }
         equalizer = null
         bassBoost = null
         virtualizer = null
         loudnessEnhancer = null
+        environmentalReverb = null
+        attachedSessionId = 0
     }
 
     private fun restore() {
@@ -154,5 +176,6 @@ class EqualizerController(context: Context) {
         setBassBoost(effectState().bassBoost)
         setSurround(effectState().surround)
         setLoudness(effectState().loudness)
+        setReverb(effectState().reverb)
     }
 }
