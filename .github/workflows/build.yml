@@ -27,12 +27,22 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Validate PayPal Sandbox credentials
-        if: ${{ secrets.PAYPAL_CLIENT_ID != '' && secrets.PAYPAL_CLIENT_SECRET != '' }}
         env:
           PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
         run: |
           set -euo pipefail
+
+          if [ -z "${PAYPAL_CLIENT_ID:-}" ] && [ -z "${PAYPAL_CLIENT_SECRET:-}" ]; then
+            echo "PayPal Sandbox credentials are not configured yet; skipping validation."
+            exit 0
+          fi
+
+          if [ -z "${PAYPAL_CLIENT_ID:-}" ] || [ -z "${PAYPAL_CLIENT_SECRET:-}" ]; then
+            echo "Both PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are required."
+            exit 1
+          fi
+
           response="$(curl -fsS -X POST \
             "https://api-m.sandbox.paypal.com/v1/oauth2/token" \
             -u "$PAYPAL_CLIENT_ID:$PAYPAL_CLIENT_SECRET" \
