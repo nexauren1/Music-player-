@@ -148,16 +148,24 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         ApkInstaller.resumeIfPending(this)
         lifecycleScope.launch {
-            val account = FirebaseAccountRepository(this@MainActivity).currentAccount()
+            val account = FirebaseAccountRepository(this@MainActivity).currentAccount() ?: return@launch
+
+            PayPalCheckout.verifyPending(this@MainActivity, account.uid, premiumRepository)
+                ?.onSuccess { verified ->
+                    if (verified) {
+                        premiumEvent++
+                        premiumMessage = "Payment verified. Premium is now active."
+                    }
+                }
+
             val local = premiumRepository.loadLocal()
-            if (account != null && local.verified && local.plan != PremiumPlan.NONE) {
-                val result = PayPalVerifier.verify(
+            if (local.verified && local.plan != PremiumPlan.NONE) {
+                PayPalVerifier.verify(
                     uid = account.uid,
                     plan = local.plan,
                     orderId = local.orderId,
                     subscriptionId = local.subscriptionId
-                )
-                result.onSuccess {
+                ).onSuccess {
                     if (it.verified) {
                         premiumRepository.setVerifiedFromWorker(
                             it.plan,
@@ -165,6 +173,8 @@ class MainActivity : ComponentActivity() {
                             it.orderId,
                             it.subscriptionId
                         )
+                        premiumEvent++
+                        premiumMessage = "Premium status verified."
                     } else {
                         premiumRepository.clearVerifiedPremium()
                         premiumEvent++
@@ -450,7 +460,10 @@ private fun MusicPlayerRoot(
                             }
                         },
                         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                            containerColor = Color.Transparent
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                 },
@@ -541,45 +554,31 @@ private fun MusicPlayerRoot(
                             val account = accountRepo.currentAccount()
                             if (account == null) {
                                 accountDialog = true
+                            } else if (plan == PremiumPlan.NONE) {
+                                Toast.makeText(context, "Choose a Premium plan.", Toast.LENGTH_SHORT).show()
                             } else {
-                                val workerBase = BuildConfig.PAYPAL_WORKER_URL.trim().trimEnd('/')
-                                val fallbackUrl = when (plan) {
-                                    PremiumPlan.QUARTERLY -> BuildConfig.PAYPAL_QUARTERLY_URL
-                                    PremiumPlan.LIFETIME -> BuildConfig.PAYPAL_LIFETIME_URL
-                                    PremiumPlan.NONE -> ""
-                                }
-                                val checkoutUrl = when (plan) {
-                                    PremiumPlan.QUARTERLY ->
-                                        if (workerBase.isNotBlank()) {
-                                            workerBase + "/paypal/checkout/quarterly?uid=" +
-                                                android.net.Uri.encode(account.uid)
-                                        } else fallbackUrl
-                                    PremiumPlan.LIFETIME ->
-                                        if (workerBase.isNotBlank()) {
-                                            workerBase + "/paypal/checkout/lifetime?uid=" +
-                                                android.net.Uri.encode(account.uid)
-                                        } else fallbackUrl
-                                    PremiumPlan.NONE -> ""
-                                }
-
-                                if (checkoutUrl.isBlank() || checkoutUrl.startsWith("https://example.com")) {
-                                    Toast.makeText(
-                                        context,
-                                        "PayPal checkout is not configured yet.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                } else {
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(checkoutUrl))
-                                        )
-                                    }.onFailure {
-                                        Toast.makeText(
-                                            context,
-                                            "Unable to open PayPal checkout.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    }
+                                activity?.lifecycleScope?.launch {
+                                    PayPalCheckout.createCheckout(context, account.uid, plan)
+                                        .onSuccess { approvalUrl ->
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(approvalUrl))
+                                                )
+                                            }.onFailure {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Unable to open PayPal checkout.",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                        .onFailure {
+                                            Toast.makeText(
+                                                context,
+                                                "PayPal checkout failed: " + (it.message ?: "Unknown error"),
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                 }
                             }
                         },
