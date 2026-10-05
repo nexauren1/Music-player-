@@ -740,12 +740,8 @@ private fun MusicPlayerRoot(
                                 }
                             }
                         },
-                        quarterlyCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank() ||
-                            (BuildConfig.PAYPAL_QUARTERLY_URL.isNotBlank() &&
-                                !BuildConfig.PAYPAL_QUARTERLY_URL.startsWith("https://example.com")),
-                        lifetimeCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank() ||
-                            (BuildConfig.PAYPAL_LIFETIME_URL.isNotBlank() &&
-                                !BuildConfig.PAYPAL_LIFETIME_URL.startsWith("https://example.com")),
+                        quarterlyCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank(),
+                        lifetimeCheckoutReady = BuildConfig.PAYPAL_WORKER_URL.isNotBlank(),
                         refreshToken = premiumRefresh
                     )
                     AppScreen.SETTINGS -> SettingsScreen(
