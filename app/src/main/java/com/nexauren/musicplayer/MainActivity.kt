@@ -736,7 +736,7 @@ private fun HomeScreen(
         item { SearchBar(query, onQueryChange) }
         item { SectionTitle("Now playing", "Live status • view only") }
         item { NowPlayingInfoCard(current, playing) }
-        item { SectionTitle("Recently added", "Latest files • view only") }
+        item { SectionTitle("Recently added", "Fresh from your device • view only") }
 
         item {
             if (recent.isEmpty()) {
@@ -745,6 +745,21 @@ private fun HomeScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(recent, key = { it.id }) { song ->
                         RecentAddedCard(song)
+                    }
+                }
+            }
+        }
+
+        item { SectionTitle("Most played", "Your listening history") }
+
+        item {
+            val mostPlayed = vm.mostPlayed().take(5)
+            if (mostPlayed.isEmpty()) {
+                EmptyCard("Your most played songs will appear here.")
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(mostPlayed, key = { it.id }) { song ->
+                        MostPlayedCard(song, vm.playCount(song))
                     }
                 }
             }
@@ -998,6 +1013,40 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
 }
 
 @Composable
+private fun MostPlayedCard(song: Song, plays: Int) {
+    Card(
+        Modifier.width(176.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Box {
+                Artwork(song, Modifier.fillMaxWidth().height(154.dp))
+                Surface(
+                    Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Text(
+                        "#$plays plays",
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(Modifier.height(9.dp))
+            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
+            Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun MiniPlayer(
     song: Song,
     playing: Boolean,
@@ -1017,7 +1066,7 @@ private fun MiniPlayer(
     )
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 5.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
@@ -1052,7 +1101,7 @@ private fun MiniPlayer(
                     Modifier
                         .fillMaxWidth()
                         .clickable(onClick = onOpen)
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box {
