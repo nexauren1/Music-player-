@@ -673,18 +673,24 @@ private fun MusicPlayerRoot(
                 info = info,
                 progress = updateProgress,
                 updating = updating,
+                error = updateError,
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
                     updating = true
+                    updateError = ""
                     activity?.let { host ->
                         host.lifecycleScope.launch {
                             runCatching {
                                 UpdateManager.downloadAndInstall(context, info) {
                                     updateProgress = it
                                 }
+                            }.onFailure {
+                                updateError = it.message ?: "The update could not be installed."
                             }
                             updating = false
-                            updateInfo = null
+                            if (updateError.isBlank()) {
+                                updateInfo = null
+                            }
                         }
                     }
                 }
@@ -2106,6 +2112,7 @@ private fun UpdateDialog(
     info: UpdateInfo,
     progress: Int,
     updating: Boolean,
+    error: String,
     onDismiss: () -> Unit,
     onInstall: () -> Unit
 ) {
@@ -2121,6 +2128,10 @@ private fun UpdateDialog(
                     Spacer(Modifier.height(14.dp))
                     LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
                     Text("$progress%", modifier = Modifier.padding(top = 6.dp))
+                }
+                if (error.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(error, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             }
         },
