@@ -211,6 +211,7 @@ object PayPalCheckout {
                 premiumRepository.setVerifiedFromWorker(
                     result.plan, result.expiresAtMillis, result.orderId, result.subscriptionId
                 )
+                premiumRepository.syncVerifiedToFirebase()
                 clearPending(context)
                 true
             } else false
