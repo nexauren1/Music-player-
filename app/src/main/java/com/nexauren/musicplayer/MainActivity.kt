@@ -846,12 +846,18 @@ private fun SectionTitle(title: String, subtitle: String) {
 @Composable
 private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
     val transition = rememberInfiniteTransition(label = "home_now_playing")
-    val pulse by transition.animateFloat(0.88f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "pulse")
+    val pulse by transition.animateFloat(
+        0.96f,
+        1.02f,
+        infiniteRepeatable(tween(1200), RepeatMode.Reverse),
+        label = "pulse"
+    )
 
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        shape = RoundedCornerShape(34.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 7.dp)
     ) {
         Box(
             Modifier.fillMaxWidth()
@@ -863,57 +869,97 @@ private fun NowPlayingInfoCard(song: Song?, playing: Boolean) {
                             MaterialTheme.colorScheme.tertiaryContainer
                         )
                     ),
-                    RoundedCornerShape(30.dp)
+                    RoundedCornerShape(34.dp)
                 )
                 .padding(18.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "NOW PLAYING",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            "Your sound. Your space.",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    AnimatedBars(playing)
+                }
+
+                Spacer(Modifier.height(14.dp))
+
                 if (song == null) {
                     Surface(
-                        Modifier.size(72.dp).graphicsLayer {
-                            alpha = pulse
-                            scaleX = pulse
-                            scaleY = pulse
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+                        Modifier.fillMaxWidth().height(270.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
                     ) {
-                        Icon(Icons.Filled.PlayArrow, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(20.dp))
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text("Nothing playing", fontWeight = FontWeight.ExtraBold)
-                        Text("Start a track from All songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(
+                            Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Filled.LibraryMusic, null, modifier = Modifier.size(54.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Nothing playing", fontWeight = FontWeight.ExtraBold)
+                            Text("Start a song from All songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 } else {
-                    Artwork(
-                        song,
-                        Modifier.size(82.dp).graphicsLayer {
-                            scaleX = if (playing) pulse else 1f
-                            scaleY = if (playing) pulse else 1f
-                        }
+                    Box(
+                        Modifier.fillMaxWidth().height(286.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            Modifier.size(250.dp).alpha(if (playing) 0.28f else 0.16f),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {}
+                        Artwork(
+                            song,
+                            Modifier.fillMaxWidth().height(270.dp).graphicsLayer {
+                                scaleX = if (playing) pulse else 1f
+                                scaleY = if (playing) pulse else 1f
+                            }
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Text(
+                        song.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(song.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.ExtraBold)
-                        Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AnimatedBars(playing)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (playing) "Live playback" else "Paused",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        AssistChip(
-                            onClick = {},
-                            enabled = false,
-                            label = { Text(if (playing) "Playing now" else "Paused") },
-                            leadingIcon = { Icon(Icons.Filled.CheckCircle, null) }
+                    Text(
+                        song.artist,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(Modifier.height(9.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            Modifier.width(7.dp).height(7.dp),
+                            shape = CircleShape,
+                            color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        ) {}
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            if (playing) "Live playback" else "Paused",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
