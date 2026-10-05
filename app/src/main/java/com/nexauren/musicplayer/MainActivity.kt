@@ -63,6 +63,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -827,6 +829,8 @@ private fun NowPlayingSheet(
     onDismiss: () -> Unit,
     onEqualizer: () -> Unit
 ) {
+    val volume by vm.volume.collectAsState()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
@@ -906,6 +910,25 @@ private fun NowPlayingSheet(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatDuration(position))
                 Text(formatDuration(duration))
+            }
+
+            Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { vm.setVolume(0f) }) {
+                    Icon(Icons.Filled.VolumeDown, "Mute")
+                }
+                Slider(
+                    value = volume,
+                    onValueChange = vm::setVolume,
+                    modifier = Modifier.weight(1f),
+                    valueRange = 0f..1f
+                )
+                IconButton(onClick = { vm.setVolume(1f) }) {
+                    Icon(Icons.Filled.VolumeUp, "Max volume")
+                }
             }
 
             Spacer(Modifier.height(8.dp))
