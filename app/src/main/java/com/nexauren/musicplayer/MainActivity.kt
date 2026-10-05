@@ -176,15 +176,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handlePayPalIntent(intent: Intent?) {
-        if (intent?.scheme != "musicplayer" || intent.host != "paypal") return
+        val data = intent?.data ?: return
+        if (data.scheme != "musicplayer" || data.host != "paypal") return
 
-        if (intent.path == "/cancel") {
+        if (data.path == "/cancel") {
             premiumMessage = "Payment cancelled. Premium was not activated."
             premiumEvent++
             return
         }
 
-        if (intent.path != "/success") return
+        if (data.path != "/success") return
 
         val account = FirebaseAccountRepository(this).currentAccount()
         if (account == null) {
@@ -193,15 +194,13 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val plan = when (intent.getStringExtra("plan") ?: intent.data?.getQueryParameter("plan")) {
+        val plan = when (data.getQueryParameter("plan")) {
             "quarterly" -> PremiumPlan.QUARTERLY
             "lifetime" -> PremiumPlan.LIFETIME
             else -> PremiumPlan.NONE
         }
-        val orderId = intent.getStringExtra("orderId")
-            ?: intent.data?.getQueryParameter("orderId")
-        val subscriptionId = intent.getStringExtra("subscriptionId")
-            ?: intent.data?.getQueryParameter("subscriptionId")
+        val orderId = data.getQueryParameter("orderId")
+        val subscriptionId = data.getQueryParameter("subscriptionId")
 
         lifecycleScope.launch {
             PayPalVerifier.verify(account.uid, plan, orderId, subscriptionId)
@@ -1140,7 +1139,8 @@ private fun NowPlayingSheet(
     onEqualizer: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
-    val premiumActive = remember { PremiumRepository(LocalContext.current) }.isPremium()
+    val context = LocalContext.current
+    val premiumActive = remember(context) { PremiumRepository(context) }.isPremium()
     val transition = rememberInfiniteTransition(label = "now_playing_effects")
     val pulse by transition.animateFloat(
         0.94f,
@@ -1279,7 +1279,7 @@ private fun NowPlayingSheet(
                                         vm.startSleepTimer(30)
                                     } else {
                                         Toast.makeText(
-                                            LocalContext.current,
+                                            context,
                                             "30 minute sleep timer is Premium.",
                                             Toast.LENGTH_SHORT
                                         ).show()
@@ -1294,7 +1294,7 @@ private fun NowPlayingSheet(
                                         vm.startSleepTimer(60)
                                     } else {
                                         Toast.makeText(
-                                            LocalContext.current,
+                                            context,
                                             "60 minute sleep timer is Premium.",
                                             Toast.LENGTH_SHORT
                                         ).show()
