@@ -3744,6 +3744,18 @@ private fun UpdateDialog(
     )
 }
 
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0L) return "Unknown"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var index = 0
+    while (value >= 1024.0 && index < units.lastIndex) {
+        value /= 1024.0
+        index++
+    }
+    return if (index == 0) "${value.toInt()} ${units[index]}" else "%.1f %s".format(value, units[index])
+}
+
 private fun formatDuration(milliseconds: Long): String {
     val totalSeconds = milliseconds.coerceAtLeast(0L) / 1000L
     val minutes = totalSeconds / 60L
