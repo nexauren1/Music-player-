@@ -2088,7 +2088,7 @@ private fun PlanCard(
 ) {
     val transition = rememberInfiniteTransition(label = "plan_card")
     val scale by transition.animateFloat(
-        0.98f,
+        0.985f,
         1f,
         infiniteRepeatable(tween(1400), RepeatMode.Reverse),
         label = "planScale"
@@ -2106,40 +2106,80 @@ private fun PlanCard(
             else
                 MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Row(Modifier.padding(19.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Surface(
-                Modifier.size(58.dp),
-                shape = RoundedCornerShape(19.dp),
+                Modifier.size(54.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
                     Icons.Filled.Star,
                     null,
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.padding(15.dp)
+                    modifier = Modifier.padding(14.dp)
                 )
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                     if (highlight) {
-                        Spacer(Modifier.width(8.dp))
-                        AssistChip(onClick = {}, enabled = false, label = { Text("POPULAR") })
+                        Spacer(Modifier.width(7.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                "POPULAR",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
                     }
                 }
-                Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
-                    if (checkoutReady) "Secure PayPal checkout" else "Checkout unavailable",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (checkoutReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    detail,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    if (checkoutReady) "Secure PayPal checkout • Tap to continue"
+                    else "Checkout unavailable",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (checkoutReady)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Text(price, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    price,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    if (checkoutReady) "PayPal" else "Offline",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
