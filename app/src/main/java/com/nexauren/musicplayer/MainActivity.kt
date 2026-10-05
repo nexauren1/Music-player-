@@ -749,6 +749,7 @@ private fun MusicPlayerRoot(
                                 )
                             }
                         },
+                        checkingUpdate = checkingUpdate,
                         onCheckUpdates = {
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
@@ -2632,6 +2633,7 @@ private fun SettingsScreen(
     onAccount: () -> Unit,
     notificationsAllowed: Boolean,
     onRequestNotifications: () -> Unit,
+    checkingUpdate: Boolean,
     onCheckUpdates: () -> Unit
 ) {
     var autoScan by rememberSaveable { mutableStateOf(true) }
@@ -2731,10 +2733,20 @@ private fun SettingsScreen(
         }
         item {
             SettingsSection("Updates", "Keep Music Player current.") {
-                Button(onClick = onCheckUpdates, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Update, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Check for updates")
+                Button(
+                    onClick = onCheckUpdates,
+                    enabled = !checkingUpdate,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (checkingUpdate) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Checking for updates…")
+                    } else {
+                        Icon(Icons.Filled.Update, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Check for updates")
+                    }
                 }
             }
         }
