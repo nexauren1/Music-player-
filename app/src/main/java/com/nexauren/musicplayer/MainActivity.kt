@@ -1394,94 +1394,62 @@ private fun MiniPlayer(
     onOpen: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onEqualizer: () -> Unit,
-    initialFavorite: Boolean,
     onFavorite: () -> Unit
 ) {
     val progress = if (duration > 0) {
         (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
     } else 0f
-    var favorite by rememberSaveable(song.id) { mutableStateOf(initialFavorite) }
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 6.dp,
-        shadowElevation = 5.dp
+        tonalElevation = 4.dp,
+        shadowElevation = 2.dp
     ) {
         Column {
             Row(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
-                    .padding(start = 7.dp, top = 7.dp, end = 3.dp, bottom = 5.dp),
+                    .height(62.dp)
+                    .padding(horizontal = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Artwork(
                     song,
                     Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(15.dp))
+                        .size(50.dp)
+                        .clip(RoundedCornerShape(13.dp))
                 )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
                         song.title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.ExtraBold,
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         song.artist,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AnimatedBars(playing)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (playing) "Playing" else "Paused",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                 }
-                IconButton(onClick = {
-                    favorite = !favorite
-                    onFavorite()
-                }) {
+                IconButton(onClick = onPlayPause) {
                     Icon(
-                        if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (favorite) I18n.t("Remove favorite") else I18n.t("Add favorite"),
-                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (playing) I18n.t("Pause") else I18n.t("Play"),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                }
-                IconButton(onClick = onEqualizer) {
-                    Icon(Icons.Filled.Tune, contentDescription = I18n.t("Equalizer"), tint = MaterialTheme.colorScheme.primary)
-                }
-                Surface(
-                    Modifier.size(39.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    IconButton(onClick = onPlayPause) {
-                        Icon(
-                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (playing) I18n.t("Pause") else I18n.t("Play"),
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
                 }
                 IconButton(onClick = onNext) {
-                    Icon(Icons.Filled.SkipNext, "Next track", modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.SkipNext, I18n.t("Next track"))
                 }
             }
             LinearProgressIndicator(
@@ -1495,42 +1463,100 @@ private fun MiniPlayer(
 }
 
 @Composable
-private @OptIn(ExperimentalMaterial3Api::class)
-fun NowPlayingSheet(
+private fun NowPlayingSheet(
     song: Song,
     vm: PlayerViewModel,
+    premium: PremiumSnapshot,
     playing: Boolean,
     position: Long,
     duration: Long,
     onDismiss: () -> Unit,
+    onOpenEffects: () -> Unit,
     onEqualizer: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
-    val context = LocalContext.current
-    val transition = rememberInfiniteTransition(label = "now_playing_effects")
-    val pulse by transition.animateFloat(
-        0.94f,
-        1.02f,
-        infiniteRepeatable(tween(950), RepeatMode.Reverse),
-        label = "artPulse"
+    var menuOpen by remember { mutableStateOf(false) }
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
     )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        sheetState = sheetState,
+        dragHandle = null
     ) {
         LazyColumn(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 28.dp),
+            Modifier.fillMaxWidth().fillMaxHeight(),
+            contentPadding = PaddingValues(bottom = 30.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Card(
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(62.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.ArrowBack, I18n.t("Close"))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(I18n.t("Now Playing"), fontWeight = FontWeight.Black)
+                        Text(
+                            if (playing) I18n.t("Playing") else I18n.t("Paused"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Filled.MoreVert, I18n.t("More options"))
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(I18n.t("Effects")) },
+                                onClick = {
+                                    menuOpen = false
+                                    onOpenEffects()
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Tune, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(I18n.t("Equalizer")) },
+                                onClick = {
+                                    menuOpen = false
+                                    onEqualizer()
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Tune, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(I18n.t("Reset effects")) },
+                                onClick = {
+                                    menuOpen = false
+                                    vm.resetEffects()
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Refresh, null) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp)
                 ) {
                     Box(
-                        Modifier.fillMaxWidth()
+                        Modifier
+                            .fillMaxWidth()
+                            .height(310.dp)
+                            .clip(RoundedCornerShape(30.dp))
                             .background(
                                 Brush.linearGradient(
                                     listOf(
@@ -1538,130 +1564,358 @@ fun NowPlayingSheet(
                                         MaterialTheme.colorScheme.secondaryContainer,
                                         MaterialTheme.colorScheme.tertiaryContainer
                                     )
-                                ),
-                                RoundedCornerShape(32.dp)
-                            )
-                            .padding(18.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "NOW PLAYING",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(
-                                        "Your sound. Your space.",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-                                IconButton(onClick = onEqualizer) {
-                                    Icon(Icons.Filled.Tune, "Equalizer")
-                                }
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Box(
-                                Modifier.fillMaxWidth().height(270.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    Modifier.size(250.dp).alpha(if (playing) 0.26f else 0.16f),
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary
-                                ) {}
-                                Artwork(
-                                    song,
-                                    Modifier.fillMaxWidth().height(292.dp).graphicsLayer {
-                                        scaleX = if (playing) pulse else 1f
-                                        scaleY = if (playing) pulse else 1f
-                                    }
                                 )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        song.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                AnimatedBars(playing)
-                            }
-                            Slider(
-                                value = if (duration > 0) position.toFloat().coerceIn(0f, duration.toFloat()) else 0f,
-                                onValueChange = { vm.seekTo(it.toLong()) },
-                                valueRange = 0f..duration.coerceAtLeast(1L).toFloat()
-                            )
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(formatDuration(position), style = MaterialTheme.typography.labelSmall)
-                                Text(formatDuration(duration), style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Artwork(song, Modifier.fillMaxSize())
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        song.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        song.artist,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            item {
+                Column(Modifier.padding(horizontal = 18.dp)) {
+                    Slider(
+                        value = if (duration > 0) {
+                            position.toFloat().coerceIn(0f, duration.toFloat())
+                        } else 0f,
+                        onValueChange = { vm.seekTo(it.toLong()) },
+                        valueRange = 0f..duration.coerceAtLeast(1L).toFloat()
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(formatDuration(position), style = MaterialTheme.typography.labelSmall)
+                        Text(formatDuration(duration), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
+
             item {
-                Card(shape = RoundedCornerShape(24.dp)) {
+                Card(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                    shape = RoundedCornerShape(26.dp)
+                ) {
                     Column(Modifier.padding(14.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { vm.setVolume(0f) }) { Icon(Icons.Filled.VolumeDown, "Mute") }
-                            Slider(value = volume, onValueChange = vm::setVolume, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { vm.setVolume(1f) }) { Icon(Icons.Filled.VolumeUp, "Max volume") }
+                            IconButton(onClick = { vm.setVolume(0f) }) {
+                                Icon(Icons.Filled.VolumeDown, I18n.t("Mute"))
+                            }
+                            Slider(
+                                value = volume,
+                                onValueChange = vm::setVolume,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { vm.setVolume(1f) }) {
+                                Icon(Icons.Filled.VolumeUp, I18n.t("Max volume"))
+                            }
                         }
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, "Shuffle") }
-                            IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, null, Modifier.size(32.dp)) }
-                            Surface(Modifier.size(72.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, I18n.t("Shuffle")) }
+                            IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, I18n.t("Previous track"), Modifier.size(30.dp)) }
+                            Surface(
+                                Modifier.size(70.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
                                 IconButton(onClick = vm::togglePlayPause) {
                                     Icon(
                                         if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        null,
+                                        if (playing) I18n.t("Pause") else I18n.t("Play"),
                                         tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(38.dp)
+                                        modifier = Modifier.size(36.dp)
                                     )
                                 }
                             }
-                            IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, null, Modifier.size(32.dp)) }
-                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, "Repeat") }
+                            IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, I18n.t("Next track"), Modifier.size(30.dp)) }
+                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, I18n.t("Repeat")) }
                         }
-                        Spacer(Modifier.height(6.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(horizontal = 2.dp)
+                    }
+                }
+            }
+
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 18.dp)
+                ) {
+                    listOf(15, 30, 60).forEach { minutes ->
+                        item {
+                            AssistChip(
+                                onClick = { vm.startSleepTimer(minutes) },
+                                label = { Text(I18n.t("$minutes min")) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EffectsScreen(
+    vm: PlayerViewModel,
+    premium: PremiumSnapshot,
+    onDismiss: () -> Unit
+) {
+    val speed by vm.speed.collectAsState()
+    val pitch by vm.pitch.collectAsState()
+    var effects by remember { mutableStateOf(vm.effectState()) }
+
+    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY ->
+            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
+    fun reset() {
+        vm.resetEffects()
+        effects = vm.effectState()
+        AppAnalytics.log("effects_reset")
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Scaffold(
+                topBar = {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(I18n.t("Effects"), fontWeight = FontWeight.Black)
+                                Text(
+                                    if (premiumActive) I18n.t("Premium effects unlocked")
+                                    else I18n.t("Playback controls are free"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Filled.ArrowBack, I18n.t("Close"))
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = ::reset) {
+                                Icon(Icons.Filled.Refresh, I18n.t("Reset effects"))
+                            }
+                        }
+                    )
+                }
+            ) { padding ->
+                LazyColumn(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(26.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         ) {
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(15) },
-                                    label = { Text(I18n.t("15 min")) }
-                                )
-                            }
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(30) },
-                                    label = { Text(I18n.t("30 min")) }
-                                )
-                            }
-                            item {
-                                AssistChip(
-                                    onClick = { vm.startSleepTimer(60) },
-                                    label = { Text(I18n.t("60 min")) }
+                            Column(Modifier.padding(16.dp)) {
+                                Text(I18n.t("Playback"), fontWeight = FontWeight.Black)
+                                Text(
+                                    I18n.t("These settings are saved automatically and restored on the next launch."),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
                     }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Speed"),
+                            value = speed,
+                            range = .5f..2f,
+                            valueLabel = "%.2fx".format(speed),
+                            onChange = vm::setSpeed
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Pitch"),
+                            value = pitch,
+                            range = .5f..1.5f,
+                            valueLabel = "%.2fx".format(pitch),
+                            onChange = vm::setPitch
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Bass Boost"),
+                            value = effects.bassBoost,
+                            range = 0f..1f,
+                            enabled = premiumActive,
+                            valueLabel = "${(effects.bassBoost * 100).toInt()}%",
+                            onChange = {
+                                effects = effects.copy(bassBoost = it)
+                                vm.equalizerController().setBassBoost(it)
+                            }
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("3D Space"),
+                            value = effects.surround,
+                            range = 0f..1f,
+                            enabled = premiumActive,
+                            valueLabel = "${(effects.surround * 100).toInt()}%",
+                            onChange = {
+                                effects = effects.copy(surround = it)
+                                vm.equalizerController().setSurround(it)
+                            }
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Loudness"),
+                            value = effects.loudness,
+                            range = 0f..1f,
+                            enabled = premiumActive,
+                            valueLabel = "${(effects.loudness * 100).toInt()}%",
+                            onChange = {
+                                effects = effects.copy(loudness = it)
+                                vm.equalizerController().setLoudness(it)
+                            }
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Reverb"),
+                            value = effects.reverb,
+                            range = 0f..1f,
+                            enabled = premiumActive,
+                            valueLabel = "${(effects.reverb * 100).toInt()}%",
+                            onChange = {
+                                effects = effects.copy(reverb = it)
+                                vm.equalizerController().setReverb(it)
+                            }
+                        )
+                    }
+
+                    item {
+                        EffectSliderCard(
+                            title = I18n.t("Delay / Echo"),
+                            value = effects.delay,
+                            range = 0f..1f,
+                            enabled = premiumActive,
+                            valueLabel = "${(effects.delay * 500).toInt()} ms",
+                            onChange = {
+                                effects = effects.copy(delay = it)
+                                vm.equalizerController().setDelay(it)
+                            }
+                        )
+                    }
+
+                    item {
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            I18n.t("Auto saved"),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            I18n.t("Speed, pitch and audio effects are stored on this device."),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = ::reset,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Filled.Refresh, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(I18n.t("Reset all effects"))
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EffectSliderCard(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    valueLabel: String,
+    enabled: Boolean = true,
+    onChange: (Float) -> Unit
+) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text(valueLabel, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = value,
+                onValueChange = onChange,
+                valueRange = range,
+                enabled = enabled
+            )
+            if (!enabled) {
+                Text(
+                    I18n.t("Premium effect"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
