@@ -222,6 +222,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun audioSessionId(): Int = controller?.audioSessionId ?: 0
 
+    fun visualizerSessionId(): Int = controller?.audioSessionId ?: 0
+
     fun equalizerController(): EqualizerController = audioEffects
 
     fun setSpeed(value: Float) {
