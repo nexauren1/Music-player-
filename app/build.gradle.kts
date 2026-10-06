@@ -111,6 +111,7 @@ dependencies {
     implementation("androidx.media3:media3-common:1.11.1")
 
     implementation("androidx.media3:media3-extractor:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
     implementation("androidx.glance:glance:1.2.0")
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
