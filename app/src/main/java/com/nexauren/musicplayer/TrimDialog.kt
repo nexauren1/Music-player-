@@ -81,9 +81,9 @@ fun TrimDialog(
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 runCatching {
-                    context.startActivity(Intent.createChooser(shareIntent, "Share trimmed clip"))
+                    context.startActivity(Intent.createChooser(shareIntent, I18n.t("Share trimmed clip")))
                 }.onFailure {
-                    error = it.message ?: "The clip was exported, but it could not be shared."
+                    error = it.message ?: I18n.t("The clip was exported, but it could not be shared.")
                 }
             }
 
@@ -93,7 +93,7 @@ fun TrimDialog(
                 exception: ExportException
             ) {
                 exporting = false
-                error = exception.message ?: "Could not trim this file."
+                error = exception.message ?: I18n.t("Could not trim this file.")
             }
         }
 
@@ -104,7 +104,7 @@ fun TrimDialog(
                 .start(EditedMediaItem.Builder(input).build(), output.absolutePath)
         }.onFailure {
             exporting = false
-            error = it.message ?: "Could not start the trim operation."
+            error = it.message ?: I18n.t("Could not start the trim operation.")
         }
     }
 
@@ -136,7 +136,7 @@ fun TrimDialog(
                     valueRange = 0f..maxSeconds
                 )
                 Text(
-                    "Export the selected section as a shareable MP4 clip.",
+                    I18n.t("Export the selected section as a shareable MP4 clip."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (exporting) {
@@ -152,12 +152,12 @@ fun TrimDialog(
         },
         confirmButton = {
             Button(enabled = !exporting, onClick = { export() }) {
-                Text("Export clip")
+                Text(I18n.t("Export clip"))
             }
         },
         dismissButton = {
             TextButton(enabled = !exporting, onClick = onDismiss) {
-                Text("Close")
+                Text(I18n.t("Close"))
             }
         }
     )
