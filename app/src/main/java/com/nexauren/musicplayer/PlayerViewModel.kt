@@ -120,7 +120,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 withContext(Dispatchers.Main) {
                     syncCurrent(connected.currentMediaItem)
                     syncPosition()
-                    syncVolume()
+                    _volume.value = connected.volume.coerceIn(0f, 1f)
+                    applyEffectiveVolume()
                 }
             }
         }
