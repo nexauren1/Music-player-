@@ -1,4 +1,4 @@
-package com.musicplayer.app
+package com.nexauren.musicplayer
 
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
