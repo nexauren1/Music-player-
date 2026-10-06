@@ -148,18 +148,15 @@ fun AudioLabScreen(
         item {
             Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        if (premiumActive) I18n.t("Visualizer") else I18n.t("Visualizer") + " • " + I18n.t("Premium"),
-                        fontWeight = FontWeight.Black
-                    )
+                    Text(I18n.t("Visualizer"), fontWeight = FontWeight.Black)
                     Text(currentSong?.title ?: I18n.t("Play a track first"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(10.dp))
                     AndroidView(
-                        modifier = Modifier.fillMaxWidth().height(220.dp).then(if (premiumActive) Modifier else Modifier.alpha(.45f)),
+                        modifier = Modifier.fillMaxWidth().height(220.dp),
                         factory = { AudioVisualizerView(it) },
                         update = {
                             it.setAccentColor(accent)
-                            it.attachSession(vm.visualizerSessionId(), playing && premiumActive)
+                            it.attachSession(vm.visualizerSessionId(), playing)
                         }
                     )
                 }
