@@ -601,6 +601,8 @@ private fun MusicPlayerRoot(
                         AppScreen.FOLDERS to Icons.Filled.Folder,
                         AppScreen.VIDEOS to Icons.Filled.VideoLibrary,
                         AppScreen.PREMIUM to Icons.Filled.Star,
+                        AppScreen.DUPLICATES to Icons.Filled.Refresh,
+                        AppScreen.QUEUE to Icons.Filled.PlayArrow,
                         AppScreen.SETTINGS to Icons.Filled.Settings
                     ).forEach { (item, icon) ->
                         NavigationDrawerItem(
@@ -847,6 +849,15 @@ private fun MusicPlayerRoot(
                                 }
                             }
                         }
+                    )
+                    AppScreen.DUPLICATES -> DuplicateCleanerScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm
+                    )
+                    AppScreen.QUEUE -> QueueScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        onBack = { screen = AppScreen.HOME }
                     )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
