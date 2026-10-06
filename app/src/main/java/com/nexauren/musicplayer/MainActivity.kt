@@ -1270,6 +1270,7 @@ private fun HomeScreen(
 
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryScreen(
     modifier: Modifier,
@@ -1279,6 +1280,8 @@ private fun LibraryScreen(
     onQueryChange: (String) -> Unit
 ) {
     var sortName by rememberSaveable { mutableStateOf(LibrarySortMode.TITLE.name) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val sortMode = runCatching { LibrarySortMode.valueOf(sortName) }.getOrDefault(LibrarySortMode.TITLE)
     val sortedSongs = remember(songs, sortMode) {
         when (sortMode) {
@@ -1287,6 +1290,30 @@ private fun LibraryScreen(
             LibrarySortMode.RECENTLY_ADDED -> songs.sortedByDescending { it.dateAddedMillis }
         }
     }
+    val selectedSongs = sortedSongs.filter { it.id in selectedIds }
+    val context = LocalContext.current
+    val deleteLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) {
+        selectionMode = false
+        selectedIds = emptySet()
+        vm.scan()
+    }
+
+    fun deleteSelected() {
+        val uris = selectedSongs.map { it.uri }
+        if (uris.isEmpty()) return
+        val sender = MediaLibraryActions.buildDeleteRequest(context, uris)
+        if (sender != null) {
+            deleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
+        } else {
+            MediaLibraryActions.deleteImmediately(context, uris)
+            selectionMode = false
+            selectedIds = emptySet()
+            vm.scan()
+        }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
@@ -1323,14 +1350,71 @@ private fun LibraryScreen(
                         }
                     )
                 }
+                item {
+                    AssistChip(
+                        onClick = {
+                            selectionMode = !selectionMode
+                            if (!selectionMode) selectedIds = emptySet()
+                        },
+                        label = { Text(if (selectionMode) "Cancel selection" else "Select") }
+                    )
+                }
+                if (selectionMode) {
+                    item {
+                        AssistChip(
+                            onClick = {
+                                selectedIds = if (selectedIds.size == sortedSongs.size) {
+                                    emptySet()
+                                } else {
+                                    sortedSongs.map { it.id }.toSet()
+                                }
+                            },
+                            label = { Text(if (selectedIds.size == sortedSongs.size) "Clear all" else "Select all") }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            enabled = selectedSongs.isNotEmpty(),
+                            onClick = { vm.addSongsToQueue(selectedSongs) },
+                            label = { Text("Queue \${selectedSongs.size}") }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            enabled = selectedSongs.isNotEmpty(),
+                            onClick = {
+                                MediaLibraryActions.shareUris(context, selectedSongs.map { it.uri }, "audio/*")
+                            },
+                            label = { Text("Share") }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            enabled = selectedSongs.isNotEmpty(),
+                            onClick = { deleteSelected() },
+                            label = { Text("Delete") }
+                        )
+                    }
+                }
             }
         }
-        item { SectionTitle(I18n.t("All music"), I18n.t("Your complete local library")) }
+        item {
+            SectionTitle(I18n.t("All music"), I18n.t("Your complete local library"))
+        }
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("No songs found.")) }
         } else {
             itemsIndexed(sortedSongs, key = { _, song -> song.id }) { _, song ->
-                SongRow(song, vm, showPlays = false)
+                SongRow(
+                    song = song,
+                    vm = vm,
+                    showPlays = false,
+                    selectionMode = selectionMode,
+                    selected = song.id in selectedIds,
+                    onToggleSelection = {
+                        selectedIds = if (song.id in selectedIds) selectedIds - song.id else selectedIds + song.id
+                    }
+                )
             }
         }
     }
@@ -1584,15 +1668,29 @@ private fun SongListScreen(
 }
 
 @Composable
-fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
+fun SongRow(
+    song: Song,
+    vm: PlayerViewModel,
+    showPlays: Boolean,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
     var tagEditorOpen by rememberSaveable(song.id, "tag_editor") { mutableStateOf(false) }
 
     Card(
-        Modifier.fillMaxWidth().clickable { vm.play(song) },
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (selectionMode) onToggleSelection?.invoke() else vm.play(song)
+            },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(Modifier.padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(song, Modifier.size(58.dp))
@@ -1607,39 +1705,37 @@ fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = { vm.favorite(song) }) {
-                Icon(
-                    if (vm.isFavorite(song)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    "Favorite"
+            if (selectionMode) {
+                Text(
+                    if (selected) "✓" else "○",
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(horizontal = 10.dp)
                 )
-            }
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, "More")
+            } else {
+                IconButton(onClick = { vm.favorite(song) }) {
+                    Icon(
+                        if (vm.isFavorite(song)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        "Favorite"
+                    )
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
-                    TextButton(onClick = { vm.playNext(song); menu = false }) { Text(I18n.t("Play next")) }
-                    TextButton(onClick = { vm.addToQueue(song); menu = false }) { Text(I18n.t("Add to queue")) }
-                    TextButton(onClick = { tagEditorOpen = true; menu = false }) { Text(I18n.t("Edit tags")) }
-                    TextButton(onClick = {
-                        menu = false
-                        runCatching {
-                            val share = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    "${song.title} — ${song.artist}\n${song.album}"
-                                )
-                            }
-                            context.startActivity(Intent.createChooser(share, I18n.t("Share song")))
-                        }.onFailure {
-                            Toast.makeText(context, I18n.t("Unable to share this track."), Toast.LENGTH_SHORT).show()
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        Icon(Icons.Filled.MoreVert, "More")
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
+                        TextButton(onClick = { vm.playNext(song); menu = false }) { Text(I18n.t("Play next")) }
+                        TextButton(onClick = { vm.addToQueue(song); menu = false }) { Text(I18n.t("Add to queue")) }
+                        TextButton(onClick = { tagEditorOpen = true; menu = false }) { Text(I18n.t("Edit tags")) }
+                        TextButton(onClick = {
+                            menu = false
+                            MediaLibraryActions.shareUris(context, listOf(song.uri), "audio/*")
+                        }) { Text(I18n.t("Share song")) }
+                        TextButton(onClick = { vm.startSleepTimer(15); menu = false }) { Text(I18n.t("Sleep 15 min")) }
+                        TextButton(onClick = { vm.favorite(song); menu = false }) {
+                            Text(if (vm.isFavorite(song)) I18n.t("Remove favorite") else I18n.t("Add favorite"))
                         }
-                    }) { Text(I18n.t("Share song")) }
-                    TextButton(onClick = { vm.startSleepTimer(15); menu = false }) { Text(I18n.t("Sleep 15 min")) }
-                    TextButton(onClick = { vm.favorite(song); menu = false }) {
-                        Text(if (vm.isFavorite(song)) I18n.t("Remove favorite") else I18n.t("Add favorite"))
                     }
                 }
             }
@@ -1707,7 +1803,14 @@ private fun MiniPlayer(
     onOpenEffects: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onDrivingMode: () -> Unit,
-    onResetEffects: () -> Unit
+    onResetEffects: () -> Unit,
+    onTrim: () -> Unit,
+    onVisualizer: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    onQueue: () -> Unit,
+    onSearch: () -> Unit,
+    onSleepTimer: () -> Unit
 ) {
     val progress = if (duration > 0) {
         (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
@@ -1731,28 +1834,11 @@ private fun MiniPlayer(
                     .padding(horizontal = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Artwork(
-                    song,
-                    Modifier
-                        .size(50.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                )
+                Artwork(song, Modifier.size(50.dp).clip(RoundedCornerShape(13.dp)))
                 Spacer(Modifier.width(9.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        song.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        song.artist,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold)
+                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onPlayPause) {
                     Icon(
@@ -1770,23 +1856,18 @@ private fun MiniPlayer(
                         Icon(Icons.Filled.MoreVert, I18n.t("More options"))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(I18n.t("Effects")) },
-                            onClick = { menuOpen = false; onOpenEffects() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(I18n.t("Equalizer")) },
-                            onClick = { menuOpen = false; onOpenEqualizer() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(I18n.t("Driving mode")) },
-                            onClick = { menuOpen = false; onDrivingMode() },
-                            leadingIcon = { Icon(Icons.Filled.DirectionsCar, null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(I18n.t("Reset effects")) },
-                            onClick = { menuOpen = false; onResetEffects() }
-                        )
+                        DropdownMenuItem(text = { Text("Cut / Trim") }, onClick = { menuOpen = false; onTrim() })
+                        DropdownMenuItem(text = { Text("Visualizer mode") }, onClick = { menuOpen = false; onVisualizer() })
+                        DropdownMenuItem(text = { Text("Share") }, onClick = { menuOpen = false; onShare() })
+                        DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; onDelete() })
+                        DropdownMenuItem(text = { Text("Playback queue") }, onClick = { menuOpen = false; onQueue() })
+                        DropdownMenuItem(text = { Text("Search library") }, onClick = { menuOpen = false; onSearch() })
+                        DropdownMenuItem(text = { Text("Sleep timer") }, onClick = { menuOpen = false; onSleepTimer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Effects")) }, onClick = { menuOpen = false; onOpenEffects() })
+                        DropdownMenuItem(text = { Text(I18n.t("Equalizer")) }, onClick = { menuOpen = false; onOpenEqualizer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Driving mode")) }, onClick = { menuOpen = false; onDrivingMode() })
+                        DropdownMenuItem(text = { Text("Favorite") }, onClick = { menuOpen = false; onFavorite() })
+                        DropdownMenuItem(text = { Text(I18n.t("Reset effects")) }, onClick = { menuOpen = false; onResetEffects() })
                     }
                 }
             }
@@ -4002,7 +4083,7 @@ private fun UpdateDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Open update page")) } },
+        confirmButton = { TextButton(onClick = onInstall, enabled = !updating) { Text(I18n.t("Download APK")) } },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !updating) { Text(I18n.t("Later")) } }
     )
 }
