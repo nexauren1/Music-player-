@@ -233,6 +233,7 @@ private object AudioLabStore {
 @OptIn(UnstableApi::class)
 private class AudioVisualizerView(context: Context) : android.view.View(context) {
     private var visualizer: Visualizer? = null
+    private var attachedSessionId = 0
     private var fft = ByteArray(0)
     private var active = false
     private var accentColor = android.graphics.Color.WHITE
@@ -251,8 +252,9 @@ private class AudioVisualizerView(context: Context) : android.view.View(context)
             invalidate()
             return
         }
-        if (visualizer?.audioSessionId != sessionId) {
+        if (attachedSessionId != sessionId) {
             releaseVisualizer()
+            attachedSessionId = sessionId
             runCatching {
                 visualizer = Visualizer(sessionId).apply {
                     captureSize = Visualizer.getCaptureSizeRange()[1]
@@ -304,6 +306,7 @@ private class AudioVisualizerView(context: Context) : android.view.View(context)
     private fun releaseVisualizer() {
         runCatching { visualizer?.release() }
         visualizer = null
+        attachedSessionId = 0
         fft = ByteArray(0)
     }
 
