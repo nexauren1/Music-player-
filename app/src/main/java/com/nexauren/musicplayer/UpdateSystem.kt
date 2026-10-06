@@ -1,22 +1,23 @@
 package com.musicplayer.app
 
-import android.app.PendingIntent
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import java.io.File
-import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,11 +33,12 @@ data class UpdateInfo(
 ) {
     fun isNewer(): Boolean {
         if (versionCode > 0L) {
-            return versionCode > BuildConfig.VERSION_CODE.toLong() ||
-                (versionCode == BuildConfig.VERSION_CODE.toLong() && versionName != BuildConfig.VERSION_NAME)
+            val current = BuildConfig.VERSION_CODE.toLong()
+            if (versionCode != current) return versionCode > current
         }
 
         fun parse(value: String) = value
+            .removePrefix("v")
             .split('.')
             .map { it.toIntOrNull() ?: 0 }
             .let { listOf(it.getOrElse(0) { 0 }, it.getOrElse(1) { 0 }, it.getOrElse(2) { 0 }) }
@@ -54,11 +56,12 @@ data class UpdateInfo(
 object NotificationHelper {
     const val UPDATE_CHANNEL = "updates"
     const val PLAYBACK_CHANNEL = "playback"
+    private const val UPDATE_NOTIFICATION_ID = 2001
+    private const val INSTALL_NOTIFICATION_ID = 2002
+    private const val PREFS = "update_notifications"
 
     fun areNotificationsEnabled(context: Context): Boolean =
         androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
-    private const val UPDATE_NOTIFICATION_ID = 2001
-    private const val INSTALL_NOTIFICATION_ID = 2002
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -80,7 +83,14 @@ object NotificationHelper {
 
     fun showUpdateAvailable(context: Context, info: UpdateInfo) {
         I18n.language = AppearanceStore.load(context).language
-        val intent = Intent(context, MainActivity::class.java)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val notificationKey = info.versionName + ":" + info.versionCode
+        if (prefs.getString("last_notified", "") == notificationKey) return
+        prefs.edit().putString("last_notified", notificationKey).apply()
+
+        val intent = Intent(Intent.ACTION_VIEW, info.apkUrl.toUri()).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         val pending = PendingIntent.getActivity(
             context,
             UPDATE_NOTIFICATION_ID,
@@ -88,16 +98,24 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val title = I18n.t("Music Player ") + info.versionName + " " + I18n.t("is available")
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
-            .setContentTitle(I18n.t("Music Player ") + info.versionName + " " + I18n.t("is available"))
-            .setContentText(I18n.t("Open Music Player to download the update."))
+            .setContentTitle(title)
+            .setContentText(I18n.t("Tap to open the new APK."))
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog))
             .setContentIntent(pending)
             .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        manager(context).notify(UPDATE_NOTIFICATION_ID, notification)
+        context.getSystemService(NotificationManager::class.java)
+            .notify(UPDATE_NOTIFICATION_ID, notification)
+    }
+
+    fun clearUpdateNotification(context: Context) {
+        context.getSystemService(NotificationManager::class.java)
+            .cancel(UPDATE_NOTIFICATION_ID)
     }
 
     fun showInstallSuccess(context: Context, message: String) {
@@ -108,8 +126,8 @@ object NotificationHelper {
             .setContentText(message)
             .setAutoCancel(true)
             .build()
-
-        manager(context).notify(INSTALL_NOTIFICATION_ID, notification)
+        context.getSystemService(NotificationManager::class.java)
+            .notify(INSTALL_NOTIFICATION_ID, notification)
     }
 
     fun showInstallFailure(context: Context, message: String) {
@@ -120,119 +138,104 @@ object NotificationHelper {
             .setContentText(message)
             .setAutoCancel(true)
             .build()
-        manager(context).notify(INSTALL_NOTIFICATION_ID, notification)
-    }
-
-    private fun manager(context: Context): NotificationManager =
         context.getSystemService(NotificationManager::class.java)
+            .notify(INSTALL_NOTIFICATION_ID, notification)
+    }
 }
 
 object UpdateManager {
+    private const val MANIFEST_FALLBACK =
+        "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
+
     suspend fun check(context: Context, notify: Boolean = false): UpdateInfo? =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val manifestUrl = BuildConfig.UPDATE_MANIFEST_URL.trim()
-                    .ifBlank {
-                        "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
-                    }
-                val separator = if (manifestUrl.contains("?")) "&" else "?"
-                val connection =
-                    URL(manifestUrl + separator + "t=" + System.currentTimeMillis())
-                        .openConnection() as HttpURLConnection
-
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 15_000
-                connection.requestMethod = "GET"
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("Accept", "application/json")
-                connection.setRequestProperty("Cache-Control", "no-cache")
-
-                val responseCode = connection.responseCode
-                if (responseCode !in 200..299) {
-                    connection.disconnect()
-                    throw IllegalStateException("Update manifest returned HTTP $responseCode.")
-                }
-
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
-                connection.disconnect()
-
-                val json = JSONObject(body)
-                val manifestInfo = UpdateInfo(
-                    versionCode = json.optLong("versionCode"),
-                    versionName = json.optString("versionName"),
-                    apkUrl = json.optString("apkUrl"),
-                    changelog = json.optString(
-                        "changelog",
-                        "Performance and stability improvements."
-                    ),
-                    sha256 = json.optString("sha256", ""),
-                    sizeBytes = json.optLong("sizeBytes", 0L)
-                )
-
-                val info = if (
-                    manifestInfo.versionCode > 0L &&
-                    manifestInfo.versionName.isNotBlank() &&
-                    manifestInfo.apkUrl.isNotBlank()
-                ) {
-                    manifestInfo
-                } else {
-                    fetchLatestGithubRelease()
-                }
-
-                if (info?.isNewer() == true) {
-                    if (notify) NotificationHelper.showUpdateAvailable(context, info)
-                    info
-                } else {
-                    null
-                }
-            }.getOrElse {
-                fetchLatestGithubRelease()?.takeIf { it.isNewer() }
+            val manifest = fetchManifest()
+            val release = fetchLatestGithubRelease()
+            val candidates = listOfNotNull(manifest, release)
+            val info = candidates.firstOrNull { it.isNewer() }
+            if (info != null && notify) {
+                NotificationHelper.showUpdateAvailable(context, info)
             }
+            info
         }
 
-    private suspend fun fetchLatestGithubRelease(): UpdateInfo? =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val connection = (URL(
-                    "https://api.github.com/repos/nexauren1/Music-player-/releases/latest"
-                ).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 10_000
-                    readTimeout = 15_000
-                    requestMethod = "GET"
-                    instanceFollowRedirects = true
-                    setRequestProperty("Accept", "application/vnd.github+json")
-                    setRequestProperty("User-Agent", "MusicPlayer/" + BuildConfig.VERSION_NAME)
-                }
+    private fun fetchManifest(): UpdateInfo? =
+        runCatching {
+            val manifestUrl = BuildConfig.UPDATE_MANIFEST_URL.trim().ifBlank { MANIFEST_FALLBACK }
+            val separator = if (manifestUrl.contains("?")) "&" else "?"
+            val connection = (URL(manifestUrl + separator + "t=" + System.currentTimeMillis())
+                .openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Cache-Control", "no-cache")
+                setRequestProperty("Pragma", "no-cache")
+            }
 
-                val code = connection.responseCode
-                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-                val responseBody = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                connection.disconnect()
-                if (code !in 200..299) error("GitHub release lookup returned HTTP $code.")
+            val code = connection.responseCode
+            val body = if (code in 200..299) {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                ""
+            }
+            connection.disconnect()
+            if (code !in 200..299) error("Update manifest returned HTTP $code.")
 
-                val release = JSONObject(responseBody)
-                val version = release.optString("tag_name").removePrefix("v")
-                val assets = release.optJSONArray("assets")
-                val apk = assets?.let { array ->
-                    (0 until array.length())
-                        .map { array.getJSONObject(it) }
-                        .firstOrNull { it.optString("name") == "app-release.apk" }
-                } ?: error("Release APK was not found.")
+            val json = JSONObject(body)
+            UpdateInfo(
+                versionCode = json.optLong("versionCode"),
+                versionName = json.optString("versionName"),
+                apkUrl = json.optString("apkUrl"),
+                changelog = json.optString("changelog", "Performance and stability improvements."),
+                sha256 = json.optString("sha256", ""),
+                sizeBytes = json.optLong("sizeBytes", 0L)
+            ).takeIf {
+                it.versionName.isNotBlank() && it.apkUrl.isNotBlank()
+            }
+        }.getOrNull()
 
-                UpdateInfo(
-                    versionCode = 0L,
-                    versionName = version,
-                    apkUrl = apk.optString("browser_download_url"),
-                    changelog = release.optString(
-                        "body",
-                        "Performance and stability improvements."
-                    ),
-                    sha256 = "",
-                    sizeBytes = apk.optLong("size", 0L)
-                )
-            }.getOrNull()
-        }
+    private fun fetchLatestGithubRelease(): UpdateInfo? =
+        runCatching {
+            val connection = (URL(
+                "https://api.github.com/repos/nexauren1/Music-player-/releases/latest"
+            ).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "MusicPlayer/" + BuildConfig.VERSION_NAME)
+                setRequestProperty("Cache-Control", "no-cache")
+            }
 
+            val code = connection.responseCode
+            val body = if (code in 200..299) {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                ""
+            }
+            connection.disconnect()
+            if (code !in 200..299) error("GitHub release lookup returned HTTP $code.")
+
+            val release = JSONObject(body)
+            val version = release.optString("tag_name").removePrefix("v")
+            val assets = release.optJSONArray("assets")
+            val apk = assets?.let { array ->
+                (0 until array.length())
+                    .map { array.getJSONObject(it) }
+                    .firstOrNull { it.optString("name") == "app-release.apk" }
+            } ?: error("Release APK was not found.")
+
+            UpdateInfo(
+                versionCode = 0L,
+                versionName = version,
+                apkUrl = apk.optString("browser_download_url"),
+                changelog = release.optString("body", "Performance and stability improvements."),
+                sizeBytes = apk.optLong("size", 0L)
+            )
+        }.getOrNull()
 }
 
 class UpdateWorker(
@@ -241,20 +244,42 @@ class UpdateWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        UpdateManager.check(applicationContext, notify = true)
-        return Result.success()
+        return runCatching {
+            UpdateManager.check(applicationContext, notify = true)
+            Result.success()
+        }.getOrElse {
+            Result.retry()
+        }
     }
 
     companion object {
-        private const val NAME = "nexa_music_update_check"
+        private const val PERIODIC_NAME = "nexa_music_update_check_v2"
+        private const val IMMEDIATE_NAME = "nexa_music_update_check_now"
+
+        private fun constraints() = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
         fun schedule(context: Context) {
-            val request =
-                PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS).build()
+            val periodic = PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.HOURS)
+                .setConstraints(constraints())
+                .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                PERIODIC_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                periodic
+            )
+        }
+
+        fun checkNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<UpdateWorker>()
+                .setConstraints(constraints())
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_NAME,
+                ExistingWorkPolicy.REPLACE,
                 request
             )
         }
