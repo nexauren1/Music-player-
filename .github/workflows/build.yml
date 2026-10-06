@@ -117,3 +117,4 @@ jobs:
 
 
 # Production release trigger [release]
+# Release publishing is enabled when the commit message contains [release].
