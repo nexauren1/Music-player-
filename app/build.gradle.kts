@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.nexauren.musicplayer"
+    namespace = "com.nexauren.musicplayer2"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.nexauren.musicplayer"
+        applicationId = "com.nexauren.musicplayer2"
         minSdk = 26
         targetSdk = 36
         versionCode = 30
