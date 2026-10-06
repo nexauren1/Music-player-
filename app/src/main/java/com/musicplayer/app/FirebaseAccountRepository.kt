@@ -41,6 +41,7 @@ class FirebaseAccountRepository(private val context: Context) {
                 .await()
                 .user ?: error("Could not sign in.")
             persist(user.uid)
+            AppAnalytics.login("email")
             AccountSnapshot(user.uid, user.email, user.displayName)
         }
     }
@@ -55,6 +56,7 @@ class FirebaseAccountRepository(private val context: Context) {
                 .await()
                 .user ?: error("Could not create account.")
             persist(user.uid)
+            AppAnalytics.signUp("email")
             AccountSnapshot(user.uid, user.email, user.displayName)
         }
     }
@@ -101,6 +103,7 @@ class FirebaseAccountRepository(private val context: Context) {
                 .user ?: error("Could not sign in with Google.")
 
             persist(user.uid)
+            AppAnalytics.login("google")
             AccountSnapshot(user.uid, user.email, user.displayName)
         }
     }
@@ -112,6 +115,7 @@ class FirebaseAccountRepository(private val context: Context) {
         return runCatching {
             val user = FirebaseAuth.getInstance().currentUser ?: error("No account is signed in.")
             user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(clean).build()).await()
+            AppAnalytics.log("profile_update")
             AccountSnapshot(user.uid, user.email, user.displayName)
         }
     }
@@ -122,6 +126,7 @@ class FirebaseAccountRepository(private val context: Context) {
             val user = FirebaseAuth.getInstance().currentUser ?: error("No account is signed in.")
             user.delete().await()
             prefs.edit().clear().apply()
+            AppAnalytics.log("account_deleted")
         }
     }
 
@@ -130,6 +135,7 @@ class FirebaseAccountRepository(private val context: Context) {
             FirebaseAuth.getInstance().signOut()
         }
         prefs.edit().clear().apply()
+        AppAnalytics.log("logout")
     }
 
     private fun persist(uid: String) {
@@ -236,20 +242,27 @@ class PremiumRepository(private val context: Context) {
             }
 
             prefs.edit().putBoolean("cloudSynced", false).apply()
-            syncFromFirebase()
+            syncFromFirebase().getOrThrow()
 
             val state = loadLocal()
             if (!state.cloudSynced) {
                 throw IllegalStateException("Firebase Premium entitlement is not available yet.")
             }
+            AppAnalytics.log("firestore_entitlement_verified")
+        }.onFailure {
+            AppAnalytics.log(
+                "firestore_sync_error",
+                "source" to "premium_entitlement",
+                "error_type" to (it::class.simpleName ?: "unknown")
+            )
         }
     }
 
-    suspend fun syncFromFirebase() {
-        if (FirebaseApp.getApps(context).isEmpty()) return
-        val user = FirebaseAuth.getInstance().currentUser ?: return
+    suspend fun syncFromFirebase(): Result<Unit> {
+        if (FirebaseApp.getApps(context).isEmpty()) return Result.success(Unit)
+        val user = FirebaseAuth.getInstance().currentUser ?: return Result.success(Unit)
 
-        runCatching {
+        return runCatching {
             val doc = FirebaseFirestore.getInstance()
                 .collection("users")
                 .document(user.uid)
@@ -268,6 +281,7 @@ class PremiumRepository(private val context: Context) {
                     .remove("orderId")
                     .remove("subscriptionId")
                     .apply()
+                AppAnalytics.log("firestore_entitlement_missing")
                 return@runCatching
             }
 
@@ -290,6 +304,17 @@ class PremiumRepository(private val context: Context) {
                 .putString("subscriptionId", subscriptionId)
                 .putBoolean("cloudSynced", true)
                 .apply()
+            AppAnalytics.log(
+                "firestore_entitlement_sync",
+                "plan" to plan.name.lowercase(),
+                "verified" to verified.toString()
+            )
+        }.onFailure {
+            AppAnalytics.log(
+                "firestore_sync_error",
+                "source" to "premium_entitlement",
+                "error_type" to (it::class.simpleName ?: "unknown")
+            )
         }
     }
 
