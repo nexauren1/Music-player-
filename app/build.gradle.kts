@@ -12,8 +12,8 @@ android {
         applicationId = "com.nexauren.musicplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 29
-        versionName = "1.9.3"
+        versionCode = 30
+        versionName = "1.9.4"
 
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
