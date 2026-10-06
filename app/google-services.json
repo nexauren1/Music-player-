@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "1062438516387",
+    "project_id": "nexauren-story",
+    "storage_bucket": "nexauren-story.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062438516387:android:650d199bdab99d57287116",
+        "android_client_info": {
+          "package_name": "com.nexauren.musicplayer2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1062438516387-3pvd3rhq5uca2l8l6vqk8pelsfljhmii.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nexauren.musicplayer2",
+            "certificate_hash": "33a0bbd964c338e3bf8245410f110c8f3167d3a8"
+          }
+        },
+        {
+          "client_id": "1062438516387-i2plli4d5mq9gkaauik6q2tf4nb1bqq7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtO5UOedU4qtdZBgQERMhygWYLUxybVTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1062438516387-i2plli4d5mq9gkaauik6q2tf4nb1bqq7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062438516387:android:d7afe7177d3c4cd1287116",
+        "android_client_info": {
+          "package_name": "nexaurenstory.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1062438516387-i2plli4d5mq9gkaauik6q2tf4nb1bqq7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtO5UOedU4qtdZBgQERMhygWYLUxybVTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1062438516387-i2plli4d5mq9gkaauik6q2tf4nb1bqq7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
