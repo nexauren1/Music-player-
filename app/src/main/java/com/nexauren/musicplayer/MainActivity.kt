@@ -22,6 +22,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -559,6 +562,11 @@ private fun MusicPlayerRoot(
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet {
+                    Column(
+                        Modifier
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                    ) {
                     Spacer(Modifier.height(28.dp))
                     Row(
                         Modifier.padding(horizontal = 22.dp),
@@ -652,6 +660,7 @@ private fun MusicPlayerRoot(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    }
                 }
             }
         ) {
@@ -1396,14 +1405,14 @@ private fun LibraryScreen(
                             onClick = {
                                 MediaLibraryActions.shareUris(context, selectedSongs.map { it.uri }, "audio/*")
                             },
-                            label = { Text("Share") }
+                            label = { Text(I18n.t("Share")) }
                         )
                     }
                     item {
                         AssistChip(
                             enabled = selectedSongs.isNotEmpty(),
                             onClick = { deleteSelected() },
-                            label = { Text("Delete") }
+                            label = { Text(I18n.t("Delete")) }
                         )
                     }
                 }
@@ -1867,17 +1876,17 @@ private fun MiniPlayer(
                         Icon(Icons.Filled.MoreVert, I18n.t("More options"))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(text = { Text("Cut / Trim") }, onClick = { menuOpen = false; onTrim() })
-                        DropdownMenuItem(text = { Text("Visualizer mode") }, onClick = { menuOpen = false; onVisualizer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Cut / Trim")) }, onClick = { menuOpen = false; onTrim() })
+                        DropdownMenuItem(text = { Text(I18n.t("Visualizer mode")) }, onClick = { menuOpen = false; onVisualizer() })
                         DropdownMenuItem(text = { Text("Share") }, onClick = { menuOpen = false; onShare() })
                         DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; onDelete() })
-                        DropdownMenuItem(text = { Text("Playback queue") }, onClick = { menuOpen = false; onQueue() })
-                        DropdownMenuItem(text = { Text("Search library") }, onClick = { menuOpen = false; onSearch() })
-                        DropdownMenuItem(text = { Text("Sleep timer") }, onClick = { menuOpen = false; onSleepTimer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Playback queue")) }, onClick = { menuOpen = false; onQueue() })
+                        DropdownMenuItem(text = { Text(I18n.t("Search library")) }, onClick = { menuOpen = false; onSearch() })
+                        DropdownMenuItem(text = { Text(I18n.t("Sleep timer")) }, onClick = { menuOpen = false; onSleepTimer() })
                         DropdownMenuItem(text = { Text(I18n.t("Effects")) }, onClick = { menuOpen = false; onOpenEffects() })
                         DropdownMenuItem(text = { Text(I18n.t("Equalizer")) }, onClick = { menuOpen = false; onOpenEqualizer() })
                         DropdownMenuItem(text = { Text(I18n.t("Driving mode")) }, onClick = { menuOpen = false; onDrivingMode() })
-                        DropdownMenuItem(text = { Text("Favorite") }, onClick = { menuOpen = false; onFavorite() })
+                        DropdownMenuItem(text = { Text(I18n.t("Favorite")) }, onClick = { menuOpen = false; onFavorite() })
                         DropdownMenuItem(text = { Text(I18n.t("Reset effects")) }, onClick = { menuOpen = false; onResetEffects() })
                     }
                 }
