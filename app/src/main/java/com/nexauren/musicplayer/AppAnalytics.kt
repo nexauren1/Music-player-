@@ -12,22 +12,25 @@ object AppAnalytics {
     private var currentScreen: String? = null
 
     fun initialize(context: Context) {
+        if (analytics != null) return
         runCatching {
-            analytics = FirebaseAnalytics.getInstance(context.applicationContext)
-            analytics?.setAnalyticsCollectionEnabled(true)
+            val instance = FirebaseAnalytics.getInstance(context.applicationContext)
+            instance.setAnalyticsCollectionEnabled(true)
+            analytics = instance
         }
     }
 
     fun onActivityStart() {
+        if (activityStartedAt > 0L) return
         activityStartedAt = SystemClock.elapsedRealtime()
-        log("session_start")
+        log("app_session_start")
     }
 
     fun onActivityStop() {
         val now = SystemClock.elapsedRealtime()
         val activeMs = if (activityStartedAt > 0L) now - activityStartedAt else 0L
         if (activeMs > 0L) {
-            log("session_end", "activity_time_ms" to activeMs.toString())
+            log("app_session_end", "activity_time_ms" to activeMs.toString())
         }
         endCurrentScreen(now)
         activityStartedAt = 0L
@@ -57,6 +60,14 @@ object AppAnalytics {
         }
         currentScreen = null
         screenStartedAt = 0L
+    }
+
+    fun login(method: String) {
+        log(FirebaseAnalytics.Event.LOGIN, "method" to method)
+    }
+
+    fun signUp(method: String) {
+        log(FirebaseAnalytics.Event.SIGN_UP, "method" to method)
     }
 
     fun log(name: String, vararg params: Pair<String, String>) {
