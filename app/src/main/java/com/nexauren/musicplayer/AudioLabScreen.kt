@@ -159,7 +159,7 @@ fun AudioLabScreen(
                         factory = { AudioVisualizerView(it) },
                         update = {
                             it.setAccentColor(accent)
-                            it.attachSession(vm.audioSessionId(), playing && premiumActive)
+                            it.attachSession(vm.visualizerSessionId(), playing && premiumActive)
                         }
                     )
                 }
