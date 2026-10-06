@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.musicplayer.app"
+    namespace = "com.nexauren.musicplayer"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.musicplayer.app"
+        applicationId = "com.nexauren.musicplayer"
         minSdk = 26
         targetSdk = 36
         versionCode = 28
@@ -29,10 +29,10 @@ android {
             .trim()
             .ifBlank { "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json" }
 
-        buildConfigField("String", "PAYPAL_QUARTERLY_URL", "\"$paypalQuarterlyUrl\"")
-        buildConfigField("String", "PAYPAL_LIFETIME_URL", "\"$paypalLifetimeUrl\"")
-        buildConfigField("String", "PAYPAL_WORKER_URL", "\"$paypalWorkerUrl\"")
-        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"" )
+        buildConfigField("String", "PAYPAL_QUARTERLY_URL", ""$paypalQuarterlyUrl"")
+        buildConfigField("String", "PAYPAL_LIFETIME_URL", ""$paypalLifetimeUrl"")
+        buildConfigField("String", "PAYPAL_WORKER_URL", ""$paypalWorkerUrl"")
+        buildConfigField("String", "UPDATE_MANIFEST_URL", ""$updateManifestUrl"" )
 
     }
 
