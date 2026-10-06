@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.nexauren.musicplayer2
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
