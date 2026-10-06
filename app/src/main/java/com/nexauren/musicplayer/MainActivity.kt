@@ -708,7 +708,22 @@ private fun MusicPlayerRoot(
                                     context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE)
                                         .edit().putBoolean("driving_mode", true).apply()
                                 },
-                                onResetEffects = vm::resetEffects
+                                onResetEffects = vm::resetEffects,
+                                onTrim = { trimOpen = true },
+                                onVisualizer = { screen = AppScreen.AUDIO_LAB },
+                                onShare = { MediaLibraryActions.shareUris(context, listOf(song.uri), "audio/*") },
+                                onDelete = {
+                                    val sender = MediaLibraryActions.buildDeleteRequest(context, listOf(song.uri))
+                                    if (sender != null) {
+                                        deleteMediaLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                                    } else {
+                                        MediaLibraryActions.deleteImmediately(context, listOf(song.uri))
+                                        vm.scan()
+                                    }
+                                },
+                                onQueue = { screen = AppScreen.QUEUE },
+                                onSearch = { screen = AppScreen.LIBRARY },
+                                onSleepTimer = { sleepTimerOpen = true }
                             )
                         }
 
