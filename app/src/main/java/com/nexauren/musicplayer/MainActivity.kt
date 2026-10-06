@@ -1107,27 +1107,14 @@ private fun MusicPlayerRoot(
                 error = updateError,
                 onDismiss = { if (!updating) updateInfo = null },
                 onInstall = {
-                    runCatching {
-                        try {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    android.net.Uri.parse("market://details?id=" + BuildConfig.APPLICATION_ID)
-                                )
-                            )
-                        } catch (_: Exception) {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    android.net.Uri.parse(info.apkUrl)
-                                )
-                            )
-                        }
-                        updateInfo = null
-                    }.onFailure {
-                        updateError = I18n.t("Unable to open the update page.")
-                    }
-                }
+                     runCatching {
+                         UpdateManager.enqueueDownload(context, info)
+                         Toast.makeText(context, I18n.t("APK download started."), Toast.LENGTH_LONG).show()
+                         updateInfo = null
+                     }.onFailure {
+                         updateError = I18n.t("Unable to download the update.")
+                     }
+                 }
             )
         }
 
