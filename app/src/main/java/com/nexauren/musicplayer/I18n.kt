@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.nexauren.musicplayer2
 
 enum class AppLanguage(val label: String) {
     ENGLISH("English"),
