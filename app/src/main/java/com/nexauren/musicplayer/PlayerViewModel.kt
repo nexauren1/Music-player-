@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Metadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import android.content.Context
@@ -21,8 +22,17 @@ import kotlinx.coroutines.withContext
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = MusicRepository(application)
+    private val videoRepository = VideoRepository(application)
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
+    private val _videos = MutableStateFlow<List<VideoItem>>(emptyList())
+    val videos = _videos.asStateFlow()
+    private val _currentVideo = MutableStateFlow<VideoItem?>(null)
+    val currentVideo = _currentVideo.asStateFlow()
+    private val _shuffleEnabled = MutableStateFlow(false)
+    val shuffleEnabled = _shuffleEnabled.asStateFlow()
+    private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
+    val repeatModeState = _repeatMode.asStateFlow()
     val songs = _songs.asStateFlow()
 
     private val _currentSong = MutableStateFlow<Song?>(null)
@@ -46,6 +56,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var controller: MediaController? = null
     private val audioEffects = EqualizerController(application)
     private val playbackPrefs = application.getSharedPreferences("playback_effects", Context.MODE_PRIVATE)
+    private val audioLabPrefs = application.getSharedPreferences("audio_lab", Context.MODE_PRIVATE)
+    private val replayGainDb = mutableMapOf<Long, Float>()
+    private val _crossfadeSeconds = MutableStateFlow(audioLabPrefs.getFloat("crossfade", 4f).coerceIn(0f, 12f))
+    val crossfadeSeconds = _crossfadeSeconds.asStateFlow()
+    private val _replayGainEnabled = MutableStateFlow(audioLabPrefs.getBoolean("replay_gain", true))
+    val replayGainEnabled = _replayGainEnabled.asStateFlow()
     private val _speed = MutableStateFlow(playbackPrefs.getFloat("speed", 1f).coerceIn(.5f, 2f))
     val speed = _speed.asStateFlow()
     private val _pitch = MutableStateFlow(playbackPrefs.getFloat("pitch", 1f).coerceIn(.5f, 1.5f))
@@ -57,6 +73,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             connect()
             scan()
+            scanVideos()
             startPositionTicker()
         }
     }
@@ -75,10 +92,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 connected.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _isPlaying.value = isPlaying
+                        applyEffectiveVolume()
+                        syncWidget()
+                    }
+
+                    override fun onMetadata(metadata: Metadata) {
+                        val id = connected.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+                        ReplayGain.gainDb(metadata)?.let { replayGainDb[id] = it }
+                        applyEffectiveVolume()
                     }
 
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                        syncCurrent(mediaItem)
+                        if (mediaItem?.mediaId?.startsWith("video:") == true) {
+                            syncVideo(mediaItem)
+                            _currentSong.value = null
+                        } else {
+                            syncCurrent(mediaItem)
+                            _currentVideo.value = null
+                        }
+                        replayGainDb.remove(mediaItem?.mediaId?.toLongOrNull())
+                        applyEffectiveVolume()
+                        syncWidget()
                         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
                             reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
                         ) {
@@ -102,7 +136,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 withContext(Dispatchers.Main) {
                     syncCurrent(connected.currentMediaItem)
                     syncPosition()
-                    syncVolume()
+                    _volume.value = connected.volume.coerceIn(0f, 1f)
+                    applyEffectiveVolume()
                 }
             }
         }
@@ -115,6 +150,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             syncCurrent(controller?.currentMediaItem)
         }
     }
+
+    fun scanVideos() {
+        viewModelScope.launch {
+            _videos.value = videoRepository.scan()
+            syncVideo(controller?.currentMediaItem)
+        }
+    }
+
+    fun playVideo(video: VideoItem) {
+        val c = controller ?: return
+        val items = _videos.value.map { it.toMediaItem() }
+        val index = _videos.value.indexOfFirst { it.id == video.id }.coerceAtLeast(0)
+        _currentVideo.value = video
+        _currentSong.value = null
+        c.setMediaItems(items, index, 0L)
+        c.prepare()
+        c.play()
+        syncWidget()
+    }
+
+    fun playerController(): androidx.media3.common.Player? = controller
+
 
     fun play(song: Song) {
         val c = controller ?: return
@@ -129,6 +186,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         c.play()
         audioEffects.attach(c.audioSessionId)
         applyPlaybackParameters()
+        applyEffectiveVolume()
+        syncCurrent(c.currentMediaItem)
+        syncWidget()
         AppAnalytics.log("play_start", "song_id" to song.id.toString())
     }
 
@@ -163,29 +223,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setVolume(value: Float) {
         val normalized = value.coerceIn(0f, 1f)
-        controller?.volume = normalized
         _volume.value = normalized
+        applyEffectiveVolume()
     }
 
-    fun toggleShuffle() {
-        controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+    fun setCrossfadeSeconds(value: Float) {
+        val normalized = value.coerceIn(0f, 12f)
+        _crossfadeSeconds.value = normalized
+        audioLabPrefs.edit().putFloat("crossfade", normalized).apply()
+        applyEffectiveVolume()
     }
 
-    fun toggleRepeat() {
-        controller?.let {
-            it.repeatMode = when (it.repeatMode) {
-                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                else -> Player.REPEAT_MODE_OFF
-            }
+    fun setReplayGainEnabled(enabled: Boolean) {
+        _replayGainEnabled.value = enabled
+        audioLabPrefs.edit().putBoolean("replay_gain", enabled).apply()
+        applyEffectiveVolume()
+    }
+
+    fun toggleShuffle(): Boolean {
+        val enabled = !(controller?.shuffleModeEnabled ?: false)
+        controller?.shuffleModeEnabled = enabled
+        _shuffleEnabled.value = enabled
+        return enabled
+    }
+
+    fun toggleRepeat(): Int {
+        val mode = when (controller?.repeatMode ?: Player.REPEAT_MODE_OFF) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
         }
+        controller?.repeatMode = mode
+        _repeatMode.value = mode
+        return mode
     }
 
     fun isShuffleEnabled(): Boolean = controller?.shuffleModeEnabled == true
 
-    fun repeatMode(): Int = controller?.repeatMode ?: Player.REPEAT_MODE_OFF
+    fun repeatMode(): Int = _repeatMode.value
 
     fun audioSessionId(): Int = controller?.audioSessionId ?: 0
+
+    fun visualizerSessionId(): Int = controller?.audioSessionId ?: 0
 
     fun equalizerController(): EqualizerController = audioEffects
 
@@ -293,6 +372,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun syncVideo(mediaItem: MediaItem?) {
+        val id = mediaItem?.mediaId?.removePrefix("video:")?.toLongOrNull()
+        _currentVideo.value = id?.let { videoId ->
+            _videos.value.firstOrNull { it.id == videoId }
+        }
+    }
+
     private fun syncPosition() {
         controller?.let {
             _position.value = it.currentPosition.coerceAtLeast(0L)
@@ -301,9 +387,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun syncVolume() {
-        controller?.let {
-            _volume.value = it.volume.coerceIn(0f, 1f)
+    private fun applyEffectiveVolume() {
+        val c = controller ?: return
+        val currentId = c.currentMediaItem?.mediaId?.toLongOrNull()
+        val gain = if (_replayGainEnabled.value) replayGainDb[currentId] ?: 0f else 0f
+        val gainMultiplier = ReplayGain.multiplier(gain)
+        val durationMs = c.duration
+        val positionMs = c.currentPosition.coerceAtLeast(0L)
+        val transitionMs = (_crossfadeSeconds.value * 1000f).toLong()
+        val envelope = if (!c.isPlaying || transitionMs <= 0L || durationMs <= 0L) {
+            1f
+        } else {
+            val fadeIn = if (positionMs < transitionMs) positionMs.toFloat() / transitionMs else 1f
+            val remaining = durationMs - positionMs
+            val fadeOut = if (remaining < transitionMs) remaining.toFloat() / transitionMs else 1f
+            (0.22f + 0.78f * minOf(fadeIn, fadeOut).coerceIn(0f, 1f))
+        }
+        c.volume = (_volume.value * gainMultiplier * envelope).coerceIn(0f, 1f)
+    }
+
+    private fun syncWidget() {
+        val song = _currentSong.value ?: return
+        viewModelScope.launch {
+            getApplication<Application>()
+                .getSharedPreferences("now_playing_widget", Context.MODE_PRIVATE)
+                .edit()
+                .putString("title", song.title)
+                .putString("artist", song.artist)
+                .putBoolean("playing", _isPlaying.value)
+                .apply()
+            runCatching { MusicWidget.update(getApplication()) }
         }
     }
 
@@ -312,8 +425,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         positionJob = viewModelScope.launch {
             while (true) {
                 syncPosition()
-                syncVolume()
-                delay(500)
+                applyEffectiveVolume()
+                delay(250)
             }
         }
     }
@@ -330,6 +443,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     .build()
             )
             .build()
+
+    private fun VideoItem.toMediaItem(): MediaItem =
+        MediaItem.Builder()
+            .setMediaId("video:" + id)
+            .setUri(uri)
+            .setMimeType("video/*")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsPlayable(true)
+                    .setIsBrowsable(false)
+                    .build()
+            )
+            .build()
+
+    val isVideoPlaying: Boolean
+        get() = _currentVideo.value != null
 
     override fun onCleared() {
         positionJob?.cancel()

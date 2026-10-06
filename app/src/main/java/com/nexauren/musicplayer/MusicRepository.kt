@@ -19,7 +19,8 @@ data class Song(
     val duration: Long,
     val uri: Uri,
     val albumId: Long,
-    val dateAddedMillis: Long = 0L
+    val dateAddedMillis: Long = 0L,
+    val folder: String = "Unknown folder"
 )
 
 class MusicRepository(private val context: Context) {
@@ -40,7 +41,8 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DATE_ADDED
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATA
         )
 
         context.contentResolver.query(
@@ -57,9 +59,14 @@ class MusicRepository(private val context: Context) {
             val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val dataIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idIndex)
+                val data = if (dataIndex >= 0) cursor.getString(dataIndex).orEmpty() else ""
+                val folder = data.substringBeforeLast("/", "Music")
+                    .substringAfterLast("/", "Music")
+                    .ifBlank { "Music" }
                 result += Song(
                     id = id,
                     title = cursor.getString(titleIndex).orEmpty().ifBlank { "Unknown title" },
@@ -68,7 +75,8 @@ class MusicRepository(private val context: Context) {
                     duration = cursor.getLong(durationIndex),
                     uri = ContentUris.withAppendedId(collection, id),
                     albumId = cursor.getLong(albumIdIndex),
-                    dateAddedMillis = cursor.getLong(dateAddedIndex) * 1000L
+                    dateAddedMillis = cursor.getLong(dateAddedIndex) * 1000L,
+                    folder = folder
                 )
             }
         }

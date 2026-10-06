@@ -7,5 +7,6 @@ class MusicPlayerApp : Application() {
         super.onCreate()
         NotificationHelper.createChannels(this)
         UpdateWorker.schedule(this)
+        UpdateWorker.checkNow(this)
     }
 }

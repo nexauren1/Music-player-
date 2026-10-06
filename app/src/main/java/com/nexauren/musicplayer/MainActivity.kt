@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -49,6 +51,8 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Sort
@@ -163,6 +167,19 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         AppAnalytics.onActivityStop()
         super.onStop()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerViewModel.isVideoPlaying) {
+            runCatching {
+                enterPictureInPictureMode(
+                    PictureInPictureParams.Builder()
+                        .setAspectRatio(Rational(16, 9))
+                        .build()
+                )
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -324,6 +341,9 @@ private enum class AppScreen(private val key: String) {
     RECENTLY_PLAYED("Recently played"),
     ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
+    AUDIO_LAB("Audio Lab"),
+    FOLDERS("Folders"),
+    VIDEOS("Videos"),
     PREMIUM("Premium"),
     SETTINGS("Settings");
 
@@ -343,6 +363,7 @@ private fun MusicPlayerRoot(
     val activity = context as? ComponentActivity
     val songs by vm.songs.collectAsState()
     val currentSong by vm.currentSong.collectAsState()
+    val videoPlaying = vm.currentVideo.collectAsState().value != null
     val playing by vm.isPlaying.collectAsState()
     val position by vm.position.collectAsState()
     val duration by vm.duration.collectAsState()
@@ -391,10 +412,33 @@ private fun MusicPlayerRoot(
         notificationsAllowed = NotificationHelper.areNotificationsEnabled(context)
     }
 
+    val videoPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        vm.scanVideos()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         vm.scan()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_MEDIA_VIDEO
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            videoPermissionLauncher.launch(Manifest.permission.READ_MEDIA_VIDEO)
+            return@rememberLauncherForActivityResult
+        }
         if (Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
@@ -409,6 +453,9 @@ private fun MusicPlayerRoot(
         val audioPermission =
             if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
             else Manifest.permission.READ_EXTERNAL_STORAGE
+        val videoPermission =
+            if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO
+            else Manifest.permission.READ_EXTERNAL_STORAGE
 
         if (androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
@@ -418,6 +465,16 @@ private fun MusicPlayerRoot(
             audioPermissionLauncher.launch(audioPermission)
         } else {
             vm.scan()
+            if (Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    videoPermission
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                videoPermissionLauncher.launch(videoPermission)
+            } else {
+                vm.scanVideos()
+            }
             if (Build.VERSION.SDK_INT >= 33 &&
                 androidx.core.content.ContextCompat.checkSelfPermission(
                     context,
@@ -432,6 +489,7 @@ private fun MusicPlayerRoot(
         premiumSnapshot = premiumRepo.loadLocal()
         delay(1500)
         if (updateInfo == null) {
+            UpdateWorker.checkNow(context)
             updateInfo = UpdateManager.check(context)
         }
     }
@@ -527,6 +585,9 @@ private fun MusicPlayerRoot(
                         AppScreen.RECENTLY_PLAYED to Icons.Filled.History,
                         AppScreen.ACCOUNT to Icons.Filled.Person,
                         AppScreen.EQUALIZER to Icons.Filled.Tune,
+                        AppScreen.AUDIO_LAB to Icons.Filled.Tune,
+                        AppScreen.FOLDERS to Icons.Filled.Folder,
+                        AppScreen.VIDEOS to Icons.Filled.VideoLibrary,
                         AppScreen.PREMIUM to Icons.Filled.Star,
                         AppScreen.SETTINGS to Icons.Filled.Settings
                     ).forEach { (item, icon) ->
@@ -733,6 +794,33 @@ private fun MusicPlayerRoot(
                         onBack = { screen = AppScreen.HOME },
                         onOpenPremium = { screen = AppScreen.PREMIUM }
                     )
+                    AppScreen.AUDIO_LAB -> AudioLabScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        currentSong = currentSong,
+                        onBack = { screen = AppScreen.HOME },
+                        premium = premiumSnapshot
+                    )
+                    AppScreen.FOLDERS -> FolderScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        songs = filteredSongs
+                    )
+                    AppScreen.VIDEOS -> VideoScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        onEnterPip = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                runCatching {
+                                    activity?.enterPictureInPictureMode(
+                                        PictureInPictureParams.Builder()
+                                            .setAspectRatio(Rational(16, 9))
+                                            .build()
+                                    )
+                                }
+                            }
+                        }
+                    )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
                         account = accountSnapshot,
@@ -908,6 +996,7 @@ private fun MusicPlayerRoot(
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
                                     checkingUpdate = true
+                                    UpdateWorker.checkNow(context)
                                     val found = UpdateManager.check(context)
                                     updateInfo = found
                                     checkingUpdate = false
@@ -1466,9 +1555,10 @@ private fun SongListScreen(
 }
 
 @Composable
-private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
+fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
     val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
+    var tagEditorOpen by rememberSaveable(song.id, "tag_editor") { mutableStateOf(false) }
 
     Card(
         Modifier.fillMaxWidth().clickable { vm.play(song) },
@@ -1502,6 +1592,7 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                     TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
                     TextButton(onClick = { vm.playNext(song); menu = false }) { Text(I18n.t("Play next")) }
                     TextButton(onClick = { vm.addToQueue(song); menu = false }) { Text(I18n.t("Add to queue")) }
+                    TextButton(onClick = { tagEditorOpen = true; menu = false }) { Text(I18n.t("Edit tags")) }
                     TextButton(onClick = {
                         menu = false
                         runCatching {
@@ -1524,6 +1615,17 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                 }
             }
         }
+    }
+
+    if (tagEditorOpen) {
+        TagEditorDialog(
+            song = song,
+            onDismiss = { tagEditorOpen = false },
+            onSaved = {
+                tagEditorOpen = false
+                vm.scan()
+            }
+        )
     }
 }
 
@@ -1684,6 +1786,9 @@ private fun NowPlayingSheet(
     onDrivingMode: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
+    val shuffleEnabled by vm.shuffleEnabled.collectAsState()
+    val repeatMode by vm.repeatModeState.collectAsState()
+    val toastContext = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
         skipPartiallyExpanded = true
@@ -1844,7 +1949,20 @@ private fun NowPlayingSheet(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, I18n.t("Shuffle")) }
+                            IconButton(onClick = {
+                                val enabled = vm.toggleShuffle()
+                                Toast.makeText(
+                                    toastContext,
+                                    if (enabled) I18n.t("Shuffle on") else I18n.t("Shuffle off"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }) {
+                                Icon(
+                                    Icons.Filled.Shuffle,
+                                    I18n.t("Shuffle"),
+                                    tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, I18n.t("Previous track"), Modifier.size(30.dp)) }
                             Surface(
                                 Modifier.size(70.dp),
@@ -1861,7 +1979,21 @@ private fun NowPlayingSheet(
                                 }
                             }
                             IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, I18n.t("Next track"), Modifier.size(30.dp)) }
-                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, I18n.t("Repeat")) }
+                            IconButton(onClick = {
+                                val mode = vm.toggleRepeat()
+                                val label = when (mode) {
+                                    Player.REPEAT_MODE_ALL -> I18n.t("Repeat all")
+                                    Player.REPEAT_MODE_ONE -> I18n.t("Repeat one")
+                                    else -> I18n.t("Repeat off")
+                                }
+                                Toast.makeText(toastContext, label, Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    Icons.Filled.Repeat,
+                                    I18n.t("Repeat"),
+                                    tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }
