@@ -4181,6 +4181,7 @@ private fun UpdateDialog(
         text = {
             Column {
                 Text(I18n.t("Music Player ") + info.versionName)
+                Text(I18n.t("Update size") + ": " + formatFileSize(info.sizeBytes), color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(7.dp))
                 Text(info.changelog, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (updating) {
