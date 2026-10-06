@@ -58,6 +58,10 @@
                 android:resource="@xml/music_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".UpdateDownloadReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
