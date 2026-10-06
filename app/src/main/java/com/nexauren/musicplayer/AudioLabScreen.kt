@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +52,12 @@ fun AudioLabScreen(
 ) {
     val context = LocalContext.current
     val playing by vm.isPlaying.collectAsState()
+    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
+        PremiumPlan.LIFETIME -> true
+        PremiumPlan.QUARTERLY -> premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
+        PremiumPlan.NONE -> false
+    }
+
     val stored = remember { AudioLabStore.load(context) }
     var crossfade by remember { mutableFloatStateOf(stored.crossfadeSeconds) }
     var replayGain by remember { mutableStateOf(stored.replayGain) }
@@ -90,6 +97,7 @@ fun AudioLabScreen(
                         Text(crossfade.toInt().toString() + "s", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
                         Switch(
+                            enabled = premiumActive,
                             checked = crossfade > 0f,
                             onCheckedChange = {
                                 crossfade = if (it) 4f else 0f
@@ -99,6 +107,7 @@ fun AudioLabScreen(
                         )
                     }
                     Slider(
+                        enabled = premiumActive,
                         value = crossfade,
                         onValueChange = {
                             crossfade = it
@@ -108,7 +117,12 @@ fun AudioLabScreen(
                         valueRange = 0f..12f,
                         steps = 11
                     )
-                    Text(I18n.t("Stable fade transition is used with the current Media3 player engine."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (premiumActive) I18n.t("Stable fade transition is used with the current Media3 player engine.")
+                        else I18n.t("Premium feature"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -120,6 +134,7 @@ fun AudioLabScreen(
                         Text(I18n.t("Normalize tracks that contain ReplayGain metadata."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
+                        enabled = premiumActive,
                         checked = replayGain,
                         onCheckedChange = {
                             replayGain = it
@@ -133,15 +148,18 @@ fun AudioLabScreen(
         item {
             Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(I18n.t("Visualizer"), fontWeight = FontWeight.Black)
+                    Text(
+                        if (premiumActive) I18n.t("Visualizer") else I18n.t("Visualizer") + " • " + I18n.t("Premium"),
+                        fontWeight = FontWeight.Black
+                    )
                     Text(currentSong?.title ?: I18n.t("Play a track first"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(10.dp))
                     AndroidView(
-                        modifier = Modifier.fillMaxWidth().height(220.dp),
+                        modifier = Modifier.fillMaxWidth().height(220.dp).then(if (premiumActive) Modifier else Modifier.alpha(.45f)),
                         factory = { AudioVisualizerView(it) },
                         update = {
                             it.setAccentColor(accent)
-                            it.attachSession(vm.audioSessionId(), playing)
+                            it.attachSession(vm.audioSessionId(), playing && premiumActive)
                         }
                     )
                 }
