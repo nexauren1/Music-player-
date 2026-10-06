@@ -4,7 +4,11 @@ Music Player is a polished offline-first Android music player built with Kotlin,
 
 ## Latest
 
-Music Player 1.5.8 is the production release candidate for public distribution.
+Music Player 1.9.3 is the production release for public distribution.
+
+- Android package: `com.nexauren.musicplayer`
+- Firebase Analytics enabled
+- Firebase Authentication and Firestore ready for the new package
 
 - English and Portuguese interface
 - Redesigned compact mini player
