@@ -373,6 +373,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun queueCurrentSongId(): Long? =
         controller?.currentMediaItem?.mediaId?.toLongOrNull()
 
+    fun queueCurrentMediaId(): String? =
+        controller?.currentMediaItem?.mediaId
+
     fun removeFromQueueMedia(mediaId: String) {
         val c = controller ?: return
         val index = (0 until c.mediaItemCount).firstOrNull { i ->
