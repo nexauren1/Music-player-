@@ -5,11 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.app.DownloadManager
-import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
-import androidx.core.net.toUri
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -20,7 +17,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
@@ -110,6 +106,7 @@ object NotificationHelper {
         val intent = Intent(context, UpdateDownloadReceiver::class.java).apply {
             putExtra(UpdateDownloadReceiver.EXTRA_URL, info.apkUrl)
             putExtra(UpdateDownloadReceiver.EXTRA_VERSION, info.versionName)
+            putExtra(UpdateDownloadReceiver.EXTRA_SHA256, info.sha256)
         }
         val pending = PendingIntent.getBroadcast(
             context,
@@ -123,7 +120,7 @@ object NotificationHelper {
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
             .setContentTitle(title)
-            .setContentText(I18n.t("Tap to download the APK directly."))
+            .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog))
             .setContentIntent(pending)
             .setAutoCancel(true)
@@ -216,21 +213,36 @@ object NotificationHelper {
 }
 
 object UpdateManager {
-    fun enqueueDownload(context: Context, info: UpdateInfo): Long =
-        enqueueDownload(context, info.apkUrl, info.versionName)
+    fun enqueueDownload(context: Context, info: UpdateInfo) {
+        enqueueDownload(context, info.apkUrl, info.versionName, info.sha256)
+    }
 
-    fun enqueueDownload(context: Context, url: String, versionName: String): Long {
+    fun enqueueDownload(
+        context: Context,
+        url: String,
+        versionName: String,
+        sha256: String = ""
+    ) {
         require(url.isNotBlank()) { "APK download URL is empty." }
-        val safeVersion = versionName.replace(Regex("[^A-Za-z0-9._-]+"), "_").ifBlank { "latest" }
-        val request = DownloadManager.Request(url.toUri())
-            .setTitle("Music Player $safeVersion")
-            .setDescription("Downloading APK update")
-            .setMimeType("application/vnd.android.package-archive")
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "music-player-$safeVersion.apk")
-        return context.getSystemService(DownloadManager::class.java).enqueue(request)
+        val input = androidx.work.workDataOf(
+            UpdateDownloadWorker.KEY_URL to url,
+            UpdateDownloadWorker.KEY_VERSION to versionName,
+            UpdateDownloadWorker.KEY_SHA256 to sha256
+        )
+        val request = OneTimeWorkRequestBuilder<UpdateDownloadWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setInputData(input)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "nexa_music_apk_download",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
     }
 
     private const val MANIFEST_FALLBACK =
@@ -327,6 +339,141 @@ object UpdateManager {
         }.getOrNull()
 }
 
+
+class UpdateDownloadWorker(
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
+
+    companion object {
+        const val KEY_URL = "apk_url"
+        const val KEY_VERSION = "version_name"
+        const val KEY_SHA256 = "sha256"
+    }
+
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val url = inputData.getString(KEY_URL).orEmpty()
+        val version = inputData.getString(KEY_VERSION).orEmpty()
+        val expectedSha256 = inputData.getString(KEY_SHA256).orEmpty()
+
+        if (url.isBlank() || version.isBlank()) {
+            NotificationHelper.showDownloadFailure(
+                applicationContext,
+                I18n.t("Invalid update download information.")
+            )
+            return@withContext Result.failure()
+        }
+
+        val tempFile = File(
+            applicationContext.cacheDir,
+            "music-player-update-$version.apk.part"
+        )
+        val apkFile = File(
+            applicationContext.cacheDir,
+            "music-player-update-$version.apk"
+        )
+
+        runCatching {
+            tempFile.delete()
+            apkFile.delete()
+
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "application/vnd.android.package-archive")
+                setRequestProperty("User-Agent", "MusicPlayer/" + BuildConfig.VERSION_NAME)
+            }
+
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                error("HTTP $code")
+            }
+
+            val total = connection.contentLengthLong
+            var downloaded = 0L
+            var lastPercent = -1
+            NotificationHelper.showDownloadProgress(applicationContext, version, 0)
+
+            connection.inputStream.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        downloaded += read
+
+                        if (total > 0L) {
+                            val percent = ((downloaded * 100L) / total)
+                                .toInt()
+                                .coerceIn(0, 100)
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                NotificationHelper.showDownloadProgress(
+                                    applicationContext,
+                                    version,
+                                    percent
+                                )
+                            }
+                        } else {
+                            setProgress(androidx.work.workDataOf("downloadedBytes" to downloaded))
+                        }
+                    }
+                }
+            }
+            connection.disconnect()
+
+            if (tempFile.length() <= 0L) {
+                error("Downloaded APK is empty.")
+            }
+
+            if (expectedSha256.isNotBlank()) {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                tempFile.inputStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (!actual.equals(expectedSha256.trim(), ignoreCase = true)) {
+                    error("Checksum verification failed.")
+                }
+            }
+
+            if (!tempFile.renameTo(apkFile)) {
+                tempFile.copyTo(apkFile, overwrite = true)
+                tempFile.delete()
+            }
+
+            val uri = FileProvider.getUriForFile(
+                applicationContext,
+                applicationContext.packageName + ".fileprovider",
+                apkFile
+            )
+
+            NotificationHelper.showDownloadReady(
+                applicationContext,
+                version,
+                uri
+            )
+            Result.success()
+        }.getOrElse { error ->
+            tempFile.delete()
+            apkFile.delete()
+            NotificationHelper.showDownloadFailure(
+                applicationContext,
+                error.message ?: "Could not download the update."
+            )
+            if (runAttemptCount < 2) Result.retry() else Result.failure()
+        }
+    }
+}
+
 class UpdateWorker(
     context: Context,
     params: WorkerParameters
@@ -342,7 +489,7 @@ class UpdateWorker(
     }
 
     companion object {
-        private const val PERIODIC_NAME = "nexa_music_update_check_v2"
+        private const val PERIODIC_NAME = "nexa_music_update_check_v3"
         private const val IMMEDIATE_NAME = "nexa_music_update_check_now"
 
         private fun constraints() = Constraints.Builder()
