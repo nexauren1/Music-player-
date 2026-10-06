@@ -6,7 +6,7 @@ The app is prepared for Firebase, but Firebase registration is intentionally not
 
 Use this exact package/application ID in Firebase:
 
-com.nexauren.musicplayer
+com.nexauren.musicplayer2
 
 ## Firebase Authentication
 
@@ -21,6 +21,12 @@ app/google-services.json
 Then enable the Google Services Gradle plugin in the root/app build configuration.
 
 For Google Sign-In, register the app signing SHA-1 and SHA-256 fingerprints in Firebase.
+
+Production signing fingerprints:
+- SHA-1: 33:A0:BB:D9:64:C3:38:E3:BF:82:45:41:0F:11:0C:8F:31:67:D3:A8
+- SHA-256: 15:C1:41:6C:53:47:F3:2C:FD:0F:68:03:94:E8:D2:F9:22:CE:0C:0C:14:96:7B:7C:D9:E2:25:E6:DB:DD:31:9F
+
+After registering the new Android app, download the new `google-services.json` and replace the repository copy.
 
 ## Firestore entitlement
 
