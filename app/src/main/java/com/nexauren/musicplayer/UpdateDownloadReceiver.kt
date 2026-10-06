@@ -1,4 +1,4 @@
-package com.musicplayer.app
+package com.nexauren.musicplayer
 
 import android.content.BroadcastReceiver
 import android.content.Context
