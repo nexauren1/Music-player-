@@ -1555,7 +1555,7 @@ private fun SongListScreen(
 }
 
 @Composable
-private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
+fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
     val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
     var tagEditorOpen by rememberSaveable(song.id, "tag_editor") { mutableStateOf(false) }
