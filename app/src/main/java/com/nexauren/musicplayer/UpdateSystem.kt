@@ -28,6 +28,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+
+private fun formatUpdateSize(bytes: Long): String {
+    if (bytes <= 0L) return "Size unavailable"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var index = 0
+    while (value >= 1024.0 && index < units.lastIndex) {
+        value /= 1024.0
+        index++
+    }
+    return if (index == 0) "\${value.toInt()} \${units[index]}" else "%.1f %s".format(value, units[index])
+}
+
 data class UpdateInfo(
     val versionCode: Long,
     val versionName: String,
@@ -106,6 +119,7 @@ object NotificationHelper {
         )
 
         val title = I18n.t("Music Player ") + info.versionName + " " + I18n.t("is available")
+        val text = I18n.t("Update size") + ": " + formatUpdateSize(info.sizeBytes) + " • " + I18n.t("Tap to download")
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
             .setContentTitle(title)
