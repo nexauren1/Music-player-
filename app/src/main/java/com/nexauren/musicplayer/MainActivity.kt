@@ -433,6 +433,7 @@ private fun MusicPlayerRoot(
         premiumSnapshot = premiumRepo.loadLocal()
         delay(1500)
         if (updateInfo == null) {
+            UpdateWorker.checkNow(context)
             updateInfo = UpdateManager.check(context)
         }
     }
@@ -917,6 +918,7 @@ private fun MusicPlayerRoot(
                             activity?.let { host ->
                                 host.lifecycleScope.launch {
                                     checkingUpdate = true
+                                    UpdateWorker.checkNow(context)
                                     val found = UpdateManager.check(context)
                                     updateInfo = found
                                     checkingUpdate = false
