@@ -390,6 +390,8 @@ object I18n {
         "matching copies" to "cópias correspondentes",
         "5m" to "5 min",
         "15m" to "15 min",
+        "min" to "min",
+        "Cancel timer" to "Cancelar temporizador",
         "30m" to "30 min",
         "60m" to "60 min",
         "Choose when playback should stop." to "Escolha quando a reprodução deve parar.",
