@@ -94,8 +94,8 @@ fun DuplicateCleanerScreen(
                     )
                     Spacer(Modifier.padding(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { mode = "music" }) { Text(I18n.t("Music") + " ("${audioGroups.size})") }
-                        Button(onClick = { mode = "video" }) { Text(I18n.t("Videos") + " ("${videoGroups.size})") }
+                        Button(onClick = { mode = "music" }) { Text(I18n.t("Music") + " (" + audioGroups.size + ")") }
+                        Button(onClick = { mode = "video" }) { Text(I18n.t("Videos") + " (" + videoGroups.size + ")") }
                     }
                     Spacer(Modifier.padding(4.dp))
                     Button(
@@ -116,7 +116,7 @@ fun DuplicateCleanerScreen(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
                         Text(group.first().title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("${group.size} matching copies", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(group.size.toString() + " " + I18n.t("matching copies"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         group.forEachIndexed { index, song ->
                             Text(
                                 "${I18n.t(if (index == 0) "KEEP" else "DELETE")} • ${song.artist} • ${song.album}",
