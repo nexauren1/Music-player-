@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.clickable
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -29,7 +31,7 @@ class MusicWidget : GlanceAppWidget() {
             val artist = prefs.getString("artist", "Tap to open") ?: "Tap to open"
             val playing = prefs.getBoolean("playing", false)
             Column(
-                modifier = GlanceModifier.fillMaxSize().background(Color(0xFF11131A)).padding(12.dp),
+                modifier = GlanceModifier.fillMaxSize().background(Color(0xFF11131A)).clickable(actionStartActivity<MainActivity>()).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(title, style = TextStyle(color = Color.White, fontSize = 15.sp))
@@ -38,7 +40,7 @@ class MusicWidget : GlanceAppWidget() {
                 Spacer(GlanceModifier.height(8.dp))
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (playing) "PLAYING" else "PAUSED", style = TextStyle(color = Color(0xFFB88CFF), fontSize = 11.sp))
-                    Spacer(GlanceModifier.height(1.dp))
+                    Spacer(GlanceModifier.width(8.dp))
                     Text("Music Player", style = TextStyle(color = Color(0xFF777D8C), fontSize = 10.sp))
                 }
             }
