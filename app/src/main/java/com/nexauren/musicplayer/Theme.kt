@@ -32,7 +32,10 @@ enum class AppThemeStyle(val label: String) {
     CYBER("Cyber"),
     LAGOON("Lagoon"),
     ROSE("Rose"),
-    EMERALD("Emerald")
+    EMERALD("Emerald"),
+    PLASMA("Plasma"),
+    AMBER("Amber"),
+    ARCTIC("Arctic")
 }
 
 enum class AppBackgroundStyle(val label: String) {
@@ -42,7 +45,8 @@ enum class AppBackgroundStyle(val label: String) {
     MIDNIGHT("Midnight"),
     NEON_WAVE("Neon Wave"),
     SOFT("Soft"),
-    STUDIO("Studio")
+    STUDIO("Studio"),
+    LIQUID("Liquid")
 }
 
 data class AppearanceState(
@@ -153,6 +157,21 @@ fun themeColors(theme: AppThemeStyle, dark: Boolean) =
             secondary = Color(0xFF9DE4FF), secondaryContainer = Color(0xFF17465A),
             tertiary = Color(0xFFE5C1FF), tertiaryContainer = Color(0xFF432957)
         )
+        AppThemeStyle.PLASMA -> darkColorScheme(
+            primary = Color(0xFFFF9AF2), primaryContainer = Color(0xFF64105F),
+            secondary = Color(0xFF8EE7FF), secondaryContainer = Color(0xFF10485C),
+            tertiary = Color(0xFFB8FF9C), tertiaryContainer = Color(0xFF244D18)
+        )
+        AppThemeStyle.AMBER -> darkColorScheme(
+            primary = Color(0xFFFFC86B), primaryContainer = Color(0xFF65420C),
+            secondary = Color(0xFFFFA67C), secondaryContainer = Color(0xFF672A18),
+            tertiary = Color(0xFFFFE3A3), tertiaryContainer = Color(0xFF55420B)
+        )
+        AppThemeStyle.ARCTIC -> darkColorScheme(
+            primary = Color(0xFFB7E8FF), primaryContainer = Color(0xFF174C63),
+            secondary = Color(0xFFBFD3FF), secondaryContainer = Color(0xFF263B6B),
+            tertiary = Color(0xFFC7FFE9), tertiaryContainer = Color(0xFF164D3D)
+        )
     } else when (theme) {
         AppThemeStyle.VIOLET -> lightColorScheme(
             primary = Color(0xFF6D42E8), primaryContainer = Color(0xFFE9DEFF),
@@ -204,6 +223,21 @@ fun themeColors(theme: AppThemeStyle, dark: Boolean) =
             secondary = Color(0xFF1C698D), secondaryContainer = Color(0xFFCDEBFA),
             tertiary = Color(0xFF76549A), tertiaryContainer = Color(0xFFE9DDF7)
         )
+        AppThemeStyle.PLASMA -> lightColorScheme(
+            primary = Color(0xFF9C238F), primaryContainer = Color(0xFFFFD9F6),
+            secondary = Color(0xFF006E83), secondaryContainer = Color(0xFFC8F3FF),
+            tertiary = Color(0xFF34701E), tertiaryContainer = Color(0xFFD9F8C9)
+        )
+        AppThemeStyle.AMBER -> lightColorScheme(
+            primary = Color(0xFF956000), primaryContainer = Color(0xFFFFE6B1),
+            secondary = Color(0xFFA9421F), secondaryContainer = Color(0xFFFFDAD0),
+            tertiary = Color(0xFF766000), tertiaryContainer = Color(0xFFFFF0B8)
+        )
+        AppThemeStyle.ARCTIC -> lightColorScheme(
+            primary = Color(0xFF006A8C), primaryContainer = Color(0xFFCBEFFF),
+            secondary = Color(0xFF4C5FAD), secondaryContainer = Color(0xFFDEE3FF),
+            tertiary = Color(0xFF14775F), tertiaryContainer = Color(0xFFC8F4E2)
+        )
     }
 
 fun backgroundBrush(style: AppBackgroundStyle, dark: Boolean, theme: AppThemeStyle): Brush {
@@ -242,6 +276,14 @@ fun backgroundBrush(style: AppBackgroundStyle, dark: Boolean, theme: AppThemeSty
         AppBackgroundStyle.STUDIO -> Brush.verticalGradient(
             listOf(
                 accent.primaryContainer.copy(alpha = if (dark) .60f else .90f),
+                base
+            )
+        )
+        AppBackgroundStyle.LIQUID -> Brush.linearGradient(
+            listOf(
+                accent.primaryContainer,
+                accent.tertiaryContainer,
+                accent.secondaryContainer,
                 base
             )
         )
