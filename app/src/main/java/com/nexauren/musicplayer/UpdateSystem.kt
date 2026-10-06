@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.app.DownloadManager
+import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.work.Constraints
@@ -88,10 +90,11 @@ object NotificationHelper {
         if (prefs.getString("last_notified", "") == notificationKey) return
         prefs.edit().putString("last_notified", notificationKey).apply()
 
-        val intent = Intent(Intent.ACTION_VIEW, info.apkUrl.toUri()).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(context, UpdateDownloadReceiver::class.java).apply {
+            putExtra(UpdateDownloadReceiver.EXTRA_URL, info.apkUrl)
+            putExtra(UpdateDownloadReceiver.EXTRA_VERSION, info.versionName)
         }
-        val pending = PendingIntent.getActivity(
+        val pending = PendingIntent.getBroadcast(
             context,
             UPDATE_NOTIFICATION_ID,
             intent,
@@ -102,7 +105,7 @@ object NotificationHelper {
         val notification = NotificationCompat.Builder(context, UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_music)
             .setContentTitle(title)
-            .setContentText(I18n.t("Tap to open the new APK."))
+            .setContentText(I18n.t("Tap to download the APK directly."))
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog))
             .setContentIntent(pending)
             .setAutoCancel(true)
@@ -144,6 +147,23 @@ object NotificationHelper {
 }
 
 object UpdateManager {
+    fun enqueueDownload(context: Context, info: UpdateInfo): Long =
+        enqueueDownload(context, info.apkUrl, info.versionName)
+
+    fun enqueueDownload(context: Context, url: String, versionName: String): Long {
+        require(url.isNotBlank()) { "APK download URL is empty." }
+        val safeVersion = versionName.replace(Regex("[^A-Za-z0-9._-]+"), "_").ifBlank { "latest" }
+        val request = DownloadManager.Request(url.toUri())
+            .setTitle("Music Player $safeVersion")
+            .setDescription("Downloading APK update")
+            .setMimeType("application/vnd.android.package-archive")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "music-player-$safeVersion.apk")
+        return context.getSystemService(DownloadManager::class.java).enqueue(request)
+    }
+
     private const val MANIFEST_FALLBACK =
         "https://raw.githubusercontent.com/nexauren1/Music-player-/main/update.json"
 
