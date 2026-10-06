@@ -56,7 +56,7 @@ fun TrimDialog(
         progress = 0
         error = ""
 
-        val output = File(context.cacheDir, "musicplayer_clip_\${System.currentTimeMillis()}.mp4")
+        val output = File(context.cacheDir, "musicplayer_clip_" + System.currentTimeMillis() + ".mp4")
         val clip = MediaItem.ClippingConfiguration.Builder()
             .setStartPositionMs((start * 1000f).toLong())
             .setEndPositionMs((end * 1000f).toLong())
@@ -118,17 +118,17 @@ fun TrimDialog(
 
     AlertDialog(
         onDismissRequest = { if (!exporting) onDismiss() },
-        title = { Text("Trim \${song.title}") },
+        title = { Text(I18n.t("Trim") + " " + song.title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Start \${formatDuration((start * 1000).toLong())}")
+                Text(I18n.t("Start") + ": " + formatDuration((start * 1000).toLong()))
                 Slider(
                     enabled = !exporting,
                     value = start,
                     onValueChange = { start = it.coerceAtMost(end - 0.5f) },
                     valueRange = 0f..maxSeconds
                 )
-                Text("End \${formatDuration((end * 1000).toLong())}")
+                Text(I18n.t("End") + ": " + formatDuration((end * 1000).toLong()))
                 Slider(
                     enabled = !exporting,
                     value = end,
