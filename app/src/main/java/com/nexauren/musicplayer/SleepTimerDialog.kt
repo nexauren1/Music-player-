@@ -27,7 +27,7 @@ fun SleepTimerDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     if (remaining > 0L) {
-                        "Playback will stop in \${remaining / 60000L}m \${((remaining % 60000L) / 1000L)}s."
+                        I18n.t("Playback will stop in ") + (remaining / 60000L).toString() + "m " + ((remaining % 60000L) / 1000L).toString() + "s."
                     } else {
                         I18n.t("Choose when playback should stop.")
                     }
@@ -42,7 +42,7 @@ fun SleepTimerDialog(
                                 vm.startSleepTimer(minutes)
                                 onDismiss()
                             },
-                            label = { Text("\${minutes}m") }
+                            label = { Text(minutes.toString() + " " + I18n.t("min")) }
                         )
                     }
                 }
