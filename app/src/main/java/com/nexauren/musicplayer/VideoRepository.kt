@@ -1,4 +1,4 @@
-package com.nexauren.musicplayer
+package com.nexauren.musicplayer2
 
 import android.content.ContentUris
 import android.content.Context
