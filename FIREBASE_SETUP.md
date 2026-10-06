@@ -6,7 +6,7 @@ The app is prepared for Firebase, but Firebase registration is intentionally not
 
 Use this exact package/application ID in Firebase:
 
-com.musicplayer.app
+com.nexauren.musicplayer
 
 ## Firebase Authentication
 
