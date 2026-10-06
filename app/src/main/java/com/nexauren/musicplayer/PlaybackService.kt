@@ -84,7 +84,7 @@ class PlaybackService : MediaLibraryService() {
             page: Int,
             pageSize: Int,
             params: LibraryParams?
-        ): ListenableFuture<LibraryResult<androidx.media3.common.util.UnstableApi.ImmutableList<MediaItem>>> {
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val filtered = libraryItems.filter { item ->
                 val title = item.mediaMetadata.title?.toString().orEmpty()
                 val artist = item.mediaMetadata.artist?.toString().orEmpty()
