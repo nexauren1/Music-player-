@@ -12,11 +12,13 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ControllerInfo
 import androidx.media3.session.MediaLibraryService.LibraryParams
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class PlaybackService : MediaLibraryService() {
@@ -40,7 +42,7 @@ class PlaybackService : MediaLibraryService() {
             page: Int,
             pageSize: Int,
             params: LibraryParams?
-        ): ListenableFuture<LibraryResult<androidx.media3.common.util.UnstableApi.ImmutableList<MediaItem>>> {
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             if (libraryItems.isEmpty()) refreshLibrary()
             if (parentId != ROOT_ID) {
                 return Futures.immediateFuture(
