@@ -1,4 +1,4 @@
-package com.musicplayer.app
+package com.nexauren.musicplayer
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
