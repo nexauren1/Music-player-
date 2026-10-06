@@ -121,14 +121,14 @@ fun TrimDialog(
         title = { Text(I18n.t("Trim") + " " + song.title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(I18n.t("Start") + ": " + formatDuration((start * 1000).toLong()))
+                Text(I18n.t("Start") + ": " + formatTrimDuration((start * 1000).toLong()))
                 Slider(
                     enabled = !exporting,
                     value = start,
                     onValueChange = { start = it.coerceAtMost(end - 0.5f) },
                     valueRange = 0f..maxSeconds
                 )
-                Text(I18n.t("End") + ": " + formatDuration((end * 1000).toLong()))
+                Text(I18n.t("End") + ": " + formatTrimDuration((end * 1000).toLong()))
                 Slider(
                     enabled = !exporting,
                     value = end,
@@ -161,4 +161,12 @@ fun TrimDialog(
             }
         }
     )
+}
+
+
+private fun formatTrimDuration(milliseconds: Long): String {
+    val totalSeconds = milliseconds.coerceAtLeast(0L) / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%d:%02d".format(minutes, seconds)
 }
