@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -345,7 +346,9 @@ private enum class AppScreen(private val key: String) {
     FOLDERS("Folders"),
     VIDEOS("Videos"),
     PREMIUM("Premium"),
-    SETTINGS("Settings");
+    SETTINGS("Settings"),
+    DUPLICATES("Duplicate cleaner"),
+    QUEUE("Playback queue");
 
     val label: String
         get() = I18n.t(key)
@@ -396,6 +399,8 @@ private fun MusicPlayerRoot(
     var drivingModeOpen by rememberSaveable { mutableStateOf(false) }
     var drivingMode by rememberSaveable { mutableStateOf(context.getSharedPreferences("player_modes", android.content.Context.MODE_PRIVATE).getBoolean("driving_mode", false)) }
     var showTutorial by rememberSaveable { mutableStateOf(!context.getSharedPreferences("first_run", android.content.Context.MODE_PRIVATE).getBoolean("tutorial_done", false)) }
+    var trimOpen by rememberSaveable { mutableStateOf(false) }
+    var sleepTimerOpen by rememberSaveable { mutableStateOf(false) }
 
     val appTheme = runCatching { AppThemeStyle.valueOf(themeName) }.getOrDefault(AppThemeStyle.VIOLET)
     val appBackground = runCatching { AppBackgroundStyle.valueOf(backgroundName) }.getOrDefault(AppBackgroundStyle.GRADIENT)
@@ -410,6 +415,13 @@ private fun MusicPlayerRoot(
         ActivityResultContracts.RequestPermission()
     ) {
         notificationsAllowed = NotificationHelper.areNotificationsEnabled(context)
+    }
+
+    val deleteMediaLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) {
+        vm.scan()
+        vm.scanVideos()
     }
 
     val videoPermissionLauncher = rememberLauncherForActivityResult(
@@ -1044,6 +1056,21 @@ private fun MusicPlayerRoot(
                 onPrevious = vm::previous,
                 onNext = vm::next,
                 onDismiss = { drivingModeOpen = false }
+            )
+        }
+
+        if (trimOpen && currentSong != null) {
+            TrimDialog(
+                song = currentSong!!,
+                vm = vm,
+                onDismiss = { trimOpen = false }
+            )
+        }
+
+        if (sleepTimerOpen) {
+            SleepTimerDialog(
+                vm = vm,
+                onDismiss = { sleepTimerOpen = false }
             )
         }
 
