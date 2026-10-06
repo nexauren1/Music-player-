@@ -68,6 +68,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val pitch = _pitch.asStateFlow()
     private var positionJob: Job? = null
     private var sleepJob: Job? = null
+    private val _sleepRemainingMs = MutableStateFlow(0L)
+    val sleepRemainingMs = _sleepRemainingMs.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -322,6 +324,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         AppAnalytics.log("queue_add", "song_id" to song.id.toString())
     }
 
+    fun addSongsToQueue(songs: List<Song>) {
+        songs.forEach(::addToQueue)
+    }
+
+    fun queueSongs(): List<Song> {
+        val c = controller ?: return emptyList()
+        return (0 until c.mediaItemCount).mapNotNull { index ->
+            c.getMediaItemAt(index).mediaId.toLongOrNull()?.let { id ->
+                _songs.value.firstOrNull { it.id == id }
+            }
+        }
+    }
+
+    fun queueCurrentSongId(): Long? =
+        controller?.currentMediaItem?.mediaId?.toLongOrNull()
+
+    fun removeFromQueue(songId: Long) {
+        val c = controller ?: return
+        val index = (0 until c.mediaItemCount).firstOrNull { i ->
+            c.getMediaItemAt(i).mediaId.toLongOrNull() == songId
+        } ?: return
+        c.removeMediaItem(index)
+        syncCurrent(c.currentMediaItem)
+    }
+
     fun favorite(song: Song) {
         repository.toggleFavorite(song.id)
         _libraryVersion.value += 1
@@ -357,10 +384,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startSleepTimer(minutes: Int) {
         sleepJob?.cancel()
+        val total = minutes.coerceAtLeast(1) * 60_000L
+        _sleepRemainingMs.value = total
         sleepJob = viewModelScope.launch {
-            delay(minutes * 60_000L)
+            var remaining = total
+            while (remaining > 0L) {
+                delay(1_000L)
+                remaining = (remaining - 1_000L).coerceAtLeast(0L)
+                _sleepRemainingMs.value = remaining
+            }
             controller?.pause()
+            _sleepRemainingMs.value = 0L
         }
+    }
+
+    fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        _sleepRemainingMs.value = 0L
     }
 
     fun refreshCurrent() { syncCurrent(controller?.currentMediaItem) }
@@ -464,6 +505,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         positionJob?.cancel()
         sleepJob?.cancel()
+        _sleepRemainingMs.value = 0L
         controller?.release()
         audioEffects.release()
         super.onCleared()
