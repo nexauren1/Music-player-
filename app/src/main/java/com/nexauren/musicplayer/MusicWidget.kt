@@ -1,6 +1,7 @@
 package com.musicplayer.app
 
 import android.content.Context
+import android.content.Intent
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
@@ -8,7 +9,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
-import androidx.glance.clickable
+import androidx.glance.action.clickable
 import androidx.glance.layout.Column
 import androidx.glance.layout.padding
 import androidx.glance.text.Text
@@ -25,7 +26,7 @@ class MusicWidget : GlanceAppWidget() {
             Column(
                 modifier = GlanceModifier
                     .padding(12.dp)
-                    .clickable(actionStartActivity<MainActivity>())
+                    .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
             ) {
                 Text(title)
                 Text(artist)
