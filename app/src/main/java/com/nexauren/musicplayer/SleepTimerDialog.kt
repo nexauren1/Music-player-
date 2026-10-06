@@ -22,14 +22,14 @@ fun SleepTimerDialog(
     val remaining by vm.sleepRemainingMs.collectAsState()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sleep timer") },
+        title = { Text(I18n.t("Sleep timer")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     if (remaining > 0L) {
-                        "Playback will stop in \${remaining / 60000L}m \${((remaining % 60000L) / 1000L)}s."
+                        I18n.t("Playback will stop in ") + (remaining / 60000L).toString() + "m " + ((remaining % 60000L) / 1000L).toString() + "s."
                     } else {
-                        "Choose when playback should stop."
+                        I18n.t("Choose when playback should stop.")
                     }
                 )
                 Row(
@@ -42,7 +42,7 @@ fun SleepTimerDialog(
                                 vm.startSleepTimer(minutes)
                                 onDismiss()
                             },
-                            label = { Text("\${minutes}m") }
+                            label = { Text(minutes.toString() + " " + I18n.t("min")) }
                         )
                     }
                 }
@@ -55,10 +55,10 @@ fun SleepTimerDialog(
                     vm.cancelSleepTimer()
                     onDismiss()
                 }
-            ) { Text("Cancel timer") }
+            ) { Text(I18n.t("Cancel timer")) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(I18n.t("Close")) }
         }
     )
 }

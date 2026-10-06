@@ -22,6 +22,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -559,6 +562,11 @@ private fun MusicPlayerRoot(
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet {
+                    Column(
+                        Modifier
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                    ) {
                     Spacer(Modifier.height(28.dp))
                     Row(
                         Modifier.padding(horizontal = 22.dp),
@@ -652,6 +660,7 @@ private fun MusicPlayerRoot(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    }
                 }
             }
         ) {
@@ -1293,6 +1302,7 @@ private fun LibraryScreen(
     var sortName by rememberSaveable { mutableStateOf(LibrarySortMode.TITLE.name) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var moreOpen by remember { mutableStateOf(false) }
     val sortMode = runCatching { LibrarySortMode.valueOf(sortName) }.getOrDefault(LibrarySortMode.TITLE)
     val sortedSongs = remember(songs, sortMode) {
         when (sortMode) {
@@ -1303,11 +1313,17 @@ private fun LibraryScreen(
     }
     val selectedSongs = sortedSongs.filter { it.id in selectedIds }
     val context = LocalContext.current
+
+    fun clearSelection() {
+        selectionMode = false
+        selectedIds = emptySet()
+        moreOpen = false
+    }
+
     val deleteLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) {
-        selectionMode = false
-        selectedIds = emptySet()
+        clearSelection()
         vm.scan()
     }
 
@@ -1319,8 +1335,7 @@ private fun LibraryScreen(
             deleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
         } else {
             MediaLibraryActions.deleteImmediately(context, uris)
-            selectionMode = false
-            selectedIds = emptySet()
+            clearSelection()
             vm.scan()
         }
     }
@@ -1330,88 +1345,162 @@ private fun LibraryScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { SearchBar(query, onQueryChange) }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard(I18n.t("Tracks"), songs.size.toString(), Modifier.weight(1f))
-                StatCard(I18n.t("Albums"), songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
-                StatCard(I18n.t("Artists"), songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
-            }
-        }
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    AssistChip(
-                        onClick = {
-                            sortName = when (sortMode) {
-                                LibrarySortMode.TITLE -> LibrarySortMode.ARTIST.name
-                                LibrarySortMode.ARTIST -> LibrarySortMode.RECENTLY_ADDED.name
-                                LibrarySortMode.RECENTLY_ADDED -> LibrarySortMode.TITLE.name
-                            }
-                        },
-                        leadingIcon = { Icon(Icons.Filled.Sort, null) },
-                        label = {
+            if (selectionMode) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Column(Modifier.padding(10.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                when (sortMode) {
-                                    LibrarySortMode.TITLE -> I18n.t("Sort: title")
-                                    LibrarySortMode.ARTIST -> I18n.t("Sort: artist")
-                                    LibrarySortMode.RECENTLY_ADDED -> I18n.t("Sort: recently added")
-                                }
+                                I18n.t("Selected") + ": " + selectedSongs.size,
+                                modifier = Modifier.weight(1f),
+                                fontWeight = FontWeight.Black
                             )
+                            TextButton(onClick = { clearSelection() }) {
+                                Text(I18n.t("Cancel selection"))
+                            }
                         }
-                    )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        selectedIds = if (selectedSongs.size == sortedSongs.size) {
+                                            emptySet()
+                                        } else {
+                                            sortedSongs.map { it.id }.toSet()
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            if (selectedSongs.size == sortedSongs.size) I18n.t("Clear all")
+                                            else I18n.t("Select all")
+                                        )
+                                    }
+                                )
+                            }
+                            item {
+                                AssistChip(
+                                    enabled = selectedSongs.isNotEmpty(),
+                                    onClick = {
+                                        vm.addSongsToQueue(selectedSongs)
+                                        clearSelection()
+                                    },
+                                    label = { Text(I18n.t("Add to queue")) }
+                                )
+                            }
+                            item {
+                                AssistChip(
+                                    enabled = selectedSongs.isNotEmpty(),
+                                    onClick = {
+                                        MediaLibraryActions.shareUris(context, selectedSongs.map { it.uri }, "audio/*")
+                                    },
+                                    label = { Text(I18n.t("Share")) }
+                                )
+                            }
+                            item {
+                                AssistChip(
+                                    enabled = selectedSongs.isNotEmpty(),
+                                    onClick = { deleteSelected() },
+                                    label = { Text(I18n.t("Delete")) }
+                                )
+                            }
+                            item {
+                                Box {
+                                    AssistChip(
+                                        onClick = { moreOpen = true },
+                                        label = { Text(I18n.t("More")) }
+                                    )
+                                    DropdownMenu(
+                                        expanded = moreOpen,
+                                        onDismissRequest = { moreOpen = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(I18n.t("Play next")) },
+                                            onClick = {
+                                                selectedSongs.forEach(vm::playNext)
+                                                moreOpen = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(I18n.t("Add favorite")) },
+                                            onClick = {
+                                                selectedSongs.forEach { song ->
+                                                    if (!vm.isFavorite(song)) vm.favorite(song)
+                                                }
+                                                moreOpen = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(I18n.t("Sleep timer")) },
+                                            onClick = {
+                                                vm.startSleepTimer(15)
+                                                moreOpen = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                item {
-                    AssistChip(
-                        onClick = {
-                            selectionMode = !selectionMode
-                            if (!selectionMode) selectedIds = emptySet()
-                        },
-                        label = { Text(if (selectionMode) "Cancel selection" else "Select") }
-                    )
+            } else {
+                SearchBar(query, onQueryChange)
+            }
+        }
+
+        if (!selectionMode) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatCard(I18n.t("Tracks"), songs.size.toString(), Modifier.weight(1f))
+                    StatCard(I18n.t("Albums"), songs.map { it.albumId }.distinct().size.toString(), Modifier.weight(1f))
+                    StatCard(I18n.t("Artists"), songs.map { it.artist }.distinct().size.toString(), Modifier.weight(1f))
                 }
-                if (selectionMode) {
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         AssistChip(
                             onClick = {
-                                selectedIds = if (selectedIds.size == sortedSongs.size) {
-                                    emptySet()
-                                } else {
-                                    sortedSongs.map { it.id }.toSet()
+                                sortName = when (sortMode) {
+                                    LibrarySortMode.TITLE -> LibrarySortMode.ARTIST.name
+                                    LibrarySortMode.ARTIST -> LibrarySortMode.RECENTLY_ADDED.name
+                                    LibrarySortMode.RECENTLY_ADDED -> LibrarySortMode.TITLE.name
                                 }
                             },
-                            label = { Text(if (selectedIds.size == sortedSongs.size) "Clear all" else "Select all") }
+                            leadingIcon = { Icon(Icons.Filled.Sort, null) },
+                            label = {
+                                Text(
+                                    when (sortMode) {
+                                        LibrarySortMode.TITLE -> I18n.t("Sort: title")
+                                        LibrarySortMode.ARTIST -> I18n.t("Sort: artist")
+                                        LibrarySortMode.RECENTLY_ADDED -> I18n.t("Sort: recently added")
+                                    }
+                                )
+                            }
                         )
                     }
                     item {
                         AssistChip(
-                            enabled = selectedSongs.isNotEmpty(),
-                            onClick = { vm.addSongsToQueue(selectedSongs) },
-                            label = { Text("Queue \${selectedSongs.size}") }
-                        )
-                    }
-                    item {
-                        AssistChip(
-                            enabled = selectedSongs.isNotEmpty(),
                             onClick = {
-                                MediaLibraryActions.shareUris(context, selectedSongs.map { it.uri }, "audio/*")
+                                selectionMode = true
+                                selectedIds = emptySet()
                             },
-                            label = { Text("Share") }
-                        )
-                    }
-                    item {
-                        AssistChip(
-                            enabled = selectedSongs.isNotEmpty(),
-                            onClick = { deleteSelected() },
-                            label = { Text("Delete") }
+                            label = { Text(I18n.t("Select")) }
                         )
                     }
                 }
             }
+            item {
+                SectionTitle(I18n.t("All music"), I18n.t("Your complete local library"))
+            }
         }
-        item {
-            SectionTitle(I18n.t("All music"), I18n.t("Your complete local library"))
-        }
+
         if (songs.isEmpty()) {
             item { EmptyCard(I18n.t("No songs found.")) }
         } else {
@@ -1424,6 +1513,10 @@ private fun LibraryScreen(
                     selected = song.id in selectedIds,
                     onToggleSelection = {
                         selectedIds = if (song.id in selectedIds) selectedIds - song.id else selectedIds + song.id
+                    },
+                    onLongPressSelect = {
+                        selectionMode = true
+                        selectedIds = selectedIds + song.id
                     }
                 )
             }
@@ -1685,7 +1778,8 @@ fun SongRow(
     showPlays: Boolean,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onToggleSelection: (() -> Unit)? = null
+    onToggleSelection: (() -> Unit)? = null,
+    onLongPressSelect: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
@@ -1694,9 +1788,15 @@ fun SongRow(
     Card(
         Modifier
             .fillMaxWidth()
-            .clickable {
-                if (selectionMode) onToggleSelection?.invoke() else vm.play(song)
-            },
+            .combinedClickable(
+                onClick = {
+                    if (selectionMode) onToggleSelection?.invoke() else vm.play(song)
+                },
+                onLongClick = {
+                    if (!selectionMode) onLongPressSelect?.invoke()
+                    else onToggleSelection?.invoke()
+                }
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -1727,12 +1827,12 @@ fun SongRow(
                 IconButton(onClick = { vm.favorite(song) }) {
                     Icon(
                         if (vm.isFavorite(song)) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        "Favorite"
+                        I18n.t("Favorite")
                     )
                 }
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, "More")
+                        Icon(Icons.Filled.MoreVert, I18n.t("More"))
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
@@ -1867,17 +1967,17 @@ private fun MiniPlayer(
                         Icon(Icons.Filled.MoreVert, I18n.t("More options"))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(text = { Text("Cut / Trim") }, onClick = { menuOpen = false; onTrim() })
-                        DropdownMenuItem(text = { Text("Visualizer mode") }, onClick = { menuOpen = false; onVisualizer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Cut / Trim")) }, onClick = { menuOpen = false; onTrim() })
+                        DropdownMenuItem(text = { Text(I18n.t("Visualizer mode")) }, onClick = { menuOpen = false; onVisualizer() })
                         DropdownMenuItem(text = { Text("Share") }, onClick = { menuOpen = false; onShare() })
                         DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; onDelete() })
-                        DropdownMenuItem(text = { Text("Playback queue") }, onClick = { menuOpen = false; onQueue() })
-                        DropdownMenuItem(text = { Text("Search library") }, onClick = { menuOpen = false; onSearch() })
-                        DropdownMenuItem(text = { Text("Sleep timer") }, onClick = { menuOpen = false; onSleepTimer() })
+                        DropdownMenuItem(text = { Text(I18n.t("Playback queue")) }, onClick = { menuOpen = false; onQueue() })
+                        DropdownMenuItem(text = { Text(I18n.t("Search library")) }, onClick = { menuOpen = false; onSearch() })
+                        DropdownMenuItem(text = { Text(I18n.t("Sleep timer")) }, onClick = { menuOpen = false; onSleepTimer() })
                         DropdownMenuItem(text = { Text(I18n.t("Effects")) }, onClick = { menuOpen = false; onOpenEffects() })
                         DropdownMenuItem(text = { Text(I18n.t("Equalizer")) }, onClick = { menuOpen = false; onOpenEqualizer() })
                         DropdownMenuItem(text = { Text(I18n.t("Driving mode")) }, onClick = { menuOpen = false; onDrivingMode() })
-                        DropdownMenuItem(text = { Text("Favorite") }, onClick = { menuOpen = false; onFavorite() })
+                        DropdownMenuItem(text = { Text(I18n.t("Favorite")) }, onClick = { menuOpen = false; onFavorite() })
                         DropdownMenuItem(text = { Text(I18n.t("Reset effects")) }, onClick = { menuOpen = false; onResetEffects() })
                     }
                 }

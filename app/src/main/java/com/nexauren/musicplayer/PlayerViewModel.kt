@@ -328,25 +328,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         songs.forEach(::addToQueue)
     }
 
-    fun queueSongs(): List<Song> {
-        val c = controller ?: return emptyList()
-        return (0 until c.mediaItemCount).mapNotNull { index ->
-            c.getMediaItemAt(index).mediaId.toLongOrNull()?.let { id ->
-                _songs.value.firstOrNull { it.id == id }
+    fun addVideosToQueue(videos: List<VideoItem>) {
+        val c = controller ?: return
+        videos.forEach { video ->
+            val item = video.toMediaItem()
+            if (c.mediaItemCount == 0) {
+                c.setMediaItem(item)
+            } else {
+                c.addMediaItem(c.mediaItemCount, item)
             }
         }
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        AppAnalytics.log("queue_videos_add", "count" to videos.size.toString())
+    }
+
+    data class QueueEntry(
+        val mediaId: String,
+        val title: String,
+        val subtitle: String,
+        val isVideo: Boolean
+    )
+
+    fun queueEntries(): List<QueueEntry> {
+        val c = controller ?: return emptyList()
+        return (0 until c.mediaItemCount).mapNotNull { index ->
+            val item = c.getMediaItemAt(index)
+            val mediaId = item.mediaId
+            if (mediaId.startsWith("video:")) {
+                val id = mediaId.removePrefix("video:").toLongOrNull()
+                val video = _videos.value.firstOrNull { it.id == id }
+                QueueEntry(mediaId, video?.title ?: item.mediaMetadata.title?.toString().orEmpty(), video?.folder ?: "Video", true)
+            } else {
+                val id = mediaId.toLongOrNull()
+                val song = _songs.value.firstOrNull { it.id == id }
+                QueueEntry(mediaId, song?.title ?: item.mediaMetadata.title?.toString().orEmpty(), song?.artist ?: item.mediaMetadata.artist?.toString().orEmpty(), false)
+            }
+        }
+    }
+
+    fun queueSongs(): List<Song> = queueEntries().filter { !it.isVideo }.mapNotNull { entry ->
+        entry.mediaId.toLongOrNull()?.let { id -> _songs.value.firstOrNull { it.id == id } }
     }
 
     fun queueCurrentSongId(): Long? =
         controller?.currentMediaItem?.mediaId?.toLongOrNull()
 
-    fun removeFromQueue(songId: Long) {
+    fun queueCurrentMediaId(): String? =
+        controller?.currentMediaItem?.mediaId
+
+    fun removeFromQueueMedia(mediaId: String) {
         val c = controller ?: return
         val index = (0 until c.mediaItemCount).firstOrNull { i ->
-            c.getMediaItemAt(i).mediaId.toLongOrNull() == songId
+            c.getMediaItemAt(i).mediaId == mediaId
         } ?: return
         c.removeMediaItem(index)
         syncCurrent(c.currentMediaItem)
+        syncVideo(c.currentMediaItem)
+    }
+
+    fun removeFromQueue(songId: Long) {
+        removeFromQueueMedia(songId.toString())
     }
 
     fun favorite(song: Song) {

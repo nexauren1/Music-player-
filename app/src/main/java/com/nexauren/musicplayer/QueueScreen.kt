@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,8 +30,7 @@ fun QueueScreen(
     vm: PlayerViewModel,
     onBack: () -> Unit
 ) {
-    val songs = vm.queueSongs()
-    val currentId = vm.queueCurrentSongId()
+    val entries = vm.queueEntries()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -44,38 +42,65 @@ fun QueueScreen(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") }
-                Column(Modifier.weight(1f)) {
-                    Text("Playback queue", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-                    Text("${songs.size} tracks", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, I18n.t("Back"))
                 }
-                Spacer(Modifier.padding(2.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        I18n.t("Playback queue"),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        entries.size.toString() + " " + I18n.t("tracks"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
-        if (songs.isEmpty()) {
+        if (entries.isEmpty()) {
             item {
                 Card(Modifier.fillMaxWidth()) {
-                    Text("The playback queue is empty.", Modifier.padding(18.dp))
+                    Text(I18n.t("The playback queue is empty."), Modifier.padding(18.dp))
                 }
             }
         } else {
-            itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+            itemsIndexed(entries, key = { _, entry -> entry.mediaId }) { index, entry ->
                 Card(Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.fillMaxWidth().padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${index + 1}", Modifier.padding(horizontal = 8.dp), fontWeight = FontWeight.Black)
+                        Text(
+                            (index + 1).toString(),
+                            Modifier.padding(horizontal = 8.dp),
+                            fontWeight = FontWeight.Black
+                        )
                         Column(Modifier.weight(1f)) {
-                            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
-                            Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (song.id == currentId) {
-                                Text("Now playing", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Text(
+                                entry.title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                if (entry.isVideo) I18n.t("Video") + " • " + entry.subtitle
+                                else entry.subtitle,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (entry.mediaId == vm.queueCurrentMediaId()) {
+                                Text(
+                                    I18n.t("Now playing"),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
-                        IconButton(onClick = { vm.removeFromQueue(song.id) }) {
-                            Icon(Icons.Filled.Delete, "Remove from queue")
+                        IconButton(onClick = { vm.removeFromQueueMedia(entry.mediaId) }) {
+                            Icon(Icons.Filled.Delete, I18n.t("Remove from queue"))
                         }
                     }
                 }

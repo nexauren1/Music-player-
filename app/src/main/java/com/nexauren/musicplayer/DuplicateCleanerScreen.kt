@@ -87,15 +87,15 @@ fun DuplicateCleanerScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Duplicate cleaner", style = MaterialTheme.typography.headlineSmall)
+                    Text(I18n.t("Duplicate cleaner"), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Finds matching title/artist and duration, then keeps the first copy and marks the extras for deletion.",
+                        I18n.t("Finds matching title/artist and duration, then keeps the first copy and marks the extras for deletion."),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.padding(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { mode = "music" }) { Text("Music (${audioGroups.size})") }
-                        Button(onClick = { mode = "video" }) { Text("Videos (${videoGroups.size})") }
+                        Button(onClick = { mode = "music" }) { Text(I18n.t("Music") + " (" + audioGroups.size + ")") }
+                        Button(onClick = { mode = "video" }) { Text(I18n.t("Videos") + " (" + videoGroups.size + ")") }
                     }
                     Spacer(Modifier.padding(4.dp))
                     Button(
@@ -105,7 +105,7 @@ fun DuplicateCleanerScreen(
                     ) {
                         androidx.compose.material3.Icon(Icons.Filled.DeleteSweep, null)
                         Spacer(Modifier.padding(horizontal = 3.dp))
-                        Text("Delete ${duplicateUris.size} duplicates")
+                        Text(I18n.t("Delete duplicates") + " (" + duplicateUris.size + ")")
                     }
                 }
             }
@@ -116,10 +116,10 @@ fun DuplicateCleanerScreen(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
                         Text(group.first().title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("${group.size} matching copies", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(group.size.toString() + " " + I18n.t("matching copies"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         group.forEachIndexed { index, song ->
                             Text(
-                                "${if (index == 0) "KEEP" else "DELETE"} • ${song.artist} • ${song.album}",
+                                "${I18n.t(if (index == 0) "KEEP" else "DELETE")} • ${song.artist} • ${song.album}",
                                 color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.padding(top = 6.dp)
                             )
@@ -135,7 +135,7 @@ fun DuplicateCleanerScreen(
                         Text("${group.size} matching copies", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         group.forEachIndexed { index, video ->
                             Text(
-                                "${if (index == 0) "KEEP" else "DELETE"} • ${video.folder}",
+                                "${I18n.t(if (index == 0) "KEEP" else "DELETE")} • ${video.folder}",
                                 color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.padding(top = 6.dp)
                             )
@@ -149,16 +149,16 @@ fun DuplicateCleanerScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete duplicates?") },
-            text = { Text("This keeps the first copy in each group and deletes the remaining matching files.") },
+            title = { Text(I18n.t("Delete duplicates?")) },
+            text = { Text(I18n.t("This keeps the first copy in each group and deletes the remaining matching files.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     deleteDuplicates()
-                }) { Text("Delete") }
+                }) { Text(I18n.t("Delete")) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) { Text(I18n.t("Cancel")) }
             }
         )
     }
