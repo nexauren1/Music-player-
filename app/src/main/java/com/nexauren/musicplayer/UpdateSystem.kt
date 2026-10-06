@@ -8,6 +8,7 @@ import android.content.Intent
 import android.app.DownloadManager
 import android.os.Environment
 import androidx.core.app.NotificationCompat
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -18,6 +19,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
@@ -59,6 +62,7 @@ object NotificationHelper {
     const val UPDATE_CHANNEL = "updates"
     const val PLAYBACK_CHANNEL = "playback"
     private const val UPDATE_NOTIFICATION_ID = 2001
+    private const val DOWNLOAD_NOTIFICATION_ID = 2003
     private const val INSTALL_NOTIFICATION_ID = 2002
     private const val PREFS = "update_notifications"
 
@@ -114,6 +118,57 @@ object NotificationHelper {
 
         context.getSystemService(NotificationManager::class.java)
             .notify(UPDATE_NOTIFICATION_ID, notification)
+    }
+
+
+    fun showDownloadProgress(context: Context, version: String, percent: Int) {
+        I18n.language = AppearanceStore.load(context).language
+        context.getSystemService(NotificationManager::class.java).notify(
+            DOWNLOAD_NOTIFICATION_ID,
+            NotificationCompat.Builder(context, UPDATE_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_music)
+                .setContentTitle(I18n.t("Downloading Music Player update"))
+                .setContentText("$version • $percent%")
+                .setProgress(100, percent.coerceIn(0, 100), false)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .build()
+        )
+    }
+
+    fun showDownloadReady(context: Context, version: String, uri: android.net.Uri) {
+        I18n.language = AppearanceStore.load(context).language
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pending = PendingIntent.getActivity(
+            context, DOWNLOAD_NOTIFICATION_ID, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        context.getSystemService(NotificationManager::class.java).notify(
+            DOWNLOAD_NOTIFICATION_ID,
+            NotificationCompat.Builder(context, UPDATE_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_music)
+                .setContentTitle(I18n.t("Update downloaded"))
+                .setContentText(I18n.t("Tap to install") + " • " + version)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .build()
+        )
+    }
+
+    fun showDownloadFailure(context: Context, message: String) {
+        I18n.language = AppearanceStore.load(context).language
+        context.getSystemService(NotificationManager::class.java).notify(
+            DOWNLOAD_NOTIFICATION_ID,
+            NotificationCompat.Builder(context, UPDATE_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_music)
+                .setContentTitle(I18n.t("Update download failed"))
+                .setContentText(message)
+                .setAutoCancel(true)
+                .build()
+        )
     }
 
     fun clearUpdateNotification(context: Context) {
