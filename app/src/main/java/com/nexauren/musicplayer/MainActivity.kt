@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -49,6 +51,8 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Sort
@@ -163,6 +167,19 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         AppAnalytics.onActivityStop()
         super.onStop()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerViewModel.isVideoPlaying) {
+            runCatching {
+                enterPictureInPictureMode(
+                    PictureInPictureParams.Builder()
+                        .setAspectRatio(Rational(16, 9))
+                        .build()
+                )
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -325,6 +342,8 @@ private enum class AppScreen(private val key: String) {
     ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
     AUDIO_LAB("Audio Lab"),
+    FOLDERS("Folders"),
+    VIDEOS("Videos"),
     PREMIUM("Premium"),
     SETTINGS("Settings");
 
@@ -344,6 +363,7 @@ private fun MusicPlayerRoot(
     val activity = context as? ComponentActivity
     val songs by vm.songs.collectAsState()
     val currentSong by vm.currentSong.collectAsState()
+    val videoPlaying = vm.currentVideo.collectAsState().value != null
     val playing by vm.isPlaying.collectAsState()
     val position by vm.position.collectAsState()
     val duration by vm.duration.collectAsState()
@@ -392,10 +412,33 @@ private fun MusicPlayerRoot(
         notificationsAllowed = NotificationHelper.areNotificationsEnabled(context)
     }
 
+    val videoPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        vm.scanVideos()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         vm.scan()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_MEDIA_VIDEO
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            videoPermissionLauncher.launch(Manifest.permission.READ_MEDIA_VIDEO)
+            return@rememberLauncherForActivityResult
+        }
         if (Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
@@ -410,6 +453,9 @@ private fun MusicPlayerRoot(
         val audioPermission =
             if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
             else Manifest.permission.READ_EXTERNAL_STORAGE
+        val videoPermission =
+            if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO
+            else Manifest.permission.READ_EXTERNAL_STORAGE
 
         if (androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
@@ -419,6 +465,16 @@ private fun MusicPlayerRoot(
             audioPermissionLauncher.launch(audioPermission)
         } else {
             vm.scan()
+            if (Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    videoPermission
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                videoPermissionLauncher.launch(videoPermission)
+            } else {
+                vm.scanVideos()
+            }
             if (Build.VERSION.SDK_INT >= 33 &&
                 androidx.core.content.ContextCompat.checkSelfPermission(
                     context,
@@ -530,6 +586,8 @@ private fun MusicPlayerRoot(
                         AppScreen.ACCOUNT to Icons.Filled.Person,
                         AppScreen.EQUALIZER to Icons.Filled.Tune,
                         AppScreen.AUDIO_LAB to Icons.Filled.Tune,
+                        AppScreen.FOLDERS to Icons.Filled.Folder,
+                        AppScreen.VIDEOS to Icons.Filled.VideoLibrary,
                         AppScreen.PREMIUM to Icons.Filled.Star,
                         AppScreen.SETTINGS to Icons.Filled.Settings
                     ).forEach { (item, icon) ->
@@ -742,6 +800,26 @@ private fun MusicPlayerRoot(
                         currentSong = currentSong,
                         onBack = { screen = AppScreen.HOME },
                         premium = premiumSnapshot
+                    )
+                    AppScreen.FOLDERS -> FolderScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        songs = filteredSongs
+                    )
+                    AppScreen.VIDEOS -> VideoScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        onEnterPip = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                runCatching {
+                                    activity?.enterPictureInPictureMode(
+                                        PictureInPictureParams.Builder()
+                                            .setAspectRatio(Rational(16, 9))
+                                            .build()
+                                    )
+                                }
+                            }
+                        }
                     )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
