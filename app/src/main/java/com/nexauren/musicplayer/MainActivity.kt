@@ -1786,6 +1786,9 @@ private fun NowPlayingSheet(
     onDrivingMode: () -> Unit
 ) {
     val volume by vm.volume.collectAsState()
+    val shuffleEnabled by vm.shuffleEnabled.collectAsState()
+    val repeatMode by vm.repeatModeState.collectAsState()
+    val toastContext = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
         skipPartiallyExpanded = true
@@ -1946,7 +1949,20 @@ private fun NowPlayingSheet(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = vm::toggleShuffle) { Icon(Icons.Filled.Shuffle, I18n.t("Shuffle")) }
+                            IconButton(onClick = {
+                                val enabled = vm.toggleShuffle()
+                                Toast.makeText(
+                                    toastContext,
+                                    if (enabled) I18n.t("Shuffle on") else I18n.t("Shuffle off"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }) {
+                                Icon(
+                                    Icons.Filled.Shuffle,
+                                    I18n.t("Shuffle"),
+                                    tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             IconButton(onClick = vm::previous) { Icon(Icons.Filled.SkipPrevious, I18n.t("Previous track"), Modifier.size(30.dp)) }
                             Surface(
                                 Modifier.size(70.dp),
@@ -1963,7 +1979,21 @@ private fun NowPlayingSheet(
                                 }
                             }
                             IconButton(onClick = vm::next) { Icon(Icons.Filled.SkipNext, I18n.t("Next track"), Modifier.size(30.dp)) }
-                            IconButton(onClick = vm::toggleRepeat) { Icon(Icons.Filled.Repeat, I18n.t("Repeat")) }
+                            IconButton(onClick = {
+                                val mode = vm.toggleRepeat()
+                                val label = when (mode) {
+                                    Player.REPEAT_MODE_ALL -> I18n.t("Repeat all")
+                                    Player.REPEAT_MODE_ONE -> I18n.t("Repeat one")
+                                    else -> I18n.t("Repeat off")
+                                }
+                                Toast.makeText(toastContext, label, Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    Icons.Filled.Repeat,
+                                    I18n.t("Repeat"),
+                                    tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }
