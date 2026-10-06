@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -43,6 +44,7 @@ fun DuplicateCleanerScreen(
     var mode by remember { mutableStateOf("music") }
     var refreshToken by remember { mutableIntStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val audioGroups = remember(songs, refreshToken) { DuplicateDetector.audio(songs) }
     val videoGroups = remember(videos, refreshToken) { DuplicateDetector.video(videos) }
@@ -63,11 +65,11 @@ fun DuplicateCleanerScreen(
     fun deleteDuplicates() {
         if (duplicateUris.isEmpty()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            MediaLibraryActions.buildDeleteRequest(vm.getApplication(), duplicateUris)?.let {
+            MediaLibraryActions.buildDeleteRequest(context, duplicateUris)?.let {
                 deleteLauncher.launch(IntentSenderRequest.Builder(it).build())
             }
         } else {
-            MediaLibraryActions.deleteImmediately(vm.getApplication(), duplicateUris)
+            MediaLibraryActions.deleteImmediately(context, duplicateUris)
             vm.scan()
             vm.scanVideos()
             refreshToken++
