@@ -324,6 +324,7 @@ private enum class AppScreen(private val key: String) {
     RECENTLY_PLAYED("Recently played"),
     ACCOUNT("Account"),
     EQUALIZER("Equalizer"),
+    AUDIO_LAB("Audio Lab"),
     PREMIUM("Premium"),
     SETTINGS("Settings");
 
@@ -527,6 +528,7 @@ private fun MusicPlayerRoot(
                         AppScreen.RECENTLY_PLAYED to Icons.Filled.History,
                         AppScreen.ACCOUNT to Icons.Filled.Person,
                         AppScreen.EQUALIZER to Icons.Filled.Tune,
+                        AppScreen.AUDIO_LAB to Icons.Filled.Tune,
                         AppScreen.PREMIUM to Icons.Filled.Star,
                         AppScreen.SETTINGS to Icons.Filled.Settings
                     ).forEach { (item, icon) ->
@@ -732,6 +734,13 @@ private fun MusicPlayerRoot(
                         premium = premiumSnapshot,
                         onBack = { screen = AppScreen.HOME },
                         onOpenPremium = { screen = AppScreen.PREMIUM }
+                    )
+                    AppScreen.AUDIO_LAB -> AudioLabScreen(
+                        modifier = Modifier.padding(padding),
+                        vm = vm,
+                        currentSong = currentSong,
+                        onBack = { screen = AppScreen.HOME },
+                        premium = premiumSnapshot
                     )
                     AppScreen.PREMIUM -> PremiumScreen(
                         modifier = Modifier.padding(padding),
@@ -1469,6 +1478,7 @@ private fun SongListScreen(
 private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
     val context = LocalContext.current
     var menu by rememberSaveable(song.id) { mutableStateOf(false) }
+    var tagEditorOpen by rememberSaveable(song.id, "tag_editor") { mutableStateOf(false) }
 
     Card(
         Modifier.fillMaxWidth().clickable { vm.play(song) },
@@ -1502,6 +1512,7 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                     TextButton(onClick = { vm.play(song); menu = false }) { Text(I18n.t("Play now")) }
                     TextButton(onClick = { vm.playNext(song); menu = false }) { Text(I18n.t("Play next")) }
                     TextButton(onClick = { vm.addToQueue(song); menu = false }) { Text(I18n.t("Add to queue")) }
+                    TextButton(onClick = { tagEditorOpen = true; menu = false }) { Text(I18n.t("Edit tags")) }
                     TextButton(onClick = {
                         menu = false
                         runCatching {
@@ -1524,6 +1535,17 @@ private fun SongRow(song: Song, vm: PlayerViewModel, showPlays: Boolean) {
                 }
             }
         }
+    }
+
+    if (tagEditorOpen) {
+        TagEditorDialog(
+            song = song,
+            onDismiss = { tagEditorOpen = false },
+            onSaved = {
+                tagEditorOpen = false
+                vm.scan()
+            }
+        )
     }
 }
 
