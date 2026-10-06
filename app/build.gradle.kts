@@ -12,8 +12,8 @@ android {
         applicationId = "com.musicplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.9.0"
+        versionCode = 27
+        versionName = "1.9.1"
 
         val paypalQuarterlyUrl = providers.gradleProperty("PAYPAL_QUARTERLY_URL")
             .getOrElse("")
@@ -33,6 +33,7 @@ android {
         buildConfigField("String", "PAYPAL_LIFETIME_URL", "\"$paypalLifetimeUrl\"")
         buildConfigField("String", "PAYPAL_WORKER_URL", "\"$paypalWorkerUrl\"")
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateManifestUrl\"" )
+
     }
 
     val releaseStoreFile = System.getenv("KEYSTORE_PATH")
@@ -109,7 +110,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
-
     implementation("androidx.media3:media3-extractor:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
     implementation("androidx.media3:media3-transformer:1.11.1")
@@ -117,7 +117,6 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
 
-    // Firebase account, premium entitlement and Google Sign-In stack.
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
