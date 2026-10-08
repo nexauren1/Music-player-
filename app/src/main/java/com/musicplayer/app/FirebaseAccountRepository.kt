@@ -146,7 +146,8 @@ class FirebaseAccountRepository(private val context: Context) {
 enum class PremiumPlan {
     NONE,
     QUARTERLY,
-    LIFETIME
+    LIFETIME,
+    SHARED
 }
 
 data class PremiumSnapshot(
@@ -156,7 +157,16 @@ data class PremiumSnapshot(
     val orderId: String? = null,
     val subscriptionId: String? = null,
     val cloudSynced: Boolean = false
-)
+) {
+    val isActive: Boolean
+        get() = cloudSynced && verified && when (plan) {
+            PremiumPlan.LIFETIME -> true
+            PremiumPlan.QUARTERLY ->
+                expiresAtMillis == null || expiresAtMillis > System.currentTimeMillis()
+            PremiumPlan.SHARED -> true
+            PremiumPlan.NONE -> false
+        }
+}
 
 class PremiumRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("premium_state", Context.MODE_PRIVATE)
@@ -183,17 +193,7 @@ class PremiumRepository(private val context: Context) {
         return PremiumSnapshot(plan, expires, verified, orderId, subscriptionId, cloudSynced)
     }
 
-    fun isPremium(): Boolean {
-        val state = loadLocal()
-        if (!state.cloudSynced || !state.verified) return false
-
-        return when (state.plan) {
-            PremiumPlan.LIFETIME -> true
-            PremiumPlan.QUARTERLY ->
-                state.expiresAtMillis == null || state.expiresAtMillis > System.currentTimeMillis()
-            PremiumPlan.NONE -> false
-        }
-    }
+    fun isPremium(): Boolean = loadLocal().isActive
 
 
     fun setVerifiedFromWorker(
@@ -263,9 +263,54 @@ class PremiumRepository(private val context: Context) {
         val user = FirebaseAuth.getInstance().currentUser ?: return Result.success(Unit)
 
         return runCatching {
-            val doc = FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(user.uid)
+            val firestore = FirebaseFirestore.getInstance()
+            val userDoc = firestore.collection("users").document(user.uid).get().await()
+
+            // Cross-app Premium source of truth: users/{uid}.premium.
+            // Music Player historically used only users/{uid}/entitlement/premium,
+            // which caused valid Premium accounts written by another Nexauren app
+            // to appear as Free when that subcollection was empty.
+            if (userDoc.exists() && userDoc.contains("premium")) {
+                val premium = userDoc.getBoolean("premium") == true
+                if (premium) {
+                    val rootPlan = when (userDoc.getString("plan")?.lowercase()) {
+                        "lifetime", "premium-lifetime" -> PremiumPlan.LIFETIME
+                        "quarterly", "premium-quarterly" -> PremiumPlan.QUARTERLY
+                        else -> PremiumPlan.SHARED
+                    }
+                    prefs.edit()
+                        .putString("ownerUid", user.uid)
+                        .putString("plan", rootPlan.name)
+                        .putLong("expiresAt", userDoc.getLong("expiresAtMillis") ?: 0L)
+                        .putBoolean("verified", true)
+                        .putString("orderId", userDoc.getString("orderId"))
+                        .putString("subscriptionId", userDoc.getString("paypalSubscriptionId"))
+                        .putBoolean("cloudSynced", true)
+                        .apply()
+                    AppAnalytics.log(
+                        "firestore_premium_sync",
+                        "source" to "users_document",
+                        "premium" to "true",
+                        "plan" to rootPlan.name.lowercase()
+                    )
+                    return@runCatching
+                } else {
+                    prefs.edit()
+                        .putString("ownerUid", user.uid)
+                        .putString("plan", PremiumPlan.NONE.name)
+                        .putLong("expiresAt", 0L)
+                        .putBoolean("verified", false)
+                        .putBoolean("cloudSynced", true)
+                        .remove("orderId")
+                        .remove("subscriptionId")
+                        .apply()
+                    AppAnalytics.log("firestore_premium_sync", "source" to "users_document", "premium" to "false")
+                    return@runCatching
+                }
+            }
+
+            // Backward-compatible fallback for Music Player's own entitlement document.
+            val doc = userDoc.reference
                 .collection("entitlement")
                 .document("premium")
                 .get()
