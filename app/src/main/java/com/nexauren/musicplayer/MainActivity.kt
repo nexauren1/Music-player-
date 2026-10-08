@@ -2250,12 +2250,7 @@ private fun EffectsScreen(
     val pitch by vm.pitch.collectAsState()
     var effects by remember { mutableStateOf(vm.effectState()) }
 
-    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
-        PremiumPlan.LIFETIME -> true
-        PremiumPlan.QUARTERLY ->
-            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
-        PremiumPlan.NONE -> false
-    }
+    val premiumActive = premium.isActive
 
     fun reset() {
         vm.resetEffects()
@@ -2497,12 +2492,7 @@ private fun EqualizerScreen(
     onBack: () -> Unit,
     onOpenPremium: () -> Unit
 ) {
-    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
-        PremiumPlan.LIFETIME -> true
-        PremiumPlan.QUARTERLY ->
-            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
-        PremiumPlan.NONE -> false
-    }
+    val premiumActive = premium.isActive
 
     var levels by remember { mutableStateOf(eq.normalizedLevels().ifEmpty { List(eq.bandCount()) { .5f } }) }
     var effects by remember { mutableStateOf(eq.effectState()) }
@@ -2909,12 +2899,7 @@ private fun PremiumScreen(
     lifetimeCheckoutReady: Boolean,
     refreshToken: Int
 ) {
-    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
-        PremiumPlan.LIFETIME -> true
-        PremiumPlan.QUARTERLY ->
-            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
-        PremiumPlan.NONE -> false
-    }
+    val premiumActive = premium.isActive
     val context = LocalContext.current
     val hasPendingPurchase = remember(refreshToken) {
         PayPalCheckout.loadPending(context) != null
@@ -3174,7 +3159,12 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
                 Column(Modifier.weight(1f)) {
                     Text(I18n.t("VERIFIED PURCHASE"), style = MaterialTheme.typography.labelMedium, color = accent, fontWeight = FontWeight.ExtraBold)
                     Text(
-                        if (premium.plan == PremiumPlan.LIFETIME) I18n.t("Lifetime Premium") else I18n.t("Quarterly Premium"),
+                        when (premium.plan) {
+                            PremiumPlan.LIFETIME -> I18n.t("Lifetime Premium")
+                            PremiumPlan.QUARTERLY -> I18n.t("Quarterly Premium")
+                            PremiumPlan.SHARED -> I18n.t("Premium Active")
+                            PremiumPlan.NONE -> I18n.t("Premium")
+                        },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -3183,10 +3173,12 @@ private fun PremiumUnlockedCard(premium: PremiumSnapshot) {
             }
             Spacer(Modifier.height(14.dp))
             Text(
-                if (premium.plan == PremiumPlan.LIFETIME)
-                    "Permanent access to every Premium feature."
-                else
-                    "Premium access is active and will renew automatically."
+                when (premium.plan) {
+                    PremiumPlan.LIFETIME -> "Permanent access to every Premium feature."
+                    PremiumPlan.QUARTERLY -> "Premium access is active and will renew automatically."
+                    PremiumPlan.SHARED -> "Premium access is active on your Nexauren account."
+                    PremiumPlan.NONE -> "Premium access is not active."
+                }
             )
             premium.expiresAtMillis?.takeIf { it > 0L }?.let {
                 Spacer(Modifier.height(5.dp))
@@ -3339,12 +3331,7 @@ private fun AccountScreen(
     var renameOpen by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf(account?.displayName.orEmpty()) }
 
-    val premiumActive = premium.cloudSynced && premium.verified && when (premium.plan) {
-        PremiumPlan.LIFETIME -> true
-        PremiumPlan.QUARTERLY ->
-            premium.expiresAtMillis == null || premium.expiresAtMillis > System.currentTimeMillis()
-        PremiumPlan.NONE -> false
-    }
+    val premiumActive = premium.isActive
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
